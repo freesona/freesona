@@ -1,10 +1,11 @@
-# cogs/tools/wolfram.py: Wolfram Alpha query solution
+# cogs/tools/math.py: Local and Wolfram Alpha query solution
 
 import os
 import aiohttp
 import logging
 import re
 import discord
+import sympy
 from discord.ext import commands
 from discord import app_commands
 from urllib.parse import quote
@@ -16,9 +17,21 @@ WOLFRAM_SHORT_APPID = os.getenv("WOLFRAM_APPID_SHORT")
 WOLFRAM_LLM_APPID = os.getenv("WOLFRAM_APPID_LLM")
 
 # Formatting function
-class WolframCog(commands.Cog):
+class MathCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    def solve_locally(self, query: str) -> str | None:
+        try:
+            clean_query = query.replace('^', '**')
+            result = sympy.sympify(clean_query, evaluate=True)
+            
+            if result.is_number and not result.is_Integer:
+                return str(result.evalf(10))
+            return str(result)
+        except Exception as e:
+            logging.debug(f"Local solve failed: {e}")
+            return None
 
     def format_wolfram_text(self, text: str) -> str:
         if not text:
@@ -70,7 +83,7 @@ class WolframCog(commands.Cog):
         return embed
 
     # Math command
-    @commands.hybrid_command(name="math", aliases=['wa', 'wolfram', 'mq'], help="Answers math queries using Wolfram Alpha.")
+    @commands.hybrid_command(name="math", aliases=['wa', 'wolfram', 'mq'], help="Answers math queries locally or via Wolfram Alpha.")
     @app_commands.describe(query="The math problem or question you want to solve.")
     async def math(self, ctx, *, query: str):
         # Mandatory for slash commands
@@ -78,24 +91,29 @@ class WolframCog(commands.Cog):
         
         logging.info(f"Processing query: {query}")
         
+        local_result = self.solve_locally(query)
+        if local_result:
+            logging.info("Local math solve succeeded")
+            embed = self.create_embed("Local Math Result", f"**Result:** `{local_result}`", query)
+            await ctx.send(embed=embed)
+            return
+
         # Try short answer API first
         short_result = await self.query_short_answer(query)
-        
         if short_result and "did not understand" not in short_result.lower():
-            logging.info(f"Short API succeeded")
+            logging.info("Short API succeeded")
             embed = self.create_embed("Wolfram Alpha Result", short_result, query)
             await ctx.send(embed=embed)
             return
         
         # If short answer fails, try full LLM API
         full_result = await self.query_llm_api(query)
-        
         if full_result:
-            logging.info(f"Full API succeeded")
+            logging.info("Full API succeeded")
             embed = self.create_embed("Wolfram Alpha Result", full_result, query)
             await ctx.send(embed=embed)
         else:
-            logging.warning("Both APIs failed")
+            logging.warning("All methods failed")
             await ctx.send("Sorry, I couldn't find an answer to your query.")
 
     async def query_short_answer(self, query: str) -> str | None:
@@ -137,4 +155,4 @@ class WolframCog(commands.Cog):
             return None
 
 async def setup(bot):
-    await bot.add_cog(WolframCog(bot))
+    await bot.add_cog(MathCog(bot))
