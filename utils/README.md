@@ -1,19 +1,19 @@
 # utils/
 
-Logic modules for Freesona. Cogs in `cogs/` are wiring only — all substantive logic lives here.
+Logic modules for Freesona. All cogs import from here; cogs do not import from each other directly.
 
 | Module | Responsibility |
 | :--- | :--- |
-| `generation.py` | Core generation pipeline — provider dispatch, rate limiting, response splitting, multimodal attachment handling, ChromaDB context injection |
-| `providers.py` | Provider abstraction — routes generation to Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, or OpenRouter |
-| `memory.py` | Long-term per-user fact storage and injection; per-channel Interactions API ID tracking for server-side conversation continuity |
-| `anniversaries_db.py` | Generic SQLite-backed anniversary entry system — insert, query, update, delete, duplicate detection, calendar sync metadata |
-| `chroma.py` | ChromaDB client singleton and `query_knowledge()` for semantic retrieval during generation |
-| `persona.py` | Persona data layer, XML assembly, modals, `/setpersona` panel |
-| `intent.py` | Intent evaluator for autonomy — confidence scoring, signal detection, threshold mapping |
-| `security.py` | Prompt injection detection, output sanitization, public URL validation |
+| `generation.py` | Gemini API calls, `ConversationResponse`, `safe_generate`, `send_response`, multimodal attachment handling, injection pre/post-check wiring |
+| `memory.py` | Long-term per-user fact storage (SQLite); per-channel interaction ID store for Gemini server-side conversation continuity |
+| `persona.py` | Persona data layer, structured field assembly, `/setpersona` modal panel, profile save/load |
+| `intent.py` | Confidence-scored intent evaluator for autonomy — signal scoring, threshold mapping, `IntentResult` type |
+| `security.py` | SSRF URL guard, prompt injection detection and redaction, output safety check, math AST allowlist helpers |
 | `search.py` | Web search via Gemini grounding with optional legacy Google Custom Search fallback |
-| `roles.py` | Message role classification (`model`, `user`, `bot`, `webhook`) |
-| `config.py` | Config I/O (`config.json`), embed footer helper, provider/model name resolution |
-| `modules.py` | Cog module registry and enable/disable state helpers |
-| `rss.py` | RSS/Atom feed parsing, feed config persistence, seen-link deduplication |
+| `config.py` | Config I/O (`config.json`), `embed_footer` helper, provider/model name accessors |
+| `rss.py` | RSS/Atom XML parser, feed CRUD, seen-link deduplication tracking |
+| `modules.py` | Cog registry — `OPTIONAL_MODULES`, `CORE_EXTENSIONS`, `load_enabled_modules`, `module_extension` |
+| `roles.py` | Message author role resolution (user vs. bot vs. webhook) for generation payloads |
+| `anniversaries_db.py` | Anniversary event storage and scheduling helpers |
+
+See [docs/architecture.md](../docs/architecture.md) for a full system walkthrough.
