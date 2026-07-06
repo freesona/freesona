@@ -288,7 +288,7 @@ class MVSepCog(commands.Cog):
             return dest, None
 
         # 1b. Prefix command attachment via ctx.message
-        if ctx.message.attachments:
+        if ctx.message is not None and ctx.message.attachments:
             att  = ctx.message.attachments[0]
             dest = os.path.join(tmp_dir, att.filename)
             await att.save(dest)

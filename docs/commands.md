@@ -61,8 +61,11 @@ The bot responds to messages in the configured conversation channel. It keeps th
 | `/model show` | Show the active Gemini model | Bot Owner |
 | `/model set <name>` | Set the active Gemini model | Bot Owner |
 | `/model reset` | Reset to the environment/default model | Bot Owner |
+| `/provider show` | Show the active AI provider | Bot Owner |
+| `/provider set <name>` | Set the active provider — **only `gemini` is functional on this branch**; full routing is in `chromadb-multi-provider-support` | Bot Owner |
+| `/provider reset` | Reset provider to the environment/default | Bot Owner |
 | `/botwhitelist` (`~botwhitelist`, alias `~bw`) | List whitelisted bot IDs | Administrator |
-| `/botwhitelist add <bot_id>` | Add a bot ID to the whitelist | Administrator |
+| `/botwhitelist add <bot_id>` | Add a bot ID (integer snowflake) to the whitelist | Administrator |
 | `/botwhitelist remove <bot_id>` | Remove a bot ID from the whitelist | Administrator |
 | `/sync` | Sync global slash commands | Bot Owner |
 | `/dumpconfig` | Dump current `config.json` contents | Bot Owner |

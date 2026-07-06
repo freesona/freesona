@@ -33,3 +33,15 @@ tzdata
 
 # sympy: Evaluates mathematical expressions locally.
 sympy
+
+# numpy: Numerical computing and array handling.
+numpy
+
+# scipy: Scientific and engineering algorithm collection.
+scipy
+
+# matplotlib: Plotting and visualization engine.
+matplotlib
+
+# symengine: Fast C++ backend for symbolic math (optional speedup).
+symengine

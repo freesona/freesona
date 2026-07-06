@@ -130,7 +130,7 @@ class GenAICog(commands.Cog):
             return
 
         config    = load_config()
-        whitelist = config.get("whitelist_bot_ids", [])
+        whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
 
         if message.author.bot and not message.webhook_id and message.author.id not in whitelist:
             return
@@ -725,7 +725,7 @@ class GenAICog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def whitelist_group(self, ctx):
         config    = load_config()
-        whitelist = config.get("whitelist_bot_ids", [1496193431809294396])
+        whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
         if not whitelist:
             await ctx.send("No bots are whitelisted.", ephemeral=True if ctx.interaction else False)
             return
@@ -733,30 +733,40 @@ class GenAICog(commands.Cog):
         await ctx.send(f"Whitelisted bots:\n{lines}", ephemeral=True if ctx.interaction else False)
 
     @whitelist_group.command(name='add', help='Add a bot ID to the whitelist.')  # type: ignore[attr-defined]
-    @app_commands.describe(bot_id='The bot ID to add to the whitelist.')
+    @app_commands.describe(bot_id='The Discord bot ID (integer snowflake) to whitelist.')
     async def whitelist_add(self, ctx, bot_id: str):
-        config    = load_config()
-        whitelist = config.get("whitelist_bot_ids", [1496193431809294396])
-        if bot_id in whitelist:
-            await ctx.send(f"Bot `{bot_id}` is already whitelisted.", ephemeral=True if ctx.interaction else False)
+        try:
+            bid = int(bot_id)
+        except ValueError:
+            await ctx.send(f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.", ephemeral=True if ctx.interaction else False)
             return
-        whitelist.append(bot_id)
+        config    = load_config()
+        whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
+        if bid in whitelist:
+            await ctx.send(f"Bot `{bid}` is already whitelisted.", ephemeral=True if ctx.interaction else False)
+            return
+        whitelist.append(bid)
         config["whitelist_bot_ids"] = whitelist
         save_config(config)
-        await ctx.send(f"Successfully added bot `{bot_id}` to the whitelist.", ephemeral=True if ctx.interaction else False)
+        await ctx.send(f"Successfully added bot `{bid}` to the whitelist.", ephemeral=True if ctx.interaction else False)
 
     @whitelist_group.command(name='remove', help='Remove a bot ID from the whitelist.')  # type: ignore[attr-defined]
-    @app_commands.describe(bot_id='The bot ID to remove from the whitelist.')
+    @app_commands.describe(bot_id='The Discord bot ID (integer snowflake) to remove.')
     async def whitelist_remove(self, ctx, bot_id: str):
-        config    = load_config()
-        whitelist = config.get("whitelist_bot_ids", [1496193431809294396])
-        if bot_id not in whitelist:
-            await ctx.send(f"Bot `{bot_id}` is not in the whitelist.", ephemeral=True if ctx.interaction else False)
+        try:
+            bid = int(bot_id)
+        except ValueError:
+            await ctx.send(f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.", ephemeral=True if ctx.interaction else False)
             return
-        whitelist.remove(bot_id)
+        config    = load_config()
+        whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
+        if bid not in whitelist:
+            await ctx.send(f"Bot `{bid}` is not in the whitelist.", ephemeral=True if ctx.interaction else False)
+            return
+        whitelist.remove(bid)
         config["whitelist_bot_ids"] = whitelist
         save_config(config)
-        await ctx.send(f"Successfully removed bot `{bot_id}` from the whitelist.", ephemeral=True if ctx.interaction else False)
+        await ctx.send(f"Successfully removed bot `{bid}` from the whitelist.", ephemeral=True if ctx.interaction else False)
 
 
 async def setup(bot):

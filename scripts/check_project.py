@@ -217,6 +217,17 @@ def check_secret_files_not_tracked() -> None:
         raise CheckFailure("Secret/runtime files are tracked: " + ", ".join(tracked))
 
 
+def check_unit_tests() -> None:
+    res = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "tests")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        raise CheckFailure(f"Unit tests failed:\n{res.stderr}\n{res.stdout}")
+
+
 def run_check(name: str, func) -> None:
     print(f"[check] {name}...", end=" ", flush=True)
     func()
@@ -234,6 +245,7 @@ def main() -> int:
         ("JSON files", check_json_files),
         (".env.sample", check_env_sample),
         ("tracked secrets", check_secret_files_not_tracked),
+        ("unit tests", check_unit_tests),
     ]
 
     try:
@@ -250,3 +262,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
