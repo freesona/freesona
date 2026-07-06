@@ -16,7 +16,6 @@ load_dotenv()
 WOLFRAM_SHORT_APPID = os.getenv("WOLFRAM_APPID_SHORT")
 WOLFRAM_LLM_APPID = os.getenv("WOLFRAM_APPID_LLM")
 
-# Formatting function
 class MathCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -27,7 +26,12 @@ class MathCog(commands.Cog):
             result = sympy.sympify(clean_query, evaluate=True)
             
             if result.is_number and not result.is_Integer:
-                return str(result.evalf(10))
+                # Convert to string and strip useless trailing zeros and floating decimal points
+                raw_float = str(result.evalf(10))
+                if '.' in raw_float:
+                    return raw_float.rstrip('0').rstrip('.')
+                return raw_float
+                
             return str(result)
         except Exception as e:
             logging.debug(f"Local solve failed: {e}")
@@ -45,8 +49,9 @@ class MathCog(commands.Cog):
         if "Input interpretation" in text:
             text = text[text.find("Input interpretation"):]
 
-        # 3. Improved Result Capture
-        text = re.sub(r'(?i)Result:\s*\n*(.+)', r'**Result:** `\1`', text)
+        # 3. Improved Result Capture (avoid double formatting)
+        if "**Result:**" not in text:
+            text = re.sub(r'(?i)Result:\s*\n*(.+)', r'**Result:** `\1`', text)
         
         # 4. Clean up metadata URLs but keep text
         text = re.sub(r'(?i)(plot|image|url):\s*https?://\S+', '', text)
@@ -72,9 +77,14 @@ class MathCog(commands.Cog):
         # identify math for LaTeX image rendering
         math_match = re.search(r'\*\*Result:\*\*\s*`([^`]+)`', formatted_content)
         if math_match:
-            raw_math = math_match.group(1)
-            if any(char in raw_math for char in '0123456789=+-*/^()√π∫'):
-                latex_math = raw_math.replace('≈', r'\approx').replace('integral', r'\int')
+            raw_math = math_match.group(1).strip()
+            
+            # Clean out rogue markdown asterisks 
+            clean_math = raw_math.replace('**', '')
+            
+            # Only trigger LaTeX for complex math (variables, roots, integrals, exponents)
+            if any(char in clean_math for char in 'xyz√π∫^') or ('=' in clean_math and len(clean_math) > 3):
+                latex_math = clean_math.replace('≈', r'\approx').replace('integral', r'\int')
                 encoded_math = quote(latex_math)
                 latex_url = fr"https://latex.codecogs.com/png.image?\dpi{{150}}\bg{{white}}{encoded_math}"
                 embed.set_image(url=latex_url)
@@ -94,7 +104,8 @@ class MathCog(commands.Cog):
         local_result = self.solve_locally(query)
         if local_result:
             logging.info("Local math solve succeeded")
-            embed = self.create_embed("Local Math Result", f"**Result:** `{local_result}`", query)
+            # Pass raw text; create_embed will format the bolding and backticks automatically
+            embed = self.create_embed("Local Math Result", f"Result: {local_result}", query)
             await ctx.send(embed=embed)
             return
 
