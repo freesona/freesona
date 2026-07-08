@@ -185,19 +185,19 @@ async def send_response(
         return
 
     for i, segment in enumerate(segments):
-            try:
-                if segment.typing and segment.delay > 0:
-                    async with channel.typing():
-                        await asyncio.sleep(segment.delay)
+        try:
+            if segment.typing and segment.delay > 0:
+                async with channel.typing():
+                    await asyncio.sleep(segment.delay)
 
-                if i == 0 and reply_to is not None:
-                    await reply_to.reply(segment.text)
-                else:
-                    await channel.send(segment.text)
-            except discord.Forbidden:
-                channel_id = getattr(channel, "id", "Unknown")
-                logger.warning(f"Missing permissions to send messages in channel {channel_id}")
-                return  # Stop trying to send the rest of the segments
+            if i == 0 and reply_to is not None:
+                await reply_to.reply(segment.text)
+            else:
+                await channel.send(segment.text)
+        except discord.Forbidden:
+            channel_id = getattr(channel, "id", "Unknown")
+            logger.warning(f"Missing permissions to send messages in channel {channel_id}")
+            return
 
 # ---------------------------------------------------------------------------
 # Attachment helper
@@ -247,10 +247,6 @@ def _build_input(
     instruction_prefix: str,
     username: str,
 ) -> list[dict[str, Any]]:
-    """
-    Assembles a multi-modal prompt payload compatible with the 
-    Generally Available (GA) client.interactions.create input schema.
-    """
     payload: list[dict[str, Any]] = []
 
     if reply:
@@ -288,6 +284,36 @@ def _build_input(
         payload.append({"type": "text", "text": "Hello"})
 
     return payload
+
+# Helper function to consume streams safely in a worker thread
+def _consume_stream(client_obj, kwargs_dict):
+    stream = client_obj.interactions.create(stream=True, **kwargs_dict)
+    text_acc = ""
+    last_interaction_id = None
+
+    for event in stream:
+        event_type = getattr(event, "event_type", None)
+
+        if event_type == "step.delta":
+            delta = getattr(event, "delta", None)
+            if delta:
+                d_type = getattr(delta, "type", None)
+                if d_type == "text":
+                    text_acc += str(getattr(delta, "text", ""))
+                elif d_type == "thought_summary":
+                    content = getattr(delta, "content", {})
+                    if isinstance(content, dict) and content.get("text"):
+                        text_acc += str(content["text"])
+
+        elif hasattr(event, "text") and event.text:
+            text_acc += str(event.text)
+
+        elif event_type == "interaction.completed":
+            interaction = getattr(event, "interaction", None)
+            if interaction and getattr(interaction, "id", None):
+                last_interaction_id = str(interaction.id)
+
+    return text_acc, last_interaction_id
 
 # ---------------------------------------------------------------------------
 # Core generation
@@ -353,31 +379,10 @@ async def generate(
         if prev_id:
             kwargs["previous_interaction_id"] = prev_id
 
-        full_text = ""
-        interaction_id: Optional[str] = None
-        
-        stream = await asyncio.to_thread(
-            client.interactions.create,
-            stream=True,
-            **kwargs
+        # Non-blocking execution of the streaming generator loop
+        full_text, interaction_id = await asyncio.to_thread(
+            _consume_stream, client, kwargs
         )
-        
-        for event in stream:
-            event_type = getattr(event, "event_type", None)
-            
-            # 1. Extract text from step deltas
-            if event_type == "step.delta":
-                delta = getattr(event, "delta", None)
-                if delta and getattr(delta, "type", None) == "text":
-                    text_delta = getattr(delta, "text", "")
-                    if text_delta:
-                        full_text += str(text_delta)
-                        
-            # 2. Extract interaction ID upon completion
-            elif event_type == "interaction.completed":
-                interaction = getattr(event, "interaction", None)
-                if interaction and getattr(interaction, "id", None):
-                    interaction_id = str(interaction.id)
 
         if not full_text:
             raise MalformedResponseError("Empty response from model stream.")
