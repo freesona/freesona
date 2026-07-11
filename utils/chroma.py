@@ -1,5 +1,6 @@
 # utils/chroma.py: ChromaDB utility functions for managing and querying a ChromaDB collection.
 import io
+import json
 import logging
 import os
 import uuid
@@ -39,8 +40,44 @@ def get_collection(collection_name: str | None = None) -> Any | None:
     return client.get_or_create_collection(name=name)
 
 
+def parse_discord_chat_json(raw_bytes: bytes) -> str:
+    """Parses exported Discord message JSON arrays into plain text logs."""
+    try:
+        data = json.loads(raw_bytes.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return ""
+
+    if not isinstance(data, list):
+        return ""
+
+    formatted_messages = []
+
+    # Sort chronological (oldest to newest)
+    for msg in reversed(data):
+        if not isinstance(msg, dict):
+            continue
+
+        author = msg.get("userName") or msg.get("author", {}).get("username") or "Unknown"
+        content = (msg.get("content") or "").strip()
+        timestamp = msg.get("timestamp", "").split("T")[0]  # Extracts YYYY-MM-DD
+
+        if content:
+            if timestamp:
+                formatted_messages.append(f"[{timestamp}] {author}: {content}")
+            else:
+                formatted_messages.append(f"{author}: {content}")
+
+    return "\n".join(formatted_messages)
+
+
 def extract_text_from_bytes(filename: str, data: bytes) -> str:
+    """Extracts plain text from various file formats (JSON, PDF, EPUB, TXT)."""
     lower_name = (filename or "").lower()
+
+    if lower_name.endswith(".json"):
+        extracted_json = parse_discord_chat_json(data)
+        if extracted_json:
+            return extracted_json
 
     if lower_name.endswith(".pdf"):
         try:
@@ -60,11 +97,9 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
     if lower_name.endswith(".epub"):
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                # Normalize namespace handling for container parsing
                 container_data = archive.read("META-INF/container.xml")
-                # Use universal namespace handling instead of string replacement
                 container = ET.fromstring(container_data)
-                # Find rootfile with namespace-agnostic approach
+                
                 rootfile = None
                 for elem in container.iter():
                     if elem.tag.endswith('rootfile'):
@@ -79,11 +114,9 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                     logger.warning("EPUB rootfile missing full-path")
                     return ""
 
-                # Normalize namespace handling for OPF parsing
                 opf_data = archive.read(opf_path)
                 opf_root = ET.fromstring(opf_data)
-                
-                # Extract manifest items with namespace-agnostic approach
+
                 item_map = {}
                 for item in opf_root.iter():
                     if item.tag.endswith('item'):
@@ -92,7 +125,6 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                         if item_id and href:
                             item_map[item_id] = href
 
-                # Extract spine item references with namespace-agnostic approach
                 spine_ids = []
                 for itemref in opf_root.iter():
                     if itemref.tag.endswith('itemref'):
@@ -101,32 +133,27 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                             spine_ids.append(idref)
 
                 text_parts: list[str] = []
-                import os
-                # Get the directory of the OPF file to resolve relative paths correctly
                 opf_dir = os.path.dirname(opf_path) if '/' in opf_path else ''
-                
+
                 for item_id in spine_ids:
                     href = item_map.get(item_id)
                     if not href:
                         continue
-                    # Resolve the href relative to the OPF file's directory
+
                     if opf_dir and not href.startswith(opf_dir):
                         full_href = f"{opf_dir}/{href}" if opf_dir else href
                     else:
                         full_href = href
-                    
+
                     try:
                         chapter_xml = archive.read(full_href)
                     except KeyError:
-                        # Try without the directory prefix if the first attempt failed
                         try:
                             chapter_xml = archive.read(href)
                         except KeyError:
                             continue
-                    
-                    # Normalize namespace handling for chapter parsing
+
                     chapter_root = ET.fromstring(chapter_xml)
-                    # Find body with namespace-agnostic approach
                     body = None
                     for elem in chapter_root.iter():
                         if elem.tag.endswith('body'):
@@ -134,7 +161,7 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                             break
                     if body is None:
                         continue
-                    
+
                     text = " ".join(part.strip() for part in body.itertext() if part and part.strip())
                     if text:
                         text_parts.append(text)
