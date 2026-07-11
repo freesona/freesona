@@ -205,18 +205,19 @@ class GenAICog(commands.Cog):
                     if bot_member and not channel_snapshot.permissions_for(bot_member).send_messages:
                         return
 
-                    attachments = await extract_attachments(message_snapshot)
-                    response = await safe_generate(
-                        payload,
-                        current_persona=CURRENT_PERSONA,
-                        channel_id=channel_snapshot.id,
-                        guild_id=guild_id_snapshot,
-                        user_id=user_id,
-                        message_id=message_snapshot.id,
-                        username=username_snapshot,
-                        attachments=attachments,
-                    )
-                    await send_response(response, channel_snapshot, reply_to=message_snapshot)
+                    async with channel_snapshot.typing():
+                        attachments = await extract_attachments(message_snapshot)
+                        response = await safe_generate(
+                            payload,
+                            current_persona=CURRENT_PERSONA,
+                            channel_id=channel_snapshot.id,
+                            guild_id=guild_id_snapshot,
+                            user_id=user_id,
+                            message_id=message_snapshot.id,
+                            username=username_snapshot,
+                            attachments=attachments,
+                        )
+                        await send_response(response, channel_snapshot, reply_to=message_snapshot)
                 except asyncio.CancelledError:
                     pass
                 except Exception as exc:
@@ -274,18 +275,19 @@ class GenAICog(commands.Cog):
                             "role": resolve_message_role(ref, bot_id),
                         }
 
-                    attachments = await extract_attachments(message)
-                    response = await safe_generate(
-                        payload,
-                        current_persona=CURRENT_PERSONA,
-                        channel_id=message.channel.id,
-                        guild_id=message.guild.id,
-                        user_id=message.author.id,
-                        message_id=message.id,
-                        username=message.author.display_name,
-                        attachments=attachments,
-                    )
-                    await send_response(response, message.channel, reply_to=message)
+                    async with message.channel.typing():
+                        attachments = await extract_attachments(message)
+                        response = await safe_generate(
+                            payload,
+                            current_persona=CURRENT_PERSONA,
+                            channel_id=message.channel.id,
+                            guild_id=message.guild.id,
+                            user_id=message.author.id,
+                            message_id=message.id,
+                            username=message.author.display_name,
+                            attachments=attachments,
+                        )
+                        await send_response(response, message.channel, reply_to=message)
 
     # -------------------------------------------------------------------
     # ~write
@@ -295,20 +297,38 @@ class GenAICog(commands.Cog):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
-        await ctx.defer()
-        attachments = await extract_attachments(ctx.message)
-        response = await safe_generate(
-            query,
-            current_persona=CURRENT_PERSONA,
-            instruction_prefix=(
-                "Return plain text only. "
-                "Use double newlines between paragraphs. "
-                "Do NOT use markdown, symbols, or headings. "
-                "Each idea must be separated clearly."
-            ),
-            apply_persona=True,
-            attachments=attachments,
-        )
+
+        if ctx.interaction:
+            await ctx.defer()
+            attachments = await extract_attachments(ctx.message)
+            response = await safe_generate(
+                query,
+                current_persona=CURRENT_PERSONA,
+                instruction_prefix=(
+                    "Return plain text only. "
+                    "Use double newlines between paragraphs. "
+                    "Do NOT use markdown, symbols, or headings. "
+                    "Each idea must be separated clearly."
+                ),
+                apply_persona=True,
+                attachments=attachments,
+            )
+        else:
+            async with ctx.typing():
+                attachments = await extract_attachments(ctx.message)
+                response = await safe_generate(
+                    query,
+                    current_persona=CURRENT_PERSONA,
+                    instruction_prefix=(
+                        "Return plain text only. "
+                        "Use double newlines between paragraphs. "
+                        "Do NOT use markdown, symbols, or headings. "
+                        "Each idea must be separated clearly."
+                    ),
+                    apply_persona=True,
+                    attachments=attachments,
+                )
+
         embed = discord.Embed(
             title=f"{BOT_NAME} says...", description=response.first_text(), color=discord.Color.green()
         )
@@ -323,19 +343,36 @@ class GenAICog(commands.Cog):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
-        await ctx.defer()
-        attachments = await extract_attachments(ctx.message)
-        response = await safe_generate(
-            query,
-            current_persona=CURRENT_PERSONA,
-            instruction_prefix=(
-                "Write in clean paragraphs. "
-                "Use newline breaks between sections. "
-                "Do NOT use markdown headings like ###."
-            ),
-            username=ctx.author.display_name,
-            attachments=attachments,
-        )
+
+        if ctx.interaction:
+            await ctx.defer()
+            attachments = await extract_attachments(ctx.message)
+            response = await safe_generate(
+                query,
+                current_persona=CURRENT_PERSONA,
+                instruction_prefix=(
+                    "Write in clean paragraphs. "
+                    "Use newline breaks between sections. "
+                    "Do NOT use markdown headings like ###."
+                ),
+                username=ctx.author.display_name,
+                attachments=attachments,
+            )
+        else:
+            async with ctx.typing():
+                attachments = await extract_attachments(ctx.message)
+                response = await safe_generate(
+                    query,
+                    current_persona=CURRENT_PERSONA,
+                    instruction_prefix=(
+                        "Write in clean paragraphs. "
+                        "Use newline breaks between sections. "
+                        "Do NOT use markdown headings like ###."
+                    ),
+                    username=ctx.author.display_name,
+                    attachments=attachments,
+                )
+
         embed = discord.Embed(
             title=f"{BOT_NAME} answers...", description=response.first_text(), color=discord.Color.blue()
         )
@@ -351,10 +388,14 @@ class GenAICog(commands.Cog):
             await ctx.send("AI commands are not available in DMs.")
             return
 
-        await ctx.defer()
         from utils.search import web_search
 
-        result = await web_search(query)
+        if ctx.interaction:
+            await ctx.defer()
+            result = await web_search(query)
+        else:
+            async with ctx.typing():
+                result = await web_search(query)
 
         if result.failed:
             embed = discord.Embed(
@@ -374,17 +415,31 @@ class GenAICog(commands.Cog):
         if result.has_sources:
             text = result.text[:4096]
         else:
-            response = await safe_generate(
-                f"Summarize these search results:\n\n{result.text}",
-                current_persona=CURRENT_PERSONA,
-                apply_persona=False,
-                instruction_prefix=(
-                    "Write in natural, flowing paragraphs. "
-                    "Do not use bullet points or one-sentence sections. "
-                    "Use **Bold Text** only for key terms. "
-                    "Do not use markdown headers (#)."
-                ),
-            )
+            if ctx.interaction:
+                response = await safe_generate(
+                    f"Summarize these search results:\n\n{result.text}",
+                    current_persona=CURRENT_PERSONA,
+                    apply_persona=False,
+                    instruction_prefix=(
+                        "Write in natural, flowing paragraphs. "
+                        "Do not use bullet points or one-sentence sections. "
+                        "Use **Bold Text** only for key terms. "
+                        "Do not use markdown headers (#)."
+                    ),
+                )
+            else:
+                async with ctx.typing():
+                    response = await safe_generate(
+                        f"Summarize these search results:\n\n{result.text}",
+                        current_persona=CURRENT_PERSONA,
+                        apply_persona=False,
+                        instruction_prefix=(
+                            "Write in natural, flowing paragraphs. "
+                            "Do not use bullet points or one-sentence sections. "
+                            "Use **Bold Text** only for key terms. "
+                            "Do not use markdown headers (#)."
+                        ),
+                    )
             text = response.first_text()[:4096]
 
         embed = discord.Embed(
