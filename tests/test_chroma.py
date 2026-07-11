@@ -1,4 +1,6 @@
+import io
 import unittest
+import zipfile
 from unittest.mock import patch
 
 from utils import chroma
@@ -16,10 +18,15 @@ class FakeCollection:
             "metadatas": metadatas or [],
             "ids": ids or [],
         })
-        for doc, meta, doc_id in zip(documents, metadatas or [{}] * len(documents), ids or [f"doc-{len(self.docs)}"] * len(documents)):
+
+        # Provide fallback defaults per item so zip doesn't evaluate to empty list
+        meta_list = metadatas if metadatas is not None else [{}] * len(documents)
+        id_list = ids if ids is not None else [f"doc-{i}" for i in range(len(documents))]
+
+        for doc, meta, doc_id in zip(documents, meta_list, id_list):
             self.docs[doc_id] = {"document": doc, "metadata": meta}
 
-    def get(self, *, include=None):
+    def get(self, *, limit=None, include=None):
         docs = []
         metadatas = []
         ids = []
@@ -40,7 +47,7 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         fake_collection = FakeCollection()
 
         with patch.object(chroma, "get_collection", return_value=fake_collection):
-            chroma.add_knowledge("Alpha doc", source="manual", title="Alpha")
+            doc_id = chroma.add_knowledge("Alpha doc", source="manual", title="Alpha")
             entries = chroma.list_knowledge()
 
         self.assertEqual(len(entries), 1)
@@ -53,6 +60,40 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             entries_after = chroma.list_knowledge()
 
         self.assertEqual(entries_after, [])
+
+    def test_extract_text_from_epub_bytes(self):
+        epub_buffer = io.BytesIO()
+        with zipfile.ZipFile(epub_buffer, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
+            zf.writestr(
+                "META-INF/container.xml",
+                """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>""",
+            )
+            zf.writestr(
+                "OEBPS/content.opf",
+                """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" version="3.0">
+  <metadata><dc:title>Example</dc:title></metadata>
+  <manifest>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="chapter1"/></spine>
+</package>""",
+            )
+            zf.writestr(
+                "OEBPS/chapter1.xhtml",
+                """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Chapter One</h1><p>Alpha content for test.</p></body></html>""",
+            )
+
+        text = chroma.extract_text_from_bytes("sample.epub", epub_buffer.getvalue())
+        self.assertIn("Chapter One", text)
+        self.assertIn("Alpha content for test.", text)
 
 
 if __name__ == "__main__":

@@ -11,8 +11,8 @@ Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as 
 | `~search <query>` (`/search`, alias `~s`) | Web search with AI summary | Anyone |
 | `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP | Anyone |
 | `/kbsearch <query>` | Search the local ChromaDB knowledge base | Anyone |
-| `/kbadd <title> <content>` | Add a note to the local knowledge base | Administrator |
-| `/kblist` | List knowledge base entries | Administrator |
+| `/kbadd <title> [content] [attachment]` | Add text or a PDF/EPUB attachment to the local knowledge base | Administrator |
+| `/kblist` | List the newest knowledge base entries | Administrator |
 | `/kbdelete <id>` | Delete a knowledge base entry by ID | Administrator |
 
 ## RSS / News
@@ -116,7 +116,7 @@ Warn thresholds support `timeout <duration>`, `kick`, and `ban` actions triggere
 | :--- | :--- | :--- |
 | `~help [command]` | Show help for commands | Anyone |
 | `~prefix <symbol>` | Change command prefix | Administrator |
-| `/math <equation>` | Solve an equation via Wolfram\|Alpha | Anyone |
+| `~math <equation>` | Solve an equation via Wolfram\|Alpha | Anyone |
 | `~download <url>` (`~dl`) | Download a video (1080p → 720p → 480p → compressed) | Anyone |
 | `~audio <url>` (`~mp3`) | Download audio as MP3 | Anyone |
 | `~ping` | Show bot and Discord API latency | Anyone |
