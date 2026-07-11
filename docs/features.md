@@ -26,19 +26,19 @@ Changes take effect immediately. The assembled persona is injected as the system
 
 ## Memory
 
-### Short-term (per channel, server-side)
+### Short-term (provider continuity, optional)
 
-Conversation continuity is handled server-side via the Interactions API `previous_interaction_id`. Each response chain is tracked per channel; the bot passes the last interaction ID to continue the conversation without maintaining a local message log. Cleared per channel with `/clearmemory`.
+Gemini conversation continuity is handled server-side via the Interactions API `previous_interaction_id`. The bot keeps the last continuity ID per `(guild_id, channel_id, user_id)` scope, so one user's Gemini thread does not bleed into another user's reply in the same channel. Other providers remain stateless by design and rely on prompt memory injection.
 
 ### Long-term (per user, per guild, persisted)
 
 After each user message, the bot runs a background fact extraction pass — asking the active model whether the message reveals anything worth remembering (name, job, location, interests, projects, relationships). Facts are scored by importance (0.0–1.0), deduplicated by message ID, and capped at 20 per user. Facts below 0.3 importance are dropped. The top facts are injected into the system prompt for future conversations with that user.
 
-Stored in `memory.db`, keyed by `guild_id:user_id`. Survives restarts.
+Stored in `memory.db`, keyed by `guild_id + user_id`. Survives restarts and is provider-neutral.
 
 ### User distinction
 
-Every message payload includes the sender's display name before reaching the model. The bot can tell users apart in a multi-user channel — responses stay contextually accurate even when several people are talking at once.
+Every message payload is tied to a stable Discord `user_id` before reaching the model. The bot uses that identity key to keep memory isolated per user, even in busy multi-user channels.
 
 ---
 
@@ -56,7 +56,7 @@ Freesona routes generation through a provider abstraction so the same commands c
 | Groq | `GROQ_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
 
-Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching credentials. `/model set` and `/model reset` change the active model at runtime without a restart. Note: conversation continuity via `previous_interaction_id` is Gemini-specific — non-Gemini providers handle each generation as a stateless call.
+Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching credentials. `/model set` and `/model reset` change the active model at runtime without a restart. The provider abstraction is shared across Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, and OpenRouter; Gemini-only continuity is optional and should not be assumed for provider-neutral memory behavior.
 
 ---
 
@@ -66,7 +66,7 @@ An optional ChromaDB-backed retrieval layer is available for semantic lookups du
 
 Configure with `CHROMA_COLLECTION` and `CHROMA_PERSIST_DIRECTORY` in `.env`. The retrieval path is fully optional — if ChromaDB is not installed or the collection is empty, generation continues normally.
 
-Full write/manage commands (`/kbadd`, `/kblist`, `/kbdelete`) are planned as the next step on top of this foundation.
+The local KB now exposes `/kbsearch`, `/kbadd`, `/kblist`, and `/kbdelete` on top of that retrieval foundation for simple management from Discord.
 
 ---
 

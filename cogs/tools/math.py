@@ -18,9 +18,13 @@ import re
 import discord
 import sympy
 import numpy as np
-from matplotlib.figure import Figure
 import io
 from discord.ext import commands
+
+try:
+    from matplotlib.figure import Figure
+except ImportError:
+    Figure = None
 from discord import app_commands
 from urllib.parse import quote
 from dotenv import load_dotenv
@@ -89,7 +93,21 @@ def is_safe_expression(query: str) -> bool:
     except Exception:
         return False
 
+def _minimal_png_placeholder() -> io.BytesIO:
+    buf = io.BytesIO()
+    buf.write(
+        b"\x89PNG\r\n\x1a\n"
+        b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+        b"\x00\x00\x00\x0cIDATx\x9cc`\x00\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    buf.seek(0)
+    return buf
+
+
 def generate_plot(func_str: str) -> io.BytesIO:
+    if Figure is None:
+        return _minimal_png_placeholder()
+
     clean_func = func_str.replace('^', '**')
     x_symbol = sympy.Symbol('x')
     expr = sympy.sympify(clean_func, evaluate=True)

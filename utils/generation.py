@@ -12,7 +12,11 @@ from typing import Optional, Union, Dict, Any
 
 import discord
 from dotenv import load_dotenv
-from google import genai
+
+try:
+    from google import genai
+except Exception:
+    genai = None
 
 from utils.memory import (
     get_interaction_id, set_interaction_id,
@@ -42,10 +46,9 @@ SPLIT_DELAY_MAX      = 3.5
 RATE_LIMIT       = 5
 call_timestamps: list[float] = []
 
-if PROVIDER == "gemini" and not GOOGLE_API_KEY:
-    raise EnvironmentError("GOOGLE_API_KEY missing.")
-
-client = genai.Client(api_key=GOOGLE_API_KEY) if PROVIDER == "gemini" else None
+client = None
+if PROVIDER == "gemini" and genai is not None and GOOGLE_API_KEY:
+    client = genai.Client(api_key=GOOGLE_API_KEY)
 
 # ---------------------------------------------------------------------------
 # Response types
@@ -342,22 +345,45 @@ async def generate(
     if channel_id is not None:
         LAST_DEBUG[channel_id] = text
 
-    prev_id = get_interaction_id(channel_id) if channel_id is not None else None
+    prev_id = (
+        get_interaction_id(guild_id, channel_id, user_id)
+        if guild_id is not None and channel_id is not None and user_id is not None
+        else None
+    )
 
     try:
+        provider_name = get_provider_name()
         current_model = get_provider_model() or get_model_name()
 
-        if get_provider_name() != "gemini":
+        if provider_name != "gemini":
             output = generate_text(
                 text,
                 system_prompt=persona or "You are a helpful assistant.",
-                provider=get_provider_name(),
+                provider=provider_name,
                 model=current_model,
                 max_output_tokens=1024,
             )
             if not output:
                 raise MalformedResponseError("Empty response from model.")
+
             output = clean_text(output)
+            if unsafe_output(output):
+                logger.warning("Output blocked by safety filter.")
+                return build_response("I can't respond to that.")
+
+            if guild_id and user_id and message_id and channel_id and text.strip() and role == "user":
+                asyncio.create_task(extract_and_store_fact(
+                    message_content=text,
+                    display_name=username,
+                    guild_id=guild_id,
+                    user_id=user_id,
+                    message_id=message_id,
+                    channel_id=channel_id,
+                    client=client,
+                    model_name=current_model,
+                    provider_name=provider_name,
+                ))
+
             return build_response(output)
 
         kwargs: dict[str, Any] = {
@@ -391,11 +417,12 @@ async def generate(
             logger.warning("Output blocked by safety filter.")
             return build_response("I can't respond to that.")
 
-        # Persist interaction ID for conversation continuity
-        if channel_id is not None and role in ("user", "webhook"):
-            # Ensure interaction_id is not None before calling set_interaction_id
+        # Persist interaction ID for conversation continuity.
+        # This must be scoped by guild/channel/user so replies from one user
+        # do not continue another user's Gemini interaction chain.
+        if guild_id is not None and channel_id is not None and user_id is not None and role in ("user", "webhook"):
             if interaction_id:
-                set_interaction_id(channel_id, str(interaction_id))
+                set_interaction_id(guild_id, channel_id, user_id, str(interaction_id))
 
         if guild_id and user_id and message_id and channel_id and text.strip() and role == "user":
             asyncio.create_task(extract_and_store_fact(

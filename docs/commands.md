@@ -10,6 +10,10 @@ Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as 
 | `~ask <question>` (`/ask`, alias `~a`) | Conversational response using active persona | Anyone |
 | `~search <query>` (`/search`, alias `~s`) | Web search with AI summary | Anyone |
 | `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP | Anyone |
+| `/kbsearch <query>` | Search the local ChromaDB knowledge base | Anyone |
+| `/kbadd <title> <content>` | Add a note to the local knowledge base | Administrator |
+| `/kblist` | List knowledge base entries | Administrator |
+| `/kbdelete <id>` | Delete a knowledge base entry by ID | Administrator |
 
 ## RSS / News
 
@@ -62,7 +66,7 @@ The bot responds to messages in the configured conversation channel. `all` repli
 | `/model set <name>` | Set the active Gemini model | Bot Owner |
 | `/model reset` | Reset to the environment/default model | Bot Owner |
 | `/provider show` | Show the active AI provider | Bot Owner |
-| `/provider set <name>` | Set the active provider — **only `gemini` is functional on this branch**; full routing is in `chromadb-multi-provider-support` | Bot Owner |
+| `/provider set <name>` | Set the active provider (`gemini`, `openai`, `ollama`, `nim`, `azure`, `groq`, `openrouter`) | Bot Owner |
 | `/provider reset` | Reset provider to the environment/default | Bot Owner |
 | `/botwhitelist` (`~botwhitelist`, alias `~bw`) | List whitelisted bot IDs | Administrator |
 | `/botwhitelist add <bot_id>` | Add a bot ID (integer snowflake) to the whitelist | Administrator |

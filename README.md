@@ -18,9 +18,11 @@ Freesona is a **BYOK** (Bring Your Own Key) project — you provide your own API
 
 **The persona system is built to feel alive.** `/setpersona` opens a button-based editor for structured persona fields. Changes take effect immediately, no restart required.
 
-**It remembers people.** Facts about each user are extracted from conversation, scored by importance, and persisted to SQLite — injected automatically into future conversations. Conversation history itself is maintained server-side via the Interactions API, so context survives across messages without local storage overhead.
+**It remembers people.** Facts about each user are extracted from conversation, scored by importance, and persisted to SQLite — injected automatically into future conversations. The identity key is the Discord `guild_id + user_id`, so memory stays isolated even in busy multi-user channels.
 
-**It knows who's talking.** Messages are attributed to their sender by display name before reaching the model, so it can tell users apart in multi-user channels.
+**It can retrieve context semantically.** When ChromaDB is enabled, relevant knowledge chunks are queried and injected alongside the user's fact memory, giving the active provider a provider-neutral retrieval layer.
+
+**It can still use provider continuity when available.** Gemini's server-side `previous_interaction_id` flow is supported as an optional continuity path; other providers instead fall back to stateless prompt-based memory injection.
 
 **It won't double-reply.** A per-user-per-channel debounce collapses rapid successive messages into one response.
 
@@ -30,7 +32,7 @@ Freesona is a **BYOK** (Bring Your Own Key) project — you provide your own API
 
 **It can target multiple AI backends.** The generation pipeline supports Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, and OpenRouter through a shared provider abstraction. The same commands work across all of them.
 
-**It has an optional local knowledge base.** ChromaDB-backed semantic retrieval is available for injecting relevant documents into generation context. Full `/kbadd`, `/kblist`, and `/kbdelete` commands are planned on top of this foundation.
+**It has an optional local knowledge base.** ChromaDB-backed semantic retrieval is available for injecting relevant documents into generation context, and the bot ships with `/kbsearch`, `/kbadd`, `/kblist`, and `/kbdelete` for local knowledge-base management.
 
 **It's built to be extended.** Logic lives in `utils/` — generation, memory, persona, intent, security, search, config, provider routing, and ChromaDB are all separate modules. See [utils/README.md](utils/README.md).
 
@@ -69,6 +71,15 @@ To make Git run the checks before pushes to `dev`, enable the included hook once
 ```bash
 git config core.hooksPath .githooks
 ```
+
+For a local desktop/self-hosted setup, use the included runner helpers instead of Docker or Railway-specific workflows:
+
+- `bash scripts/setup_local.sh`
+- `scripts\setup_local.cmd`
+
+These scripts create `.env` from `.env.sample` on first run, validate the required Discord IDs and selected provider keys, install local dependencies into `.venv`, run the project checks, and then launch the bot.
+
+> These helpers are for local/manual hosting only. They are not intended for Docker, Railway, Render, or any other automated deployment environment where the platform should own the bootstrap process.
 
 Create a `.env` file:
 
@@ -150,7 +161,7 @@ Without a persistent volume on cloud hosts, file changes won't survive a redeplo
 | `config.json` | Prefix, conversation channel, autonomy settings, module states |
 | `persona.json` | Active persona fields |
 | `personas.json` | Saved persona presets |
-| `memory.db` | Long-term user facts, keyed by `guild_id:user_id` |
+| `memory.db` | Long-term user facts, keyed by `guild_id + user_id` for provider-neutral memory injection |
 | `warnings.db` | Per-guild moderation warnings with hex IDs and timestamps |
 | `anniversaries.db` | User-claimed anniversary entries with optional calendar sync metadata |
 | `.chroma/` | ChromaDB vector store for knowledge base retrieval (optional) |
@@ -208,18 +219,18 @@ RSS/Atom feeds can be read and managed with:
 
 ## Acknowledgements
 
-* [discord.py](https://discordpy.readthedocs.io/)
-* [Google Gemini](https://ai.google.dev/)
-* [OpenAI](https://platform.openai.com/)
-* [Ollama](https://ollama.com/)
-* [NVIDIA NIM](https://developer.nvidia.com/nim)
-* [Azure AI Foundry](https://ai.azure.com/)
-* [Groq](https://groq.com/)
-* [OpenRouter](https://openrouter.ai/)
-* [ChromaDB](https://www.trychroma.com/)
-* [Wolfram\|Alpha](https://developer.wolframalpha.com/)
-* [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-* [MVSEP](https://mvsep.com/)
+- [discord.py](https://discordpy.readthedocs.io/)
+- [Google Gemini](https://ai.google.dev/)
+- [OpenAI](https://platform.openai.com/)
+- [Ollama](https://ollama.com/)
+- [NVIDIA NIM](https://developer.nvidia.com/nim)
+- [Azure AI Foundry](https://ai.azure.com/)
+- [Groq](https://groq.com/)
+- [OpenRouter](https://openrouter.ai/)
+- [ChromaDB](https://www.trychroma.com/)
+- [Wolfram\|Alpha](https://developer.wolframalpha.com/)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+- [MVSEP](https://mvsep.com/)
 
 ---
 
@@ -233,21 +244,21 @@ Licensed under the **MIT License**. See [LICENSE](LICENSE).
 
 ### Short-term
 
-* [x] Finish the cog folder migration and clean up stale imports
-* [x] Fix help-panel interaction failures and make the help view resilient
-* [x] Make `/botwhitelist` show the current whitelist entries directly
-* [x] Migrate short-term memory from local rolling context to server-side Interactions API
+- [x] Finish the cog folder migration and clean up stale imports
+- [x] Fix help-panel interaction failures and make the help view resilient
+- [x] Make `/botwhitelist` show the current whitelist entries directly
+- [x] Migrate short-term memory from local rolling context to server-side Interactions API
 
 ### Medium-term
 
-* [x] Multi-provider support — swap AI providers without changing command code (Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, OpenRouter)
-* [x] RSS monitors — post matching feed items into selected channels
-* [x] Warning system — per-guild moderation warnings with hex IDs, auto-threshold actions, and DM notifications
-* [x] Anniversary tracking — generic `anniversaries.db` backend for user-claimed date entries with optional calendar sync
-* [ ] Full knowledge base commands — `/kbadd`, `/kblist`, `/kbdelete` on top of the existing ChromaDB retrieval layer
-* [ ] Optional generation logging — local-only logs for abuse reporting and debugging; disabled by default, no data leaves the host
+- [x] Multi-provider support — swap AI providers without changing command code (Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, OpenRouter)
+- [x] RSS monitors — post matching feed items into selected channels
+- [x] Warning system — per-guild moderation warnings with hex IDs, auto-threshold actions, and DM notifications
+- [x] Anniversary tracking — generic `anniversaries.db` backend for user-claimed date entries with optional calendar sync
+- [ ] Full knowledge base commands — `/kbadd`, `/kblist`, `/kbdelete` on top of the existing ChromaDB retrieval layer
+- [ ] Optional generation logging — local-only logs for abuse reporting and debugging; disabled by default, no data leaves the host
 
 ### Long-term
 
-* [ ] Web dashboard via FastAPI — `fastapi_server.py` is already in the repo
-* [ ] Message claiming system for multi-instance deployments
+- [ ] Web dashboard via FastAPI — `fastapi_server.py` is already in the repo
+- [ ] Message claiming system for multi-instance deployments

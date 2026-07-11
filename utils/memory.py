@@ -10,9 +10,10 @@ import logging
 import aiosqlite
 import re
 from datetime import datetime, timezone
-from google.genai import types
 
 from dotenv import load_dotenv
+from utils.providers import generate_text
+
 load_dotenv()
 
 logger = logging.getLogger("FreesonaBot")
@@ -35,24 +36,43 @@ FACT_EXTRACT_PROMPT = (
 )
 
 # ---------------------------------------------------------------------------
-# Per-channel interaction ID store (replaces channel_memory / channel_summary)
-# Maps channel_id -> last interaction ID returned by the Interactions API.
-# Passing this as previous_interaction_id continues the conversation server-side.
+# Per-user interaction ID store (replaces channel_memory / channel_summary)
+# Gemini conversation continuity must be scoped by guild + channel + user,
+# otherwise one user's interaction chain can bleed into another user's reply.
 # ---------------------------------------------------------------------------
 
-_channel_interaction_id: dict[int, str] = {}
+_interaction_store: dict[tuple[int, int, int], str] = {}
 
 
-def get_interaction_id(channel_id: int) -> str | None:
-    return _channel_interaction_id.get(channel_id)
+def _interaction_key(guild_id: int, channel_id: int, user_id: int) -> tuple[int, int, int]:
+    return (guild_id, channel_id, user_id)
 
 
-def set_interaction_id(channel_id: int, interaction_id: str) -> None:
-    _channel_interaction_id[channel_id] = interaction_id
+def get_interaction_id(guild_id: int, channel_id: int, user_id: int) -> str | None:
+    return _interaction_store.get(_interaction_key(guild_id, channel_id, user_id))
 
 
-def clear_interaction_id(channel_id: int) -> None:
-    _channel_interaction_id.pop(channel_id, None)
+def set_interaction_id(guild_id: int, channel_id: int, user_id: int, interaction_id: str) -> None:
+    _interaction_store[_interaction_key(guild_id, channel_id, user_id)] = interaction_id
+
+
+def clear_interaction_id(channel_id: int, guild_id: int | None = None, user_id: int | None = None) -> None:
+    """
+    Clear the per-user interaction chain for a channel.
+
+    When called with only a channel id, the command clears the full channel scope.
+    When called with guild_id + user_id, it clears only that user's continuity.
+    """
+    if guild_id is None and user_id is None:
+        for key in list(_interaction_store):
+            if key[1] == channel_id:
+                _interaction_store.pop(key, None)
+        return
+
+    if guild_id is None or user_id is None:
+        raise ValueError("guild_id and user_id must be provided together when clearing a single user chain.")
+
+    _interaction_store.pop(_interaction_key(guild_id, channel_id, user_id), None)
 
 
 # ---------------------------------------------------------------------------
@@ -87,14 +107,15 @@ async def get_user_facts_prompt(guild_id: int, user_id: int, display_name: str) 
             (str(guild_id), str(user_id))
         ) as cursor:
             rows = await cursor.fetchall()
-            
-            # UPDATED BLOCK:
+
             if not rows:
-                # Return a specific statement the LLM cannot ignore
-                return f"\n[Known facts about {display_name}]\nNone. You have no record of any past interactions with this user."
-            
+                return (
+                    f"\n[Known facts about {display_name or f'Discord user {user_id}'}]\n"
+                    "None. You have no record of any past interactions with this user."
+                )
+
             lines = [f"- {row['content']}" for row in rows]
-            return f"\n[Known facts about {display_name}]\n" + "\n".join(lines)
+            return f"\n[Known facts about {display_name or f'Discord user {user_id}'}]\n" + "\n".join(lines)
 
 
 async def inject_user_memory(guild_id: int, user_id: int, display_name: str) -> str:
@@ -106,29 +127,49 @@ async def inject_user_memory(guild_id: int, user_id: int, display_name: str) -> 
 # ---------------------------------------------------------------------------
 
 async def extract_and_store_fact(
-    message_content, display_name, guild_id, user_id,
-    message_id, channel_id, client, model_name,
+    message_content,
+    display_name,
+    guild_id,
+    user_id,
+    message_id,
+    channel_id,
+    client,
+    model_name,
+    provider_name: str | None = None,
 ):
     if not message_content.strip():
         return
 
+    provider_name = (provider_name or "gemini").strip().lower()
     prompt = f"{FACT_EXTRACT_PROMPT}\n\nUser message: {message_content}"
     try:
-        interaction = await asyncio.to_thread(
-            client.interactions.create,
-            model=model_name,
-            input=prompt,
-            store=False,  # stateless — no need to persist this utility call
-        )
-        raw = (interaction.output_text or "").strip()
+        if provider_name == "gemini" and client is not None:
+            interaction = await asyncio.to_thread(
+                client.interactions.create,
+                model=model_name,
+                input=prompt,
+                store=False,
+            )
+            raw = (getattr(interaction, "output_text", "") or "").strip()
+        else:
+            raw = await asyncio.to_thread(
+                generate_text,
+                message_content,
+                system_prompt=FACT_EXTRACT_PROMPT,
+                provider=provider_name,
+                model=model_name,
+                max_output_tokens=256,
+            )
+            raw = (raw or "").strip()
+
         if not raw or raw.lower() == "null":
             return
 
         if "```" in raw:
             raw = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
 
-        parsed     = json.loads(raw)
-        content    = parsed.get("content", "").strip()
+        parsed = json.loads(raw)
+        content = parsed.get("content", "").strip()
         importance = float(parsed.get("importance", 0.0))
 
         if not content or importance < MIN_IMPORTANCE:
