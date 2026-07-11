@@ -53,10 +53,6 @@ MEMORY_FILE_PATH = os.getenv("MEMORY_FILE_PATH", "./memory.db")
 logger = logging.getLogger("FreesonaBot")
 
 # Debounce + autonomy state
-DEBOUNCE_SECONDS = 1.2
-AUTONOMY_COOLDOWN_SECONDS = 120
-AUTONOMY_USER_COOLDOWN = 60
-
 _pending_responses: dict[tuple[int, int], asyncio.Task] = {}
 _autonomy_cooldown: dict[int, float] = {}
 _autonomy_user_cooldown: dict[int, float] = {}
@@ -197,7 +193,9 @@ class GenAICog(commands.Cog):
 
             async def debounced_respond(_key=_debounce_key):
                 try:
-                    await asyncio.sleep(DEBOUNCE_SECONDS)
+                    config = load_config()
+                    debounce_seconds = config.get("debounce_seconds", 1.2)
+                    await asyncio.sleep(debounce_seconds)
 
                     # Check bot permissions before processing
                     guild = channel_snapshot.guild
@@ -244,10 +242,14 @@ class GenAICog(commands.Cog):
             threshold = FREQUENCY_THRESHOLD.get(frequency, 0.50)
             now = time.time()
             last_channel = _autonomy_cooldown.get(message.channel.id, 0)
+            config = load_config()
+            autonomy_cooldown_seconds = config.get("autonomy_cooldown_seconds", 120)
+            autonomy_user_cooldown = config.get("autonomy_user_cooldown", 60)
+
             last_user = _autonomy_user_cooldown.get(message.author.id, 0)
 
-            channel_ready = now - last_channel > AUTONOMY_COOLDOWN_SECONDS
-            user_ready = now - last_user > AUTONOMY_USER_COOLDOWN
+            channel_ready = now - last_channel > autonomy_cooldown_seconds
+            user_ready = now - last_user > autonomy_user_cooldown
 
             if channel_ready and user_ready:
                 intent = evaluate_intent(message, self.bot.user, False)

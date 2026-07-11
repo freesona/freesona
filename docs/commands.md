@@ -73,6 +73,10 @@ The bot responds to messages in the configured conversation channel. `all` repli
 | `/botwhitelist remove <bot_id>` | Remove a bot ID from the whitelist | Administrator |
 | `/sync` | Sync global slash commands | Bot Owner |
 | `/dumpconfig` | Dump current `config.json` contents | Bot Owner |
+| `/config show [key]` | Show all runtime config values, or a specific key | Bot Owner |
+| `/config list` | List all configurable keys with descriptions | Bot Owner |
+| `/config set <key> <value>` | Set a config value (type-converted) | Bot Owner |
+| `/config reset <key>` | Reset a config key to its default value | Bot Owner |
 | `/settimezone <timezone>` | Set the bot's timezone (IANA format, e.g. `Asia/Manila`) | Administrator |
 | `/timezone` | Show the bot's currently configured timezone | Anyone |
 

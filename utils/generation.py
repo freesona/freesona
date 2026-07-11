@@ -23,7 +23,7 @@ from utils.memory import (
     inject_user_memory, extract_and_store_fact,
 )
 from utils.security import sanitize_prompt, unsafe_output
-from utils.config import LAST_DEBUG, get_model_name, get_provider_name, get_provider_model
+from utils.config import LAST_DEBUG, get_model_name, get_provider_name, get_provider_model, load_config
 from utils.providers import build_messages, generate_text
 from utils.chroma import query_knowledge
 
@@ -36,15 +36,22 @@ BOT_NAME       = os.getenv("BOT_NAME", "Bot")
 
 PROVIDER = get_provider_name()
 
-# Split messaging
-SPLIT_MIN_LENGTH     = 280
-SPLIT_DELAY_BASE     = 1.2
-SPLIT_DELAY_PER_CHAR = 0.012
-SPLIT_DELAY_MAX      = 3.5
+# Split messaging - loaded from config
+def _get_split_min_length() -> int:
+    return int(load_config().get("generation_split_min_length", 280))
 
-# Rate limiter
-RATE_LIMIT       = 5
-call_timestamps: list[float] = []
+def _get_split_delay_base() -> float:
+    return float(load_config().get("generation_split_delay_base", 1.2))
+
+def _get_split_delay_per_char() -> float:
+    return float(load_config().get("generation_split_delay_per_char", 0.012))
+
+def _get_split_delay_max() -> float:
+    return float(load_config().get("generation_split_delay_max", 3.5))
+
+# Rate limiter - loaded from config
+def _get_rate_limit() -> int:
+    return int(load_config().get("generation_rate_limit", 5))
 
 client = None
 if PROVIDER == "gemini" and genai is not None and GOOGLE_API_KEY:
@@ -57,7 +64,7 @@ if PROVIDER == "gemini" and genai is not None and GOOGLE_API_KEY:
 @dataclass
 class MessageSegment:
     text: str
-    delay: float = SPLIT_DELAY_BASE
+    delay: float = _get_split_delay_base()
     typing: bool = True
     attachment: Optional[str] = None
 
@@ -122,7 +129,7 @@ async def rate_limit():
     global call_timestamps
     now = time.time()
     call_timestamps = [t for t in call_timestamps if now - t < 60]
-    if len(call_timestamps) >= RATE_LIMIT:
+    if len(call_timestamps) >= _get_rate_limit():
         wait_time = 60 - (now - call_timestamps[0])
         await asyncio.sleep(wait_time)
     call_timestamps.append(time.time())
@@ -132,7 +139,7 @@ async def rate_limit():
 # ---------------------------------------------------------------------------
 
 def split_into_segments(text: str) -> list[str]:
-    if len(text) < SPLIT_MIN_LENGTH:
+    if len(text) < _get_split_min_length():
         return [text]
 
     paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
@@ -158,8 +165,8 @@ def build_response(text: str) -> ConversationResponse:
     segments = []
     for seg in segments_text:
         delay = min(
-            SPLIT_DELAY_BASE + len(seg) * SPLIT_DELAY_PER_CHAR,
-            SPLIT_DELAY_MAX
+            _get_split_delay_base() + len(seg) * _get_split_delay_per_char(),
+            _get_split_delay_max()
         )
         segments.append(MessageSegment(text=seg, delay=delay, typing=True))
     return ConversationResponse(segments=segments)

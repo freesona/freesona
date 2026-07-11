@@ -154,3 +154,43 @@ Prompt injection attempts (`"ignore previous instructions"`, `"jailbreak"`, `"de
 ## Hybrid Commands
 
 Every command works as both a prefix command (`~write`) and a slash command (`/write`). The prefix is configurable per server and persists across restarts via `config.json`.
+
+---
+
+## Runtime Configuration
+
+Most hardcoded timing and behavior constants have been moved into `config.json` and can be changed at runtime using `/config` commands (Bot Owner only). Changes persist across restarts and take effect immediately without a bot restart.
+
+### Configurable Values
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `mvsep_poll_interval` | int | 5 | Seconds between MVSEP API polling checks |
+| `mvsep_poll_timeout` | int | 300 | Max seconds to wait for MVSEP task completion |
+| `ytdlp_subprocess_timeout` | int | 300 | Max seconds for yt-dlp subprocess to complete |
+| `ytdlp_compress_target_mb` | float | 9.5 | Target size in MB for video compression |
+| `generation_split_min_length` | int | 1900 | Minimum message length before splitting into segments |
+| `generation_split_delay_base` | float | 0.5 | Base delay in seconds between message segments |
+| `generation_split_delay_per_char` | float | 0.001 | Additional delay per character in segment |
+| `generation_split_delay_max` | float | 3.0 | Maximum delay between segments in seconds |
+| `generation_rate_limit` | float | 1.0 | Minimum seconds between AI generation calls |
+
+### Commands
+
+| Command | Action | Permissions |
+| :--- | :--- | :--- |
+| `/config show [key]` | Show all runtime config values, or a specific key | Bot Owner |
+| `/config list` | List all configurable keys with descriptions | Bot Owner |
+| `/config set <key> <value>` | Set a config value (auto type-converted) | Bot Owner |
+| `/config reset <key>` | Reset a config key to its default value | Bot Owner |
+
+### Example Usage
+
+```
+/config show mvsep_poll_interval
+/config set mvsep_poll_interval 10
+/config set ytdlp_compress_target_mb 8.0
+/config reset generation_rate_limit
+```
+
+Values are validated and type-converted based on their default types (int, float, bool, or string). Invalid values are rejected with an error message.

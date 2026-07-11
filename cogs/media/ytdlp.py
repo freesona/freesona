@@ -11,17 +11,19 @@ from discord import app_commands
 from discord.ext import commands
 
 from utils.security import is_public_http_url
+from utils.config import load_config
 
 log = logging.getLogger(__name__)
 
 # Resolutions attempted in order from highest to lowest quality
 _VIDEO_RESOLUTIONS = [1080, 720, 480]
 
-# Target size for FFmpeg compression (slightly under the hard limit)
-_COMPRESS_TARGET_MB = 9.5
+# Configurable values loaded from config.json (settable via /config slash commands)
+def _get_subprocess_timeout() -> int:
+    return int(load_config().get("ytdlp_subprocess_timeout", 300))
 
-# Subprocess timeout in seconds — prevents hung downloads from blocking indefinitely
-_SUBPROCESS_TIMEOUT = 300
+def _get_compress_target_mb() -> float:
+    return float(load_config().get("ytdlp_compress_target_mb", 9.5))
 
 
 def _normalize_url(url: str) -> str:
@@ -29,7 +31,7 @@ def _normalize_url(url: str) -> str:
     return url.replace("music.youtube.com", "www.youtube.com")
 
 
-def _clear_dir(directory: str) -> None:
+async def _run(*cmd: str, timeout: int | None = None) -> int:
     """Remove all files in a directory, ignoring errors."""
     for name in os.listdir(directory):
         try:
@@ -46,8 +48,10 @@ def _find_file(directory: str, ext: str) -> str | None:
     return None
 
 
-async def _run(*cmd: str, timeout: int = _SUBPROCESS_TIMEOUT) -> int:
+async def _run(*cmd: str, timeout: int | None = None) -> int:
     """Run a subprocess and return its exit code. Raises TimeoutError on timeout."""
+    if timeout is None:
+        timeout = _get_subprocess_timeout()
     proc = await asyncio.create_subprocess_exec(*cmd)
     try:
         await asyncio.wait_for(proc.wait(), timeout=timeout)
@@ -58,8 +62,10 @@ async def _run(*cmd: str, timeout: int = _SUBPROCESS_TIMEOUT) -> int:
     return proc.returncode
 
 
-async def _run_capture(*cmd: str, timeout: int = _SUBPROCESS_TIMEOUT) -> tuple[int, str]:
+async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]:
     """Run a subprocess, capture stdout, and return (exit_code, stdout_text)."""
+    if timeout is None:
+        timeout = _get_subprocess_timeout()
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -155,7 +161,7 @@ class YtDlp(commands.Cog):
 
     async def _compress_video(self, input_path: str) -> str | None:
         """
-        Re-encode the video to fit within _COMPRESS_TARGET_MB using FFmpeg.
+        Re-encode the video to fit within the configured target size using FFmpeg.
         Returns the path to the compressed file, or None if compression fails
         or the resulting bitrate would be unwatchably low.
         """
@@ -163,7 +169,8 @@ class YtDlp(commands.Cog):
         if duration is None:
             return None
 
-        target_bits = _COMPRESS_TARGET_MB * 8 * 1024 * 1024
+        compress_target_mb = _get_compress_target_mb()
+        target_bits = compress_target_mb * 8 * 1024 * 1024
         video_bitrate = int(target_bits / duration) - 128_000  # reserve 128k for audio
 
         if video_bitrate < 100_000:
