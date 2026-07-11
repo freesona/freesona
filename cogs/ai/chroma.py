@@ -11,6 +11,7 @@ class ChromaCog(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="kbsearch", help="Search the local knowledge base.")
+    @commands.has_permissions(administrator=True)
     async def kbsearch(self, ctx: commands.Context, *, query: str):
         await ctx.defer(ephemeral=True)
 
@@ -100,11 +101,18 @@ class ChromaCog(commands.Cog):
 
         lines = []
         for index, item in enumerate(entries, start=1):
-            title = item.get("metadata", {}).get("title") or "Untitled"
+            meta = item.get("metadata", {})
+            # Fallback chain for a clean title display
+            title = meta.get("title") or meta.get("filename") or item['id']
+            
+            # If the title is a long file path, pull just the filename
+            if "/" in title or "\\" in title:
+                title = title.replace("\\", "/").split("/")[-1]
+
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 80:
                 snippet = snippet[:77] + "..."
-            lines.append(f"**{index}.** {title} — `{item['id']}`\n└ *Snippet:* {snippet}")
+            lines.append(f"**{index}.** {title} (`{item['id']}`)\n└ *Snippet:* {snippet}")
 
         full_message = "\n".join(lines)
 
@@ -125,7 +133,6 @@ class ChromaCog(commands.Cog):
             return
 
         await ctx.send("Could not delete that knowledge entry.", ephemeral=True)
-
 
 async def setup(bot):
     await bot.add_cog(ChromaCog(bot))

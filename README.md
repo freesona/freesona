@@ -255,7 +255,7 @@ Licensed under the **MIT License**. See [LICENSE](LICENSE).
 - [x] RSS monitors — post matching feed items into selected channels
 - [x] Warning system — per-guild moderation warnings with hex IDs, auto-threshold actions, and DM notifications
 - [x] Anniversary tracking — generic `anniversaries.db` backend for user-claimed date entries with optional calendar sync
-- [ ] Full knowledge base commands — `/kbadd`, `/kblist`, `/kbdelete` on top of the existing ChromaDB retrieval layer
+- [x] Full knowledge base commands — `/kbadd`, `/kblist`, `/kbdelete` on top of the existing ChromaDB retrieval layer
 - [ ] Optional generation logging — local-only logs for abuse reporting and debugging; disabled by default, no data leaves the host
 
 ### Long-term
