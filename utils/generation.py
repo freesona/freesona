@@ -270,12 +270,37 @@ def _build_input(
 def _consume_stream(client_obj, kwargs_dict):
     stream = client_obj.interactions.create(stream=True, **kwargs_dict)
     text_acc = ""
+    last_interaction_id = None
+
     for event in stream:
-        if hasattr(event, "event_type") and event.event_type == "step.delta":
+        event_type = getattr(event, "event_type", None)
+
+        if event_type == "step.delta":
             delta = getattr(event, "delta", None)
-            if delta and hasattr(delta, "text"):
-                text_acc += str(delta.text)
-    return text_acc, None
+            if delta:
+                d_type = getattr(delta, "type", None)
+
+                if d_type == "text":
+                    text_acc += str(getattr(delta, "text", ""))
+
+                elif d_type == "thought_summary":
+                    content = getattr(delta, "content", {})
+                    if isinstance(content, dict) and content.get("text"):
+                        text_acc += str(content["text"])
+
+                # Compatibility fallback
+                elif hasattr(delta, "text"):
+                    text_acc += str(delta.text)
+
+        elif hasattr(event, "text") and event.text:
+            text_acc += str(event.text)
+
+        elif event_type == "interaction.completed":
+            interaction = getattr(event, "interaction", None)
+            if interaction and getattr(interaction, "id", None):
+                last_interaction_id = str(interaction.id)
+
+    return text_acc, last_interaction_id
 
 # ---------------------------------------------------------------------------
 # Core generation
@@ -355,7 +380,10 @@ async def generate(
                 )
                 output_text = response.text if response else None
 
-        return build_response(clean_text(output_text) if output_text else "No response generated.")
+        if not output_text:
+            raise MalformedResponseError("Empty response from model stream.")
+
+        return build_response(clean_text(output_text))
 
     except Exception as e:
         logger.error(f"Generation error: {e}")
