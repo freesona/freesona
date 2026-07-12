@@ -312,30 +312,31 @@ async def generate(
     try:
         provider_name = get_provider_name()
         current_model = get_provider_model() or get_model_name()
+        output_text: Optional[str] = None
 
         if provider_name != "gemini":
             output = generate_text(text, system_prompt=persona, provider=provider_name, model=current_model)
-            return build_response(output or "Something went wrong.")
+            output_text = output or "Something went wrong."
 
-        if not client:
-            raise RuntimeError("Gemini client not initialized.")
-
-        if types is not None:
-            # Prepare input: interactions.create expects 'input', generate_content expects 'contents'.
-            # Both expect a list of mixed types (strings and types.Part objects).
-            formatted_input = []
+        elif client and types:
+            # Construct SDK-compliant Content objects
+            contents = []
             for p in input_payload:
                 if p["type"] == "text":
-                    formatted_input.append(p["text"])
+                    part = types.Part(text=p["text"])
                 else:
-                    formatted_input.append(
-                        types.Part.from_bytes(data=base64.b64decode(p["data"]), mime_type=p["mime_type"])
+                    part = types.Part(
+                        inline_data=types.Blob(
+                            data=base64.b64decode(p["data"]),
+                            mime_type=p["mime_type"]
+                        )
                     )
+                contents.append(types.Content(role="user", parts=[part]))
 
             if hasattr(client, "interactions"):
                 kwargs_interaction = {
                     "model": current_model,
-                    "input": formatted_input,  # 'interactions.create' requires 'input'
+                    "input": contents,
                     "generation_config": {"max_output_tokens": 1024},
                 }
                 if apply_persona and persona:
@@ -348,7 +349,7 @@ async def generate(
                 response = await asyncio.to_thread(
                     client.models.generate_content,
                     model=current_model,
-                    contents=formatted_input, # 'generate_content' requires 'contents'
+                    contents=contents,
                     config=config,
                 )
                 output_text = response.text if response else None
