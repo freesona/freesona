@@ -129,7 +129,7 @@ class GenAICog(commands.Cog):
         if message.type not in (discord.MessageType.default, discord.MessageType.reply):
             return
         # Ignore interaction messages / slash command triggers
-        if message.interaction is not None:
+        if message.interaction_metadata is not None:
             return
 
         prefix = await self.bot.get_prefix(message)

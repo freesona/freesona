@@ -2,6 +2,7 @@
 
 import io
 import json
+from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -55,12 +56,13 @@ class AdminCog(commands.Cog):
     # ------------------------------------------------------------------
     # /module
     # ------------------------------------------------------------------
-    @commands.hybrid_group(name="module", fallback="help", help="List or change enabled bot modules.")
+    @commands.hybrid_group(name="module", help="List or change enabled bot modules.")
     @commands.has_permissions(administrator=True)
     async def module_group(self, ctx):
-        await ctx.send("Use `/module list`, `/module enable`, `/module disable`, or `/module reload`.", ephemeral=True if ctx.interaction else False)
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Use `/module list`, `/module enable`, `/module disable`, or `/module reload`.", ephemeral=True if ctx.interaction else False)
 
-    @module_group.command(name="list", help="List enabled and disabled modules.")
+    @module_group.command(name="list", help="List enabled and disabled modules.")  # type: ignore[attr-defined]
     @commands.has_permissions(administrator=True)
     async def module_list(self, ctx):
         config = load_config()
@@ -80,7 +82,7 @@ class AdminCog(commands.Cog):
         )
         await ctx.send(embed=embed, ephemeral=True if ctx.interaction else False)
 
-    @module_group.command(name="enable", help="Enable a module and load it now.")
+    @module_group.command(name="enable", help="Enable a module and load it now.")  # type: ignore[attr-defined]
     @commands.has_permissions(administrator=True)
     @app_commands.autocomplete(name=module_autocomplete)
     async def module_enable(self, ctx, name: str):
@@ -108,7 +110,7 @@ class AdminCog(commands.Cog):
         await self.bot.tree.sync()
         await ctx.send(f"Module `{key}` enabled.", ephemeral=True if ctx.interaction else False)
 
-    @module_group.command(name="disable", help="Disable a module and unload it now.")
+    @module_group.command(name="disable", help="Disable a module and unload it now.")  # type: ignore[attr-defined]
     @commands.has_permissions(administrator=True)
     @app_commands.autocomplete(name=module_autocomplete)
     async def module_disable(self, ctx, name: str):
@@ -136,7 +138,7 @@ class AdminCog(commands.Cog):
         await self.bot.tree.sync()
         await ctx.send(f"Module `{key}` disabled.", ephemeral=True if ctx.interaction else False)
 
-    @module_group.command(name="reload", help="Reload an enabled module.")
+    @module_group.command(name="reload", help="Reload an enabled module.")  # type: ignore[attr-defined]
     @commands.has_permissions(administrator=True)
     @app_commands.autocomplete(name=module_autocomplete)
     async def module_reload(self, ctx, name: str):
@@ -167,19 +169,20 @@ class AdminCog(commands.Cog):
     # ------------------------------------------------------------------
     # /model
     # ------------------------------------------------------------------
-    @commands.hybrid_group(name="model", fallback="current", help="Show or change the active model.")
+    @commands.hybrid_group(name="model", help="Show or change the active model.")
     @commands.is_owner()
     async def model_group(self, ctx):
-        config = get_provider_config()
-        await ctx.send(f"Current provider: `{config['provider']}`\nCurrent model: `{config['model']}`", ephemeral=True if ctx.interaction else False)
+        if ctx.invoked_subcommand is None:
+            config = get_provider_config()
+            await ctx.send(f"Current provider: `{config['provider']}`\nCurrent model: `{config['model']}`", ephemeral=True if ctx.interaction else False)
 
-    @model_group.command(name="show", help="Show the active provider and model.")
+    @model_group.command(name="show", help="Show the active provider and model.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def model_show(self, ctx):
         config = get_provider_config()
         await ctx.send(f"Current provider: `{config['provider']}`\nCurrent model: `{config['model']}`", ephemeral=True if ctx.interaction else False)
 
-    @model_group.command(name="set", help="Set the active model.")
+    @model_group.command(name="set", help="Set the active model.")  # type: ignore[attr-defined]
     @commands.is_owner()
     @app_commands.autocomplete(name=model_autocomplete)
     async def model_set(self, ctx, name: str):
@@ -190,7 +193,7 @@ class AdminCog(commands.Cog):
         config = get_provider_config()
         await ctx.send(f"Model set to `{config['model']}`.", ephemeral=True if ctx.interaction else False)
 
-    @model_group.command(name="reset", help="Reset the model to the environment/default value.")
+    @model_group.command(name="reset", help="Reset the model to the environment/default value.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def model_reset(self, ctx):
         config = load_config()
@@ -203,17 +206,18 @@ class AdminCog(commands.Cog):
     # ------------------------------------------------------------------
     # /provider
     # ------------------------------------------------------------------
-    @commands.hybrid_group(name="provider", fallback="current", help="Show or change the active provider.")
+    @commands.hybrid_group(name="provider", help="Show or change the active provider.")
     @commands.is_owner()
     async def provider_group(self, ctx):
-        await ctx.send(f"Current provider: `{get_provider_name()}`", ephemeral=True if ctx.interaction else False)
+        if ctx.invoked_subcommand is None:
+            await ctx.send(f"Current provider: `{get_provider_name()}`", ephemeral=True if ctx.interaction else False)
 
-    @provider_group.command(name="show", help="Show the active provider.")
+    @provider_group.command(name="show", help="Show the active provider.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def provider_show(self, ctx):
         await ctx.send(f"Current provider: `{get_provider_name()}`", ephemeral=True if ctx.interaction else False)
 
-    @provider_group.command(name="set", help="Set the active provider.")
+    @provider_group.command(name="set", help="Set the active provider.")  # type: ignore[attr-defined]
     @commands.is_owner()
     @app_commands.autocomplete(name=provider_autocomplete)
     async def provider_set(self, ctx, name: str):
@@ -230,7 +234,7 @@ class AdminCog(commands.Cog):
         save_config(config)
         await ctx.send(f"Provider set to `{get_provider_name()}`.", ephemeral=True if ctx.interaction else False)
 
-    @provider_group.command(name="reset", help="Reset the active provider to the environment/default value.")
+    @provider_group.command(name="reset", help="Reset the active provider to the environment/default value.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def provider_reset(self, ctx):
         config = load_config()
@@ -304,12 +308,13 @@ class AdminCog(commands.Cog):
     @commands.hybrid_group(name="config", help="View or modify runtime configuration values.")
     @commands.is_owner()
     async def config_group(self, ctx):
-        await ctx.invoke(self.config_show)
+        if ctx.invoked_subcommand is None:
+            await self.config_show(ctx)
 
-    @config_group.command(name="show", help="Show current configuration values (optionally filtered by key).")
+    @config_group.command(name="show", help="Show current configuration values (optionally filtered by key).")  # type: ignore[attr-defined]
     @app_commands.describe(key="Optional config key to show (e.g. mvsep_poll_interval)")
     @commands.is_owner()
-    async def config_show(self, ctx, key: str = None):
+    async def config_show(self, ctx, key: Optional[str] = None):
         config = load_config()
         defaults = DEFAULT_CONFIG
 
@@ -336,7 +341,7 @@ class AdminCog(commands.Cog):
         else:
             await ctx.send(f"```\n{output}\n```", ephemeral=True if ctx.interaction else False)
 
-    @config_group.command(name="list", help="List all configurable keys with descriptions.")
+    @config_group.command(name="list", help="List all configurable keys with descriptions.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def config_list(self, ctx):
         descriptions = {
@@ -357,7 +362,7 @@ class AdminCog(commands.Cog):
         output = "\n".join(lines)
         await ctx.send(f"```\n{output}\n```", ephemeral=True if ctx.interaction else False)
 
-    @config_group.command(name="set", help="Set a configuration value.")
+    @config_group.command(name="set", help="Set a configuration value.")  # type: ignore[attr-defined]
     @app_commands.describe(key="Config key to set", value="New value (will be type-converted)")
     @commands.is_owner()
     async def config_set(self, ctx, key: str, value: str):
@@ -386,7 +391,7 @@ class AdminCog(commands.Cog):
         save_config(config)
         await ctx.send(f"Set `{key}` = `{converted}` (was `{config.get(key, default_val)}`).", ephemeral=True if ctx.interaction else False)
 
-    @config_group.command(name="reset", help="Reset a configuration key to its default value.")
+    @config_group.command(name="reset", help="Reset a configuration key to its default value.")  # type: ignore[attr-defined]
     @app_commands.describe(key="Config key to reset")
     @commands.is_owner()
     async def config_reset(self, ctx, key: str):
