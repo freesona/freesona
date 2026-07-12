@@ -1,5 +1,3 @@
-# utils/generation.py: Core AI generation pipeline, response types, and message sender.
-
 import os
 import re
 import asyncio
@@ -8,7 +6,7 @@ import time
 import base64
 
 from dataclasses import dataclass, field
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any, List, cast
 
 import discord
 from dotenv import load_dotenv
@@ -116,7 +114,7 @@ def _classify_error(e: Exception) -> GenerationError:
     return GenerationError(str(e))
 
 _ERROR_MESSAGES: dict[type, str] = {
-    RateLimitError:         "Maybe pipe down on those requests. Try again in a bit.",
+    RateLimitError:        "Maybe pipe down on those requests. Try again in a bit.",
     TimeoutGenerationError: "I lost my train of thought. Try again?",
     TransientError:         "Must have been the wind... Try again?",
     MalformedResponseError: "Say what now?",
@@ -319,24 +317,18 @@ async def generate(
             output_text = output or "Something went wrong."
 
         elif client and types:
-            # Construct SDK-compliant Content objects
-            contents = []
-            for p in input_payload:
-                if p["type"] == "text":
-                    part = types.Part(text=p["text"])
-                else:
-                    part = types.Part(
-                        inline_data=types.Blob(
-                            data=base64.b64decode(p["data"]),
-                            mime_type=p["mime_type"]
-                        )
-                    )
-                contents.append(types.Content(role="user", parts=[part]))
-
             if hasattr(client, "interactions"):
+                # Interactions API: expects a specific dict structure (Turn)
+                parts = []
+                for p in input_payload:
+                    if p["type"] == "text":
+                        parts.append({"text": p["text"]})
+                    else:
+                        parts.append({"inline_data": {"mime_type": p["mime_type"], "data": p["data"]}})
+                
                 kwargs_interaction = {
                     "model": current_model,
-                    "input": contents,
+                    "input": [{"role": "user", "parts": parts}],
                     "generation_config": {"max_output_tokens": 1024},
                 }
                 if apply_persona and persona:
@@ -345,11 +337,20 @@ async def generate(
                 full_text, _ = await asyncio.to_thread(_consume_stream, client, kwargs_interaction)
                 output_text = full_text
             else:
+                # Models API: expects SDK types
+                # Cast to Any to satisfy Pylance strictness for this specific parameter
+                content_objs = [
+                    types.Content(role="user", parts=[
+                        types.Part.from_text(text=p["text"]) if p["type"] == "text"
+                        else types.Part.from_bytes(data=base64.b64decode(p["data"]), mime_type=p["mime_type"])
+                        for p in input_payload
+                    ])
+                ]
                 config = types.GenerateContentConfig(system_instruction=persona) if persona else None
                 response = await asyncio.to_thread(
                     client.models.generate_content,
                     model=current_model,
-                    contents=contents,
+                    contents=cast(Any, content_objs),
                     config=config,
                 )
                 output_text = response.text if response else None
