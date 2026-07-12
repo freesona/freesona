@@ -6,9 +6,7 @@ import asyncio
 import logging
 import time
 import base64
-import io
 
-from PIL import Image
 from dataclasses import dataclass, field
 from typing import Optional, Union, Dict, Any, List
 
@@ -28,7 +26,7 @@ from utils.memory import (
 )
 from utils.security import sanitize_prompt, unsafe_output
 from utils.config import LAST_DEBUG, get_model_name, get_provider_name, get_provider_model, load_config
-from utils.providers import build_messages, generate_text
+from utils.providers import generate_text
 from utils.chroma import query_knowledge
 
 load_dotenv()
@@ -43,6 +41,7 @@ PROVIDER = get_provider_name()
 # Global state tracking for rate limiting
 call_timestamps: list[float] = []
 
+# Split messaging - loaded from config
 def _get_split_min_length() -> int:
     return int(load_config().get("generation_split_min_length", 280))
 
@@ -108,19 +107,12 @@ class TimeoutGenerationError(GenerationError):
 
 def _classify_error(e: Exception) -> GenerationError:
     msg = str(e).lower()
-
-    # Catch 25MB payload limits explicitly
-    if "400" in msg and "payload is below" in msg:
-        return GenerationError("The attached file exceeds the 25 MB size limit.")
-    
-    # Use regex to match whole words and prevent false positives from URLs
-    if "429" in msg or re.search(r'\b(quota|rate limit)\b', msg):
+    if "429" in msg or "quota" in msg or "rate" in msg:
         return RateLimitError(str(e))
     if "timeout" in msg or "timed out" in msg:
         return TimeoutGenerationError(str(e))
     if "500" in msg or "503" in msg or "internal" in msg:
         return TransientError(str(e))
-    
     return GenerationError(str(e))
 
 _ERROR_MESSAGES: dict[type, str] = {
@@ -134,6 +126,10 @@ _ERROR_MESSAGES: dict[type, str] = {
 def _user_facing_error(e: GenerationError) -> str:
     return _ERROR_MESSAGES.get(type(e), _ERROR_MESSAGES[GenerationError])
 
+# ---------------------------------------------------------------------------
+# Rate limiter
+# ---------------------------------------------------------------------------
+
 async def rate_limit():
     global call_timestamps
     now = time.time()
@@ -143,9 +139,14 @@ async def rate_limit():
         await asyncio.sleep(wait_time)
     call_timestamps.append(time.time())
 
+# ---------------------------------------------------------------------------
+# Text splitter + response builder
+# ---------------------------------------------------------------------------
+
 def split_into_segments(text: str) -> list[str]:
     if len(text) < _get_split_min_length():
         return [text]
+
     paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
     if len(paragraphs) <= 1:
         sentences = re.split(r"(?<=[.!?])\s+", text)
@@ -160,6 +161,7 @@ def split_into_segments(text: str) -> list[str]:
         if current:
             chunks.append(current.strip())
         return chunks if len(chunks) > 1 else [text]
+
     return paragraphs
 
 def build_response(text: str) -> ConversationResponse:
@@ -182,6 +184,10 @@ def clean_text(text: str, limit: int = 4000) -> str:
         return cut[:last_dot + 1]
     return cut
 
+# ---------------------------------------------------------------------------
+# Multi-message sender
+# ---------------------------------------------------------------------------
+
 async def send_response(
     response: ConversationResponse,
     channel: discord.abc.Messageable,
@@ -190,14 +196,17 @@ async def send_response(
 ) -> None:
     if not response.segments:
         return
+
     segments = [s for s in response.segments if s.text.strip()]
     if not segments:
         return
+
     for i, segment in enumerate(segments):
         try:
             if segment.typing and segment.delay > 0:
                 async with channel.typing():
                     await asyncio.sleep(segment.delay)
+
             if i == 0 and reply_to is not None:
                 await reply_to.reply(segment.text)
             else:
@@ -207,23 +216,14 @@ async def send_response(
             logger.warning(f"Missing permissions to send messages in channel {channel_id}")
             return
 
-def compress_image_bytes(image_data: bytes, max_size: int = 25_000_000) -> bytes:
-    if len(image_data) <= max_size:
-        return image_data
-    try:
-        with Image.open(io.BytesIO(image_data)) as img:
-            if img.mode in ("RGBA", "P"):
-                img = img.convert("RGB")
-            output = io.BytesIO()
-            img.save(output, format="JPEG", optimize=True, quality=85)
-            return output.getvalue()
-    except Exception as e:
-        logger.error(f"Image compression failed: {e}")
-        return image_data
+# ---------------------------------------------------------------------------
+# Attachment helper
+# ---------------------------------------------------------------------------
 
 async def extract_attachments(message: Optional[discord.Message]) -> list[tuple[bytes, str]]:
     if not message or not message.attachments:
         return []
+
     results = []
     for att in message.attachments:
         mime = att.content_type or ""
@@ -233,50 +233,55 @@ async def extract_attachments(message: Optional[discord.Message]) -> list[tuple[
             results.append((data, mime_base))
         except Exception as e:
             logger.error(f"Failed to read attachment {att.filename}: {e}")
+
     return results
 
-def _build_gemini_contents(
+# ---------------------------------------------------------------------------
+# Input builders
+# ---------------------------------------------------------------------------
+
+def _build_input(
     text: str,
     attachments: Optional[list[tuple[bytes, str]]],
     reply: Optional[dict],
     instruction_prefix: str,
-    username: str = "",
-) -> List[Any]:
-    if types is None:
-        return []
+    username: str,
+) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
 
-    parts = []
     if reply:
-        parts.append(types.Part.from_text(text="When replying, address the author of the most recent message."))
-        parts.append(types.Part.from_text(text=f"[quoted from {reply['author']}]:\n{reply['content']}"))
+        payload.append({"type": "text", "text": "When replying, address the author of the most recent message."})
+        payload.append({"type": "text", "text": f"[quoted from {reply['author']}]:\n{reply['content']}"})
 
-    user_text = f"{instruction_prefix}\n\n[{username}]: {text}".strip() if username else text.strip()
+    name_tag = f"[{username}]: " if username else ""
+    user_text = f"{instruction_prefix}\n\n{name_tag}{text}".strip() if instruction_prefix else f"{name_tag}{text}".strip()
+
     if user_text:
-        parts.append(types.Part.from_text(text=user_text))
+        payload.append({"type": "text", "text": user_text})
 
     for att_bytes, att_mime in (attachments or []):
-        parts.append(types.Part.from_bytes(data=att_bytes, mime_type=att_mime))
+        b64_data = base64.b64encode(att_bytes).decode("utf-8")
+        media_type = "image" if att_mime.startswith("image/") else "document"
+        payload.append({"type": media_type, "data": b64_data, "mime_type": att_mime})
 
-    if not parts:
-        parts.append(types.Part.from_text(text="Hello"))
+    if not payload:
+        payload.append({"type": "text", "text": "Hello"})
 
-    return [types.Content(role="user", parts=parts)]
+    return payload
 
 def _consume_stream(client_obj, kwargs_dict):
     stream = client_obj.interactions.create(stream=True, **kwargs_dict)
     text_acc = ""
-    last_interaction_id = None
     for event in stream:
-        event_type = getattr(event, "event_type", None)
-        if event_type == "step.delta":
+        if hasattr(event, "event_type") and event.event_type == "step.delta":
             delta = getattr(event, "delta", None)
             if delta and hasattr(delta, "text"):
                 text_acc += str(delta.text)
-        elif event_type == "interaction.completed":
-            interaction = getattr(event, "interaction", None)
-            if interaction and getattr(interaction, "id", None):
-                last_interaction_id = str(interaction.id)
-    return text_acc, last_interaction_id
+    return text_acc, None
+
+# ---------------------------------------------------------------------------
+# Core generation
+# ---------------------------------------------------------------------------
 
 async def generate(
     prompt: Optional[Union[Dict[str, Any], str]],
@@ -302,14 +307,7 @@ async def generate(
         if memory_block:
             persona = f"{current_persona}\n\n{memory_block}"
 
-    if attachments:
-        processed_attachments = []
-        for att_bytes, att_mime in attachments:
-            if att_mime.startswith("image/"):
-                att_bytes = compress_image_bytes(att_bytes)
-                att_mime = "image/jpeg"
-            processed_attachments.append((att_bytes, att_mime))
-        attachments = processed_attachments
+    input_payload = _build_input(text, attachments, None, instruction_prefix, username)
 
     try:
         provider_name = get_provider_name()
@@ -317,35 +315,45 @@ async def generate(
 
         if provider_name != "gemini":
             output = generate_text(text, system_prompt=persona, provider=provider_name, model=current_model)
-            return build_response(output if output else "Something went wrong.")
+            return build_response(output or "Something went wrong.")
 
         if not client:
             raise RuntimeError("Gemini client not initialized.")
 
-        gemini_contents = _build_gemini_contents(text, attachments, None, instruction_prefix, username)
+        if types is not None:
+            # Prepare input: interactions.create expects 'input', generate_content expects 'contents'.
+            # Both expect a list of mixed types (strings and types.Part objects).
+            formatted_input = []
+            for p in input_payload:
+                if p["type"] == "text":
+                    formatted_input.append(p["text"])
+                else:
+                    formatted_input.append(
+                        types.Part.from_bytes(data=base64.b64decode(p["data"]), mime_type=p["mime_type"])
+                    )
 
-        if hasattr(client, "interactions"):
-            kwargs_interaction = {
-                "model": current_model,
-                "contents": gemini_contents, 
-                "generation_config": {"max_output_tokens": 1024},
-            }
-            if apply_persona and persona:
-                kwargs_interaction["system_instruction"] = persona
+            if hasattr(client, "interactions"):
+                kwargs_interaction = {
+                    "model": current_model,
+                    "input": formatted_input,  # 'interactions.create' requires 'input'
+                    "generation_config": {"max_output_tokens": 1024},
+                }
+                if apply_persona and persona:
+                    kwargs_interaction["system_instruction"] = persona
 
-            full_text, _ = await asyncio.to_thread(_consume_stream, client, kwargs_interaction)
-            output_text = full_text
-        else:
-            config = types.GenerateContentConfig(system_instruction=persona) if (types and persona) else None
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=current_model,
-                contents=gemini_contents,
-                config=config,
-            )
-            output_text = response.text if response else None
+                full_text, _ = await asyncio.to_thread(_consume_stream, client, kwargs_interaction)
+                output_text = full_text
+            else:
+                config = types.GenerateContentConfig(system_instruction=persona) if persona else None
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=current_model,
+                    contents=formatted_input, # 'generate_content' requires 'contents'
+                    config=config,
+                )
+                output_text = response.text if response else None
 
-        return build_response(clean_text(output_text) if output_text else "I couldn't generate a response.")
+        return build_response(clean_text(output_text) if output_text else "No response generated.")
 
     except Exception as e:
         logger.error(f"Generation error: {e}")
@@ -358,3 +366,5 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
         return build_response(_user_facing_error(e))
     except Exception:
         return build_response("Something went wrong. Try again.")
+
+__all__ = ["ConversationResponse", "build_response", "extract_attachments", "safe_generate", "send_response"]
