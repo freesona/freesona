@@ -301,7 +301,7 @@ class AdminCog(commands.Cog):
     # ------------------------------------------------------------------
     # /config
     # ------------------------------------------------------------------
-    @commands.hybrid_group(name="config", fallback="show", help="View or modify runtime configuration values.")
+    @commands.hybrid_group(name="config", help="View or modify runtime configuration values.")
     @commands.is_owner()
     async def config_group(self, ctx):
         await ctx.invoke(self.config_show)
