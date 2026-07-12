@@ -3,7 +3,6 @@ import logging
 from typing import Any
 
 import requests
-
 import base64
 
 from utils.config import get_model_name, get_provider_model as get_configured_provider_model, get_provider_name as get_configured_provider_name
@@ -34,7 +33,7 @@ def build_messages(
     if not attachments:
         messages.append({"role": "user", "content": user_prompt})
     else:
-        # Standard OpenAI Multimodal/Vision message format
+        # Standard OpenAI / NVIDIA NIM Multimodal Vision message format
         content_parts: list[dict[str, Any]] = []
         if user_prompt:
             content_parts.append({"type": "text", "text": user_prompt})
@@ -79,7 +78,7 @@ def post_chat_completion(
     url: str,
     headers: dict[str, str],
     model: str,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     max_output_tokens: int,
     token_field: str = "max_tokens",
     extra_payload: dict[str, Any] | None = None,
@@ -115,7 +114,7 @@ def generate_text(
     provider: str | None = None,
     model: str | None = None,
     max_output_tokens: int = 1024,
-    attachments: list[tuple[bytes, str]] | None = None,  # Add attachments param
+    attachments: list[tuple[bytes, str]] | None = None,
 ) -> str:
     provider_name = normalize_provider_name(provider)
     model_name = (model or get_provider_model() or get_model_name()).strip() or get_model_name()
