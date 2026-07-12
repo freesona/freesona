@@ -8,7 +8,7 @@ This document explains how Freesona is structured internally. It is intended for
 
 ```text
 Freesona/
-├── main.py                   # Bot startup, intents, prefix, on_ready
+├── main.py                   # Bot startup, intents, prefix, on_ready, HTTP server (port via HTTP_PORT env var, default 10000)
 ├── fastapi_server.py         # FastAPI health + MVSEP webhook receiver
 ├── cogs/
 │   ├── ai/

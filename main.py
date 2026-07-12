@@ -187,8 +187,10 @@ async def send_app_error(interaction: discord.Interaction, message: str):
         logger.warning(f"Failed to send app error response: {e}")
 
 # --- Background Tasks & Execution ---
+HTTP_PORT = int(os.getenv("HTTP_PORT", "10000"))
+
 async def start_http():
-    config = uvicorn.Config(app, host="0.0.0.0", port=10000, log_level="warning")
+    config = uvicorn.Config(app, host="0.0.0.0", port=HTTP_PORT, log_level="warning")
     server = uvicorn.Server(config)
     await server.serve()
 

@@ -84,6 +84,9 @@ These scripts create `.env` from `.env.sample` on first run, validate the requir
 Create a `.env` file:
 
 ```dotenv
+# HTTP Server
+HTTP_PORT=10000
+
 # Discord
 BOT_TOKEN=YOUR_DISCORD_BOT_TOKEN
 CHANNEL_ID=YOUR_LOG_CHANNEL_ID

@@ -18,4 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# HTTP health/webhook server (configurable via HTTP_PORT env var, default 10000)
+EXPOSE 10000
+
 CMD ["python", "main.py"]
