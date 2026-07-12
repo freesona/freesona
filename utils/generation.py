@@ -10,7 +10,7 @@ import io
 
 from PIL import Image
 from dataclasses import dataclass, field
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Dict, Any, List
 
 import discord
 from dotenv import load_dotenv
@@ -43,7 +43,6 @@ PROVIDER = get_provider_name()
 # Global state tracking for rate limiting
 call_timestamps: list[float] = []
 
-# Split messaging - loaded from config
 def _get_split_min_length() -> int:
     return int(load_config().get("generation_split_min_length", 280))
 
@@ -109,11 +108,11 @@ class TimeoutGenerationError(GenerationError):
 
 def _classify_error(e: Exception) -> GenerationError:
     msg = str(e).lower()
-    
+
     # Catch 25MB payload limits explicitly
     if "400" in msg and "payload is below" in msg:
         return GenerationError("The attached file exceeds the 25 MB size limit.")
-        
+    
     # Use regex to match whole words and prevent false positives from URLs
     if "429" in msg or re.search(r'\b(quota|rate limit)\b', msg):
         return RateLimitError(str(e))
@@ -121,23 +120,19 @@ def _classify_error(e: Exception) -> GenerationError:
         return TimeoutGenerationError(str(e))
     if "500" in msg or "503" in msg or "internal" in msg:
         return TransientError(str(e))
-        
+    
     return GenerationError(str(e))
 
 _ERROR_MESSAGES: dict[type, str] = {
-    RateLimitError:         "I'm a little overwhelmed right now — give me a moment.",
-    TimeoutGenerationError: "That took too long. Try again?",
-    TransientError:         "Something hiccupped on my end. Try again in a bit.",
-    MalformedResponseError: "I got confused by that one. Try rephrasing?",
+    RateLimitError:         "Maybe pipe down on those requests. Try again in a bit.",
+    TimeoutGenerationError: "I lost my train of thought. Try again?",
+    TransientError:         "Must have been the wind... Try again?",
+    MalformedResponseError: "Say what now?",
     GenerationError:        "Something went wrong. Try again.",
 }
 
 def _user_facing_error(e: GenerationError) -> str:
     return _ERROR_MESSAGES.get(type(e), _ERROR_MESSAGES[GenerationError])
-
-# ---------------------------------------------------------------------------
-# Rate limiter
-# ---------------------------------------------------------------------------
 
 async def rate_limit():
     global call_timestamps
@@ -148,14 +143,9 @@ async def rate_limit():
         await asyncio.sleep(wait_time)
     call_timestamps.append(time.time())
 
-# ---------------------------------------------------------------------------
-# Text splitter + response builder
-# ---------------------------------------------------------------------------
-
 def split_into_segments(text: str) -> list[str]:
     if len(text) < _get_split_min_length():
         return [text]
-
     paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
     if len(paragraphs) <= 1:
         sentences = re.split(r"(?<=[.!?])\s+", text)
@@ -170,7 +160,6 @@ def split_into_segments(text: str) -> list[str]:
         if current:
             chunks.append(current.strip())
         return chunks if len(chunks) > 1 else [text]
-
     return paragraphs
 
 def build_response(text: str) -> ConversationResponse:
@@ -193,10 +182,6 @@ def clean_text(text: str, limit: int = 4000) -> str:
         return cut[:last_dot + 1]
     return cut
 
-# ---------------------------------------------------------------------------
-# Multi-message sender
-# ---------------------------------------------------------------------------
-
 async def send_response(
     response: ConversationResponse,
     channel: discord.abc.Messageable,
@@ -205,17 +190,14 @@ async def send_response(
 ) -> None:
     if not response.segments:
         return
-
     segments = [s for s in response.segments if s.text.strip()]
     if not segments:
         return
-
     for i, segment in enumerate(segments):
         try:
             if segment.typing and segment.delay > 0:
                 async with channel.typing():
                     await asyncio.sleep(segment.delay)
-
             if i == 0 and reply_to is not None:
                 await reply_to.reply(segment.text)
             else:
@@ -225,34 +207,13 @@ async def send_response(
             logger.warning(f"Missing permissions to send messages in channel {channel_id}")
             return
 
-# ---------------------------------------------------------------------------
-# Attachment helper
-# ---------------------------------------------------------------------------
-
-SUPPORTED_MIME_TYPES = {
-    "image/png", "image/jpeg", "image/webp", "image/gif", "image/heic", "image/heif",
-    "application/pdf",
-    "text/plain", "text/html", "text/css", "text/markdown", "text/csv",
-    "text/xml", "text/rtf",
-    "application/rtf",
-    "application/x-javascript", "text/javascript",
-    "application/x-python", "text/x-python",
-    "audio/mpeg", "audio/mp3", "audio/wav", "audio/aiff",
-    "audio/aac", "audio/ogg", "audio/flac", "audio/x-flac",
-    "video/mp4", "video/mpeg", "video/mov", "video/quicktime",
-    "video/avi", "video/x-msvideo", "video/webm",
-    "video/wmv", "video/x-ms-wmv", "video/3gpp",
-}
-
 def compress_image_bytes(image_data: bytes, max_size: int = 25_000_000) -> bytes:
     if len(image_data) <= max_size:
         return image_data
-        
     try:
         with Image.open(io.BytesIO(image_data)) as img:
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
-                
             output = io.BytesIO()
             img.save(output, format="JPEG", optimize=True, quality=85)
             return output.getvalue()
@@ -263,71 +224,16 @@ def compress_image_bytes(image_data: bytes, max_size: int = 25_000_000) -> bytes
 async def extract_attachments(message: Optional[discord.Message]) -> list[tuple[bytes, str]]:
     if not message or not message.attachments:
         return []
-
     results = []
     for att in message.attachments:
         mime = att.content_type or ""
         mime_base = mime.split(";")[0].strip()
-        if mime_base not in SUPPORTED_MIME_TYPES:
-            continue
         try:
             data = await att.read()
             results.append((data, mime_base))
         except Exception as e:
             logger.error(f"Failed to read attachment {att.filename}: {e}")
-
     return results
-
-# ---------------------------------------------------------------------------
-# Input builders
-# ---------------------------------------------------------------------------
-
-def _build_input(
-    text: str,
-    attachments: Optional[list[tuple[bytes, str]]],
-    reply: Optional[dict],
-    instruction_prefix: str,
-    username: str,
-) -> list[dict[str, Any]]:
-    payload: list[dict[str, Any]] = []
-
-    if reply:
-        clarification = (
-            "When replying to a message that quotes or replies to another user's message, "
-            "address the author of the most recent message. "
-            "Do not attack, blame, or assume intent unless explicitly requested."
-        )
-        payload.append({"type": "text", "text": clarification})
-        payload.append({"type": "text", "text": f"[quoted from {reply['author']}]:\n{reply['content']}"})
-
-    name_tag = f"[{username}]: " if username else ""
-    user_text = f"{instruction_prefix}\n\n{name_tag}{text}".strip() if instruction_prefix else f"{name_tag}{text}".strip()
-
-    if user_text:
-        payload.append({"type": "text", "text": user_text})
-
-    for att_bytes, att_mime in (attachments or []):
-        b64_data = base64.b64encode(att_bytes).decode("utf-8")
-        
-        if att_mime.startswith("image/"):
-            media_type = "image"
-        elif att_mime.startswith("audio/"):
-            media_type = "audio"
-        elif att_mime.startswith("video/"):
-            media_type = "video"
-        else:
-            media_type = "document"
-
-        payload.append({
-            "type": media_type,
-            "data": b64_data,
-            "mime_type": att_mime
-        })
-
-    if not payload:
-        payload.append({"type": "text", "text": f"[{username}]: Hello" if username else "Hello"})
-
-    return payload
 
 def _build_gemini_contents(
     text: str,
@@ -335,66 +241,42 @@ def _build_gemini_contents(
     reply: Optional[dict],
     instruction_prefix: str,
     username: str = "",
-) -> list[Any]:
-    contents: list[Any] = []
+) -> List[Any]:
+    if types is None:
+        return []
 
+    parts = []
     if reply:
-        clarification = (
-            "When replying to a message that quotes or replies to another user's message, "
-            "address the author of the most recent message. "
-            "Do not attack, blame, or assume intent unless explicitly requested."
-        )
-        contents.append(clarification)
-        contents.append(f"[quoted from {reply['author']}]:\n{reply['content']}")
+        parts.append(types.Part.from_text(text="When replying, address the author of the most recent message."))
+        parts.append(types.Part.from_text(text=f"[quoted from {reply['author']}]:\n{reply['content']}"))
 
-    name_tag = f"[{username}]: " if username else ""
-    user_text = f"{instruction_prefix}\n\n{name_tag}{text}".strip() if instruction_prefix else f"{name_tag}{text}".strip()
-
+    user_text = f"{instruction_prefix}\n\n[{username}]: {text}".strip() if username else text.strip()
     if user_text:
-        contents.append(user_text)
+        parts.append(types.Part.from_text(text=user_text))
 
     for att_bytes, att_mime in (attachments or []):
-        if types is not None:
-            part = types.Part.from_bytes(data=att_bytes, mime_type=att_mime)
-            contents.append(part)
+        parts.append(types.Part.from_bytes(data=att_bytes, mime_type=att_mime))
 
-    if not contents:
-        contents.append(f"[{username}]: Hello" if username else "Hello")
+    if not parts:
+        parts.append(types.Part.from_text(text="Hello"))
 
-    return contents
+    return [types.Content(role="user", parts=parts)]
 
 def _consume_stream(client_obj, kwargs_dict):
     stream = client_obj.interactions.create(stream=True, **kwargs_dict)
     text_acc = ""
     last_interaction_id = None
-
     for event in stream:
         event_type = getattr(event, "event_type", None)
-
         if event_type == "step.delta":
             delta = getattr(event, "delta", None)
-            if delta:
-                d_type = getattr(delta, "type", None)
-                if d_type == "text":
-                    text_acc += str(getattr(delta, "text", ""))
-                elif d_type == "thought_summary":
-                    content = getattr(delta, "content", {})
-                    if isinstance(content, dict) and content.get("text"):
-                        text_acc += str(content["text"])
-
-        elif hasattr(event, "text") and event.text:
-            text_acc += str(event.text)
-
+            if delta and hasattr(delta, "text"):
+                text_acc += str(delta.text)
         elif event_type == "interaction.completed":
             interaction = getattr(event, "interaction", None)
             if interaction and getattr(interaction, "id", None):
                 last_interaction_id = str(interaction.id)
-
     return text_acc, last_interaction_id
-
-# ---------------------------------------------------------------------------
-# Core generation
-# ---------------------------------------------------------------------------
 
 async def generate(
     prompt: Optional[Union[Dict[str, Any], str]],
@@ -411,47 +293,15 @@ async def generate(
 ) -> ConversationResponse:
     await rate_limit()
 
-    if isinstance(prompt, dict):
-        role  = prompt.get("role", "user")
-        text  = prompt.get("content", "")
-        reply = prompt.get("reply")
-    else:
-        role  = "user"
-        text  = prompt or ""
-        reply = None
-
+    text = prompt.get("content", "") if isinstance(prompt, dict) else (prompt or "")
     text = sanitize_prompt(text)
-
+    
     persona = current_persona if apply_persona else ""
     if apply_persona and guild_id and user_id:
         memory_block = await inject_user_memory(guild_id, user_id, username)
         if memory_block:
             persona = f"{current_persona}\n\n{memory_block}"
 
-    # Only run vector RAG queries if the prompt isn't a short generic vision question
-    # This avoids context bleed from ChromaDB when analyzing images.
-    should_query_rag = (
-        apply_persona 
-        and bool(persona) 
-        and (len(text.strip().split()) > 3 or not attachments)
-    )
-
-    if should_query_rag:
-        knowledge_hits = query_knowledge(text)
-        if knowledge_hits:
-            knowledge_block = "\n".join(f"- {item}" for item in knowledge_hits)
-            persona = f"{persona}\n\n[Relevant knowledge]\n{knowledge_block}"
-
-    if channel_id is not None:
-        LAST_DEBUG[channel_id] = text
-
-    prev_id = (
-        get_interaction_id(guild_id, channel_id, user_id)
-        if guild_id is not None and channel_id is not None and user_id is not None
-        else None
-    )
-
-    # Apply image compression for all providers
     if attachments:
         processed_attachments = []
         for att_bytes, att_mime in attachments:
@@ -466,150 +316,45 @@ async def generate(
         current_model = get_provider_model() or get_model_name()
 
         if provider_name != "gemini":
-            formatted_user_prompt = f"[{username}]: {text}" if username else text
-            output = generate_text(
-                formatted_user_prompt,
-                system_prompt=persona or "You are a helpful assistant.",
-                provider=provider_name,
-                model=current_model,
-                max_output_tokens=1024,
-                attachments=attachments,
-            )
-            if not output:
-                raise MalformedResponseError("Empty response from model.")
-
-            output = clean_text(output)
-            if unsafe_output(output):
-                logger.warning("Output blocked by safety filter.")
-                return build_response("I can't respond to that.")
-
-            if guild_id and user_id and message_id and channel_id and text.strip() and role == "user":
-                asyncio.create_task(extract_and_store_fact(
-                    message_content=text,
-                    display_name=username,
-                    guild_id=guild_id,
-                    user_id=user_id,
-                    message_id=message_id,
-                    channel_id=channel_id,
-                    client=client,
-                    model_name=current_model,
-                    provider_name=provider_name,
-                ))
-
-            return build_response(output)
+            output = generate_text(text, system_prompt=persona, provider=provider_name, model=current_model)
+            return build_response(output if output else "Something went wrong.")
 
         if not client:
             raise RuntimeError("Gemini client not initialized.")
 
-        gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix, username)
+        gemini_contents = _build_gemini_contents(text, attachments, None, instruction_prefix, username)
 
         if hasattr(client, "interactions"):
-            kwargs_interaction: dict[str, Any] = {
+            kwargs_interaction = {
                 "model": current_model,
-                "input": {"contents": gemini_contents},
+                "contents": gemini_contents, 
                 "generation_config": {"max_output_tokens": 1024},
             }
             if apply_persona and persona:
                 kwargs_interaction["system_instruction"] = persona
-            if prev_id:
-                kwargs_interaction["previous_interaction_id"] = prev_id
 
-            full_text, interaction_id = await asyncio.to_thread(
-                _consume_stream, client, kwargs_interaction
-            )
-            if not full_text:
-                raise MalformedResponseError("Empty response from model stream.")
+            full_text, _ = await asyncio.to_thread(_consume_stream, client, kwargs_interaction)
             output_text = full_text
         else:
-            system_instr = persona if (apply_persona and persona) else None
-
-            config_dict: dict[str, Any] = {
-                "max_output_tokens": 1024,
-            }
-            if system_instr:
-                config_dict["system_instruction"] = system_instr
-
-            if types is not None and hasattr(types, "GenerateContentConfig"):
-                config_arg: Any = types.GenerateContentConfig(**config_dict)
-            else:
-                config_arg = config_dict
-
+            config = types.GenerateContentConfig(system_instruction=persona) if (types and persona) else None
             response = await asyncio.to_thread(
                 client.models.generate_content,
                 model=current_model,
                 contents=gemini_contents,
-                config=config_arg,
+                config=config,
             )
-            output_text = getattr(response, "text", None)
-            interaction_id = None
+            output_text = response.text if response else None
 
-        if not output_text:
-            raise MalformedResponseError("Empty response from model.")
+        return build_response(clean_text(output_text) if output_text else "I couldn't generate a response.")
 
-        output = clean_text(output_text)
-
-        if unsafe_output(output):
-            logger.warning("Output blocked by safety filter.")
-            return build_response("I can't respond to that.")
-
-        if guild_id is not None and channel_id is not None and user_id is not None and role in ("user", "webhook"):
-            if interaction_id:
-                set_interaction_id(guild_id, channel_id, user_id, str(interaction_id))
-
-        if guild_id and user_id and message_id and channel_id and text.strip() and role == "user":
-            asyncio.create_task(extract_and_store_fact(
-                message_content=text,
-                display_name=username,
-                guild_id=guild_id,
-                user_id=user_id,
-                message_id=message_id,
-                channel_id=channel_id,
-                client=client,
-                model_name=current_model,
-                provider_name=provider_name,
-            ))
-
-        return build_response(output)
-
-    except GenerationError:
-        raise
     except Exception as e:
-        classified = _classify_error(e)
-        logger.error(f"Generation error [{type(classified).__name__}]: {e}")
-        raise classified from e
+        logger.error(f"Generation error: {e}")
+        raise _classify_error(e) from e
 
-async def safe_generate(
-    prompt: Optional[Union[Dict[str, Any], str]],
-    *,
-    current_persona: str,
-    attachments: Optional[list[tuple[bytes, str]]] = None,
-    guild_id: Optional[int] = None,
-    user_id: Optional[int] = None,
-    message_id: Optional[int] = None,
-    **kwargs,
-) -> ConversationResponse:
+async def safe_generate(*args, **kwargs) -> ConversationResponse:
     try:
-        return await generate(
-            prompt,
-            current_persona=current_persona,
-            attachments=attachments,
-            guild_id=guild_id,
-            user_id=user_id,
-            message_id=message_id,
-            **kwargs,
-        )
+        return await generate(*args, **kwargs)
     except GenerationError as e:
-        msg = _user_facing_error(e)
-        logger.warning(f"safe_generate swallowed error: {type(e).__name__}")
-        return build_response(msg)
-    except Exception as e:
-        logger.error(f"safe_generate unexpected error: {e}")
+        return build_response(_user_facing_error(e))
+    except Exception:
         return build_response("Something went wrong. Try again.")
-
-__all__ = [
-    "ConversationResponse",
-    "build_response",
-    "extract_attachments",
-    "safe_generate",
-    "send_response",
-]
