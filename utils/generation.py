@@ -6,7 +6,7 @@ import time
 import base64
 
 from dataclasses import dataclass, field
-from typing import Optional, Union, Dict, Any, List, cast
+from typing import Optional, Union, Dict, Any, cast
 
 import discord
 from dotenv import load_dotenv
@@ -19,13 +19,11 @@ except Exception:
     types = None
 
 from utils.memory import (
-    get_interaction_id, set_interaction_id,
-    inject_user_memory, extract_and_store_fact,
+    inject_user_memory,
 )
-from utils.security import sanitize_prompt, unsafe_output
-from utils.config import LAST_DEBUG, get_model_name, get_provider_name, get_provider_model, load_config
+from utils.security import sanitize_prompt
+from utils.config import get_model_name, get_provider_name, get_provider_model, load_config
 from utils.providers import generate_text
-from utils.chroma import query_knowledge
 
 load_dotenv()
 
@@ -335,6 +333,7 @@ async def generate(
     try:
         provider_name = get_provider_name()
         current_model = get_provider_model() or get_model_name()
+        kwargs_interaction: Optional[Dict[str, Any]] = None
         output_text: Optional[str] = None
 
         if provider_name != "gemini":
@@ -380,10 +379,7 @@ async def generate(
                 )
                 output_text = response.text if response else None
 
-        if not output_text:
-            raise MalformedResponseError("Empty response from model stream.")
-
-        return build_response(clean_text(output_text))
+        return build_response(clean_text(output_text or "Something went wrong."))
 
     except Exception as e:
         logger.error(f"Generation error: {e}")
