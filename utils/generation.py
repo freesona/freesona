@@ -6,7 +6,9 @@ import asyncio
 import logging
 import time
 import base64
+import io
 
+from PIL import Image
 from dataclasses import dataclass, field
 from typing import Optional, Union, Dict, Any
 
@@ -107,12 +109,19 @@ class TimeoutGenerationError(GenerationError):
 
 def _classify_error(e: Exception) -> GenerationError:
     msg = str(e).lower()
-    if "429" in msg or "quota" in msg or "rate" in msg:
+    
+    # Catch 25MB payload limits explicitly
+    if "400" in msg and "payload is below" in msg:
+        return GenerationError("The attached file exceeds the 25 MB size limit.")
+        
+    # Use regex to match whole words and prevent false positives from URLs
+    if "429" in msg or re.search(r'\b(quota|rate limit)\b', msg):
         return RateLimitError(str(e))
     if "timeout" in msg or "timed out" in msg:
         return TimeoutGenerationError(str(e))
     if "500" in msg or "503" in msg or "internal" in msg:
         return TransientError(str(e))
+        
     return GenerationError(str(e))
 
 _ERROR_MESSAGES: dict[type, str] = {
@@ -164,7 +173,6 @@ def split_into_segments(text: str) -> list[str]:
 
     return paragraphs
 
-
 def build_response(text: str) -> ConversationResponse:
     segments_text = split_into_segments(text)
     segments = []
@@ -175,7 +183,6 @@ def build_response(text: str) -> ConversationResponse:
         )
         segments.append(MessageSegment(text=seg, delay=delay, typing=True))
     return ConversationResponse(segments=segments)
-
 
 def clean_text(text: str, limit: int = 4000) -> str:
     if len(text) <= limit:
@@ -236,6 +243,22 @@ SUPPORTED_MIME_TYPES = {
     "video/avi", "video/x-msvideo", "video/webm",
     "video/wmv", "video/x-ms-wmv", "video/3gpp",
 }
+
+def compress_image_bytes(image_data: bytes, max_size: int = 25_000_000) -> bytes:
+    if len(image_data) <= max_size:
+        return image_data
+        
+    try:
+        with Image.open(io.BytesIO(image_data)) as img:
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+                
+            output = io.BytesIO()
+            img.save(output, format="JPEG", optimize=True, quality=85)
+            return output.getvalue()
+    except Exception as e:
+        logger.error(f"Image compression failed: {e}")
+        return image_data
 
 async def extract_attachments(message: Optional[discord.Message]) -> list[tuple[bytes, str]]:
     if not message or not message.attachments:
@@ -306,7 +329,6 @@ def _build_input(
 
     return payload
 
-
 def _build_gemini_contents(
     text: str,
     attachments: Optional[list[tuple[bytes, str]]],
@@ -340,7 +362,6 @@ def _build_gemini_contents(
         contents.append(f"[{username}]: Hello" if username else "Hello")
 
     return contents
-
 
 def _consume_stream(client_obj, kwargs_dict):
     stream = client_obj.interactions.create(stream=True, **kwargs_dict)
@@ -421,8 +442,6 @@ async def generate(
             knowledge_block = "\n".join(f"- {item}" for item in knowledge_hits)
             persona = f"{persona}\n\n[Relevant knowledge]\n{knowledge_block}"
 
-    input_payload = _build_input(text, attachments, reply, instruction_prefix, username)
-
     if channel_id is not None:
         LAST_DEBUG[channel_id] = text
 
@@ -431,6 +450,16 @@ async def generate(
         if guild_id is not None and channel_id is not None and user_id is not None
         else None
     )
+
+    # Apply image compression for all providers
+    if attachments:
+        processed_attachments = []
+        for att_bytes, att_mime in attachments:
+            if att_mime.startswith("image/"):
+                att_bytes = compress_image_bytes(att_bytes)
+                att_mime = "image/jpeg"
+            processed_attachments.append((att_bytes, att_mime))
+        attachments = processed_attachments
 
     try:
         provider_name = get_provider_name()
@@ -472,10 +501,12 @@ async def generate(
         if not client:
             raise RuntimeError("Gemini client not initialized.")
 
+        gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix, username)
+
         if hasattr(client, "interactions"):
             kwargs_interaction: dict[str, Any] = {
                 "model": current_model,
-                "input": input_payload,
+                "input": gemini_contents,
                 "generation_config": {"max_output_tokens": 1024},
             }
             if apply_persona and persona:
@@ -490,8 +521,6 @@ async def generate(
                 raise MalformedResponseError("Empty response from model stream.")
             output_text = full_text
         else:
-            gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix, username)
-
             system_instr = persona if (apply_persona and persona) else None
 
             config_dict: dict[str, Any] = {
