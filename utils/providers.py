@@ -35,8 +35,13 @@ def build_messages(
     else:
         # Standard OpenAI / NVIDIA NIM Multimodal Vision message format
         content_parts: list[dict[str, Any]] = []
-        if user_prompt:
-            content_parts.append({"type": "text", "text": user_prompt})
+        
+        # Guide the vision model explicitly when an attachment is provided
+        prompt_text = user_prompt or "Describe this image."
+        content_parts.append({
+            "type": "text", 
+            "text": f"[User provided an attached image. Address the visual contents directly]: {prompt_text}"
+        })
 
         for att_bytes, att_mime in attachments:
             b64 = base64.b64encode(att_bytes).decode("utf-8")
@@ -167,13 +172,20 @@ def generate_text(
         url = os.getenv("NVIDIA_NIM_BASE_URL") or os.getenv("NIM_BASE_URL") or "https://integrate.api.nvidia.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": OPENAI_COMPATIBLE_CONTENT_TYPE}
         
-        extra_payload = {}
+        extra_payload: dict[str, Any] = {}
         target_model = model_name or "meta/llama-3.1-8b-instruct"
 
+        # Model-specific parameters for NVIDIA NIM
         if "diffusiongemma" in target_model.lower():
             max_output_tokens = max(max_output_tokens, 2048)
+            extra_payload.update({
+                "diffusion_sampler": "entropy_bound",
+                "diffusion_entropy_bound": 0.1,
+                "canvas_length": 256
+            })
         elif "mistral-small-4" in target_model.lower():
             max_output_tokens = max(max_output_tokens, 2048)
+            extra_payload["reasoning_effort"] = "none"  # Disable internal thinking loops for fast visual chat
 
         return post_chat_completion(
             url=url,

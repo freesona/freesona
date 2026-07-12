@@ -372,7 +372,15 @@ async def generate(
         if memory_block:
             persona = f"{current_persona}\n\n{memory_block}"
 
-    if apply_persona and persona:
+    # Only run vector RAG queries if the prompt isn't a short generic vision question
+    # This avoids context bleed from ChromaDB when analyzing images.
+    should_query_rag = (
+        apply_persona 
+        and bool(persona) 
+        and (len(text.strip().split()) > 3 or not attachments)
+    )
+
+    if should_query_rag:
         knowledge_hits = query_knowledge(text)
         if knowledge_hits:
             knowledge_block = "\n".join(f"- {item}" for item in knowledge_hits)
@@ -400,6 +408,7 @@ async def generate(
                 provider=provider_name,
                 model=current_model,
                 max_output_tokens=1024,
+                attachments=attachments,
             )
             if not output:
                 raise MalformedResponseError("Empty response from model.")
@@ -445,16 +454,18 @@ async def generate(
             gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix)
 
             system_instr = persona if (apply_persona and persona) else None
-            if types is not None:
-                config_arg: Any = types.GenerateContentConfig(
-                    max_output_tokens=1024,
-                    system_instruction=system_instr,
-                )
+
+            # Explicit dict construction to satisfy GenerateContentConfigDict / Pylance typing
+            config_dict: dict[str, Any] = {
+                "max_output_tokens": 1024,
+            }
+            if system_instr:
+                config_dict["system_instruction"] = system_instr
+
+            if types is not None and hasattr(types, "GenerateContentConfig"):
+                config_arg: Any = types.GenerateContentConfig(**config_dict)
             else:
-                config_arg = {
-                    "max_output_tokens": 1024,
-                    "system_instruction": system_instr,
-                }
+                config_arg = config_dict
 
             response = await asyncio.to_thread(
                 client.models.generate_content,
@@ -527,3 +538,11 @@ async def safe_generate(
     except Exception as e:
         logger.error(f"safe_generate unexpected error: {e}")
         return build_response("Something went wrong. Try again.")
+
+__all__ = [
+    "ConversationResponse",
+    "build_response",
+    "extract_attachments",
+    "safe_generate",
+    "send_response",
+]
