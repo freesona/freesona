@@ -336,6 +336,36 @@ def _build_gemini_contents(
 
     return contents
 
+
+def _consume_stream(client_obj, kwargs_dict):
+    stream = client_obj.interactions.create(stream=True, **kwargs_dict)
+    text_acc = ""
+    last_interaction_id = None
+
+    for event in stream:
+        event_type = getattr(event, "event_type", None)
+
+        if event_type == "step.delta":
+            delta = getattr(event, "delta", None)
+            if delta:
+                d_type = getattr(delta, "type", None)
+                if d_type == "text":
+                    text_acc += str(getattr(delta, "text", ""))
+                elif d_type == "thought_summary":
+                    content = getattr(delta, "content", {})
+                    if isinstance(content, dict) and content.get("text"):
+                        text_acc += str(content["text"])
+
+        elif hasattr(event, "text") and event.text:
+            text_acc += str(event.text)
+
+        elif event_type == "interaction.completed":
+            interaction = getattr(event, "interaction", None)
+            if interaction and getattr(interaction, "id", None):
+                last_interaction_id = str(interaction.id)
+
+    return text_acc, last_interaction_id
+
 # ---------------------------------------------------------------------------
 # Core generation
 # ---------------------------------------------------------------------------
@@ -447,15 +477,17 @@ async def generate(
             if prev_id:
                 kwargs_interaction["previous_interaction_id"] = prev_id
 
-            interaction = await asyncio.to_thread(client.interactions.create, **kwargs_interaction)
-            output_text = getattr(interaction, "output_text", None)
-            interaction_id = getattr(interaction, "id", None)
+            full_text, interaction_id = await asyncio.to_thread(
+                _consume_stream, client, kwargs_interaction
+            )
+            if not full_text:
+                raise MalformedResponseError("Empty response from model stream.")
+            output_text = full_text
         else:
             gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix)
 
             system_instr = persona if (apply_persona and persona) else None
 
-            # Explicit dict construction to satisfy GenerateContentConfigDict / Pylance typing
             config_dict: dict[str, Any] = {
                 "max_output_tokens": 1024,
             }
