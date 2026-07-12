@@ -129,7 +129,7 @@ class GenAICog(commands.Cog):
         if message.type not in (discord.MessageType.default, discord.MessageType.reply):
             return
         # Ignore interaction messages / slash command triggers
-        if message.interaction_metadata is not None:
+        if message.interaction is not None:
             return
 
         prefix = await self.bot.get_prefix(message)
@@ -193,8 +193,8 @@ class GenAICog(commands.Cog):
 
             async def debounced_respond(_key=_debounce_key):
                 try:
-                    config = load_config()
-                    debounce_seconds = config.get("debounce_seconds", 1.2)
+                    current_config = load_config()
+                    debounce_seconds = current_config.get("debounce_seconds", 1.2)
                     await asyncio.sleep(debounce_seconds)
 
                     # Check bot permissions before processing
@@ -238,11 +238,10 @@ class GenAICog(commands.Cog):
                 if not perms.send_messages:
                     return
 
-            frequency = config.get("autonomy_frequency", "default")
-            threshold = FREQUENCY_THRESHOLD.get(frequency, 0.50)
+            freq_setting = config.get("autonomy_frequency", "default")
+            threshold = FREQUENCY_THRESHOLD.get(freq_setting, 0.50)
             now = time.time()
             last_channel = _autonomy_cooldown.get(message.channel.id, 0)
-            config = load_config()
             autonomy_cooldown_seconds = config.get("autonomy_cooldown_seconds", 120)
             autonomy_user_cooldown = config.get("autonomy_user_cooldown", 60)
 
@@ -300,9 +299,10 @@ class GenAICog(commands.Cog):
             await ctx.send("AI commands are not available in DMs.")
             return
 
+        attachments = await extract_attachments(ctx.message) if ctx.message else []
+
         if ctx.interaction:
             await ctx.defer()
-            attachments = await extract_attachments(ctx.message)
             response = await safe_generate(
                 query,
                 current_persona=CURRENT_PERSONA,
@@ -317,7 +317,6 @@ class GenAICog(commands.Cog):
             )
         else:
             async with ctx.typing():
-                attachments = await extract_attachments(ctx.message)
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,
@@ -346,9 +345,10 @@ class GenAICog(commands.Cog):
             await ctx.send("AI commands are not available in DMs.")
             return
 
+        attachments = await extract_attachments(ctx.message) if ctx.message else []
+
         if ctx.interaction:
             await ctx.defer()
-            attachments = await extract_attachments(ctx.message)
             response = await safe_generate(
                 query,
                 current_persona=CURRENT_PERSONA,
@@ -362,7 +362,6 @@ class GenAICog(commands.Cog):
             )
         else:
             async with ctx.typing():
-                attachments = await extract_attachments(ctx.message)
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,
@@ -556,6 +555,7 @@ class GenAICog(commands.Cog):
     @commands.hybrid_command(
         name="setchannel", aliases=["sc"], help="Set the AI conversation channel (Admin only)."
     )
+    @app_commands.describe(channel="The channel to set for AI conversations.")
     @commands.has_permissions(administrator=True)
     async def set_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         config = load_config()

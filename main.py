@@ -2,7 +2,7 @@
 
 import discord
 from discord.ext import commands
-from discord import abc
+from discord import app_commands, abc
 import os
 import logging
 import asyncio
@@ -14,6 +14,9 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from utils.config import load_config, save_config
 from utils.modules import CORE_EXTENSIONS, OPTIONAL_MODULES, load_enabled_modules
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 # --- Configuration & Persistence Setup ---
 bot_token = os.getenv("BOT_TOKEN")
@@ -28,18 +31,19 @@ except ValueError:
     raise ValueError("CHANNEL_ID must be an integer")
 
 def get_prefix(bot, message):
-    """Reads the prefix from the persistent JSON file."""
-    return load_config().get("prefix", "~")
+    """Reads the prefix from the in-memory bot config."""
+    return getattr(bot, "config", {}).get("prefix", "~")
 
 # --- Bot Class Definition ---
 class Freesona(commands.Bot):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.config = load_config()  # Cache config in memory to eliminate disk read on prefix checks
         self._legacy_notice_sent = False  # guard: only DM once per session
+        self._startup_sent = False        # guard: only send startup message once per session
 
     async def setup_hook(self):
-        config = load_config()
-        enabled_modules = load_enabled_modules(config)
+        enabled_modules = load_enabled_modules(self.config)
         extensions = CORE_EXTENSIONS + [
             ext for name, ext in OPTIONAL_MODULES.items()
             if enabled_modules.get(name, True)
@@ -48,11 +52,11 @@ class Freesona(commands.Bot):
         for ext in extensions:
             try:
                 await self.load_extension(ext)
-            except Exception as e:
-                logger.error(f"Failed to load extension {ext}: {e}")
+            except Exception:
+                logger.exception(f"Failed to load extension {ext}")  # Capture full traceback
 
         await self.tree.sync()
-        print(f"Synced slash commands for {self.user}")
+        logger.info(f"Synced slash commands for {self.user}")
 
     async def notify_owner_legacy(self, bot_name: str):
         """DM the bot owner about legacy persona.txt — called from genai cog."""
@@ -72,7 +76,7 @@ class Freesona(commands.Bot):
                 f"You can also run `/debugpersona` to confirm your current state."
             )
         except Exception as e:
-            logging.getLogger(__name__).warning(f"Could not DM owner for legacy persona notice: {e}")
+            logger.warning(f"Could not DM owner for legacy persona notice: {e}")
 
 # Initialize Bot
 intents = discord.Intents.default()
@@ -84,37 +88,44 @@ intents.guilds = True
 bot = Freesona(command_prefix=get_prefix, intents=intents)
 bot.remove_command('help')
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
-logger = logging.getLogger(__name__)
-
 # --- Commands & Events ---
 @bot.hybrid_command(name="prefix", description="Changes the bot prefix and saves it to config.json")
 @commands.has_permissions(administrator=True)
 async def change_prefix(ctx, new_prefix: str):
+    clean_prefix = new_prefix.strip()
+
+    if not clean_prefix:
+        await ctx.send("Prefix cannot be empty.")
+        return
+    if len(clean_prefix) > 5:
+        await ctx.send("Prefix cannot be longer than 5 characters.")
+        return
+
     try:
-        config = load_config()
-        config["prefix"] = new_prefix
-        save_config(config)
-        await ctx.send(f"Prefix updated to: `{new_prefix}`")
+        bot.config["prefix"] = clean_prefix
+        save_config(bot.config)
+        await ctx.send(f"Prefix updated to: `{clean_prefix}`")
     except Exception as e:
         logger.error(f"Failed to save prefix: {e}")
         await ctx.send("Error saving prefix to persistent storage.")
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
+    logger.info(f'Logged in as {bot.user}')
 
-    channel = bot.get_channel(CHANNEL_ID)
-    if isinstance(channel, abc.Messageable):
-        bot_name = os.getenv("BOT_NAME", "Bot")
-        try:
-            current_p = get_prefix(bot, None)
-            await channel.send(
-                f"Heya! {bot_name} here! Current prefix is `{current_p}`. "
-                "For fresh info, use `search <query>`."
-            )
-        except Exception as e:
-            logger.warning(f"Failed to send startup message: {e}")
+    if not bot._startup_sent:
+        bot._startup_sent = True
+        channel = bot.get_channel(CHANNEL_ID)
+        if isinstance(channel, abc.Messageable):
+            bot_name = os.getenv("BOT_NAME", "Bot")
+            try:
+                current_p = get_prefix(bot, None)
+                await channel.send(
+                    f"Heya! {bot_name} here! Current prefix is `{current_p}`. "
+                    "For fresh info, use `search <query>`."
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send startup message: {e}")
 
     # Trigger legacy persona DM if needed — deferred here so bot is fully ready
     try:
@@ -148,6 +159,33 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.BadArgument):
         await ctx.send(f"Invalid argument: {error}")
 
+@bot.event
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    """Handle slash command errors so the bot always responds instead of silently failing."""
+    raw_error = error.original if isinstance(error, app_commands.CommandInvokeError) else error
+
+    if isinstance(raw_error, app_commands.MissingPermissions):
+        await send_app_error(interaction, "You don't have permission to use this command.")
+    elif isinstance(raw_error, app_commands.BotMissingPermissions):
+        await send_app_error(interaction, "I don't have permission to do that.")
+    elif isinstance(raw_error, app_commands.CommandOnCooldown):
+        await send_app_error(interaction, f"Cooldown. Try again in {raw_error.retry_after:.1f}s.")
+    elif isinstance(raw_error, (commands.BadArgument, app_commands.TransformerError)):
+        await send_app_error(interaction, f"Invalid argument: {raw_error}")
+    else:
+        logger.error(f"Unhandled slash command error: {type(raw_error).__name__}: {raw_error}")
+        await send_app_error(interaction, "An unexpected error occurred. Please try again.")
+
+async def send_app_error(interaction: discord.Interaction, message: str):
+    """Safely send an error response to a slash command interaction."""
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except Exception as e:
+        logger.warning(f"Failed to send app error response: {e}")
+
 # --- Background Tasks & Execution ---
 async def start_http():
     config = uvicorn.Config(app, host="0.0.0.0", port=10000, log_level="warning")
@@ -167,4 +205,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Bot stopped.")
+        logger.info("Bot stopped.")
