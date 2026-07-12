@@ -14,11 +14,12 @@ OPTIONAL_MODULES = {
     "random":     "cogs.fun.random",
     "moderation": "cogs.moderation.core",
     "genai":      "cogs.ai.genai",
-    "wolfram":    "cogs.tools.wolfram",
+    "math":       "cogs.tools.math",
     "news":       "cogs.system.news",
     "ytdlp":      "cogs.media.ytdlp",
     "mvsep":      "cogs.media.mvsep",
     "warns":      "cogs.moderation.warns",
+    "chroma":     "cogs.ai.chroma",
 }
 
 DEFAULT_ENABLED_MODULES = {name: True for name in OPTIONAL_MODULES}

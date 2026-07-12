@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from fastapi_server import register_mvsep_job, unregister_mvsep_job
 from utils.security import is_public_http_url
+from utils.config import load_config
 
 load_dotenv()
 
@@ -39,8 +40,12 @@ SEP_TYPE  = 40
 ADD_OPT1  = 81
 OUT_FMT   = 0   # mp3 320kbps
 
-POLL_INTERVAL = 10   # seconds between status checks
-POLL_TIMEOUT  = 600  # 10 minutes max
+# Polling values are loaded from config (configurable via /config slash commands)
+def _get_poll_interval() -> int:
+    return int(load_config().get("mvsep_poll_interval", 10))
+
+def _get_poll_timeout() -> int:
+    return int(load_config().get("mvsep_poll_timeout", 600))
 
 # Statuses that mean the job is still running
 IN_PROGRESS = {"waiting", "processing", "distributing", "merging"}
@@ -167,10 +172,12 @@ class MVSepCog(commands.Cog):
         endpoint = f"https://mvsep.com/api/separation/get?hash={job_hash}"
         elapsed  = 0
         last_status_text = None
+        poll_interval = _get_poll_interval()
+        poll_timeout  = _get_poll_timeout()
 
-        while elapsed < POLL_TIMEOUT:
-            await asyncio.sleep(POLL_INTERVAL)
-            elapsed += POLL_INTERVAL
+        while elapsed < poll_timeout:
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
 
             async with session.get(endpoint) as resp:
                 payload = await resp.json()
@@ -212,13 +219,15 @@ class MVSepCog(commands.Cog):
         register_mvsep_job(job_hash, future)
         elapsed = 0
         last_status_text = None
+        poll_interval = _get_poll_interval()
+        poll_timeout  = _get_poll_timeout()
 
         try:
-            while elapsed < POLL_TIMEOUT:
+            while elapsed < poll_timeout:
                 try:
-                    return await asyncio.wait_for(asyncio.shield(future), timeout=POLL_INTERVAL)
+                    return await asyncio.wait_for(asyncio.shield(future), timeout=poll_interval)
                 except asyncio.TimeoutError:
-                    elapsed += POLL_INTERVAL
+                    elapsed += poll_interval
 
                 async with session.get(endpoint) as resp:
                     payload = await resp.json()
@@ -288,7 +297,7 @@ class MVSepCog(commands.Cog):
             return dest, None
 
         # 1b. Prefix command attachment via ctx.message
-        if ctx.message.attachments:
+        if ctx.message is not None and ctx.message.attachments:
             att  = ctx.message.attachments[0]
             dest = os.path.join(tmp_dir, att.filename)
             await att.save(dest)

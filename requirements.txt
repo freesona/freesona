@@ -1,30 +1,56 @@
-# --- Required Modules --- #
 # discord.py: Interfaces with the Discord API.
-# discord.ext.commands: Provides tools to define and manage bot commands.
-# python-dotenv: Loads environment variables from a .env file.
-# pyyaml: Parses YAML specifically for dump_command.py to handle command data. (Used in development and debugging only)
-# re: Handles text parsing via regular expressions.
-# os: Accesses system-level environment variables.
-# asyncio: Enables asynchronous operations.
-# datetime: Manages time-related tasks like cooldowns.
-# logging: Records events and errors for debugging.
-# requests: Handles HTTP requests for features like web search.
-# google-genai: Connects to the Gemini API for AI responses.
-# urllib.parse: Encodes URLs, used in search functionality.
-# fastapi: Async web framework for building APIs.
-# uvicorn: ASGI server required to run FastAPI apps and handle HTTP requests.
-# aiohttp: Handles async HTTP requests, used in the Cobalt downloader cog.
-# yt-dlp: CLI tool for downloading YouTube/TikTok/Twitter videos.
-# aiosqlite: Handles databses for memory.db
-
 discord.py
+
+# python-dotenv: Loads environment variables from a .env file.
 python-dotenv
-pyyaml
+
+# pyyaml: Parses YAML specifically for dump_command.py to handle command data.
+PyYAML
+
+# requests: Handles HTTP requests for features like web search.
 requests
+
+# google-genai: Connects to the Gemini API for AI responses.
 google-genai
+
+# fastapi: Async web framework for building APIs.
 fastapi
+
+# uvicorn: ASGI server required to run FastAPI apps and handle HTTP requests.
 uvicorn
+
+# aiohttp: Handles async HTTP requests, used in the Cobalt downloader cog.
 aiohttp
+
+# yt-dlp: CLI tool for downloading YouTube/TikTok/Twitter videos.
 yt-dlp
+
+# aiosqlite: Handles databases for memory.db.
 aiosqlite
+
+# tzdata: Provides time zone updates.
 tzdata
+
+# sympy: Evaluates mathematical expressions locally.
+sympy
+
+# numpy: Numerical computing and array handling.
+numpy
+
+# scipy: Scientific and engineering algorithm collection.
+scipy
+
+# matplotlib: Plotting and visualization engine.
+matplotlib
+
+# symengine: Fast C++ backend for symbolic math (optional speedup).
+symengine
+
+# pypdf: PDF processing library for handling PDF files.
+pypdf
+
+# chromadb: Vector database for AI and machine learning applications.
+chromadb
+
+# onnxruntime: Inference engine for running ONNX models, used in AI cogs.
+onnxruntime

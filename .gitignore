@@ -16,6 +16,10 @@ ENV/
 # Runtime / bot state
 memory.json
 persona.json
+memory.db
+warnings.db
+anniversaries.db
+.chroma/
 
 # User/private notes
 persona.txt

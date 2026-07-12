@@ -3,7 +3,23 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+
+if (-not $Python) {
+    # Check virtual environments first
+    $venvPaths = @(
+        (Join-Path $RepoRoot ".venv\Scripts\python.exe"),
+        (Join-Path $RepoRoot "venv\Scripts\python.exe"),
+        (Join-Path $RepoRoot ".venv\bin\python"),
+        (Join-Path $RepoRoot "venv\bin\python")
+    )
+    foreach ($path in $venvPaths) {
+        if (Test-Path $path) {
+            $Python = $path
+            break
+        }
+    }
+}
 
 if (-not $Python) {
     $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
@@ -23,3 +39,4 @@ if (-not $Python) {
 
 & $Python (Join-Path $RepoRoot "scripts\check_project.py")
 exit $LASTEXITCODE
+
