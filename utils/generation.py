@@ -271,49 +271,16 @@ def _consume_stream(client_obj, kwargs_dict):
     last_interaction_id = None
 
     for event in stream:
-        # The stream yields InteractionSSEStreamEvent objects with the actual event in .data
-        inner_event = getattr(event, "data", event)
-        event_type = getattr(inner_event, "event_type", None)
+        # Per official SDK cookbook: events are raw StepDelta objects.
+        # Check for text delta directly: hasattr(event, "delta") and event.delta.text
+        if hasattr(event, "delta") and hasattr(event.delta, "text") and event.delta.text:
+            text_acc += str(event.delta.text)
 
-        if event_type == "step.delta":
-            delta = getattr(inner_event, "delta", None)
-            if delta:
-                d_type = getattr(delta, "type", None)
-
-                if d_type == "text":
-                    text_acc += str(getattr(delta, "text", ""))
-
-                elif d_type == "thought_summary":
-                    content = getattr(delta, "content", {})
-                    if isinstance(content, dict) and content.get("text"):
-                        text_acc += str(content["text"])
-
-                # Compatibility fallback
-                elif hasattr(delta, "text"):
-                    text_acc += str(delta.text)
-
-        elif hasattr(inner_event, "text") and inner_event.text:
-            text_acc += str(inner_event.text)
-
-        elif event_type == "interaction.completed":
-            interaction = getattr(inner_event, "interaction", None)
+        # Capture interaction ID from completed events
+        if hasattr(event, "event_type") and event.event_type == "interaction.completed":
+            interaction = getattr(event, "interaction", None)
             if interaction and getattr(interaction, "id", None):
                 last_interaction_id = str(interaction.id)
-
-        # Debug: log unrecognized events
-        else:
-            logger.debug(
-                "Unrecognized stream event type=%r, has_text=%r, dir=%r",
-                event_type,
-                hasattr(inner_event, "text"),
-                [a for a in dir(inner_event) if not a.startswith("_")][:20],
-            )
-
-    if not text_acc:
-        logger.error(
-            "Gemini stream produced no text. kwargs=%r",
-            {k: v for k, v in kwargs_dict.items() if k != "input"},
-        )
 
     return text_acc, last_interaction_id
 
@@ -359,17 +326,11 @@ async def generate(
 
         elif client and types:
             if hasattr(client, "interactions"):
-                # Interactions API: expects a specific dict structure (Turn)
-                parts = []
-                for p in input_payload:
-                    if p["type"] == "text":
-                        parts.append({"text": p["text"]})
-                    else:
-                        parts.append({"inline_data": {"mime_type": p["mime_type"], "data": p["data"]}})
-                
+                # Interactions API: input is a list of part dicts with "type" keys,
+                # or a plain string. _build_input already returns the correct format.
                 kwargs_interaction = {
                     "model": current_model,
-                    "input": [{"role": "user", "parts": parts}],
+                    "input": input_payload,
                     "generation_config": {"max_output_tokens": 1024},
                 }
                 if apply_persona and persona:
