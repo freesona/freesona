@@ -1,7 +1,4 @@
 # utils/memory.py: Long-term SQLite facts + per-channel interaction ID store.
-# Short-term memory (channel_memory, channel_summary, push_memory, maybe_summarize,
-# memory_to_contents) has been removed — conversation history is now managed
-# server-side by the Interactions API via previous_interaction_id.
 
 import os
 import json
@@ -12,7 +9,6 @@ import re
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from utils.providers import generate_text
 
 load_dotenv()
 
@@ -36,9 +32,7 @@ FACT_EXTRACT_PROMPT = (
 )
 
 # ---------------------------------------------------------------------------
-# Per-user interaction ID store (replaces channel_memory / channel_summary)
-# Gemini conversation continuity must be scoped by guild + channel + user,
-# otherwise one user's interaction chain can bleed into another user's reply.
+# Per-user interaction ID store
 # ---------------------------------------------------------------------------
 
 _interaction_store: dict[tuple[int, int, int], str] = {}
@@ -57,12 +51,6 @@ def set_interaction_id(guild_id: int, channel_id: int, user_id: int, interaction
 
 
 def clear_interaction_id(channel_id: int, guild_id: int | None = None, user_id: int | None = None) -> None:
-    """
-    Clear the per-user interaction chain for a channel.
-
-    When called with only a channel id, the command clears the full channel scope.
-    When called with guild_id + user_id, it clears only that user's continuity.
-    """
     if guild_id is None and user_id is None:
         for key in list(_interaction_store):
             if key[1] == channel_id:
@@ -97,6 +85,7 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_user_guild ON user_facts (user_id, guild_id)"
         )
         await db.commit()
+
 
 async def get_user_facts_prompt(guild_id: int, user_id: int, display_name: str) -> str:
     async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
@@ -140,22 +129,26 @@ async def extract_and_store_fact(
     if not message_content.strip():
         return
 
+    # Deferred import prevents circular import resolution issues with Pylance
+    from utils.providers import generate_text
+
     provider_name = (provider_name or "gemini").strip().lower()
-    prompt = f"{FACT_EXTRACT_PROMPT}\n\nUser message: {message_content}"
+    full_prompt = f"{FACT_EXTRACT_PROMPT}\n\nUser message: {message_content}"
+
     try:
         if provider_name == "gemini" and client is not None:
             interaction = await asyncio.to_thread(
                 client.interactions.create,
                 model=model_name,
-                input=prompt,
+                input=full_prompt,
                 store=False,
             )
             raw = (getattr(interaction, "output_text", "") or "").strip()
         else:
             raw = await asyncio.to_thread(
                 generate_text,
-                message_content,
-                system_prompt=FACT_EXTRACT_PROMPT,
+                full_prompt,
+                system_prompt="You are a JSON-only fact extraction assistant.",
                 provider=provider_name,
                 model=model_name,
                 max_output_tokens=256,
@@ -169,7 +162,12 @@ async def extract_and_store_fact(
             raw = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
 
         parsed = json.loads(raw)
-        content = parsed.get("content", "").strip()
+
+        # Safeguard: ensure parsed output is a dictionary before calling .get()
+        if not isinstance(parsed, dict):
+            return
+
+        content = str(parsed.get("content", "")).strip()
         importance = float(parsed.get("importance", 0.0))
 
         if not content or importance < MIN_IMPORTANCE:
@@ -197,8 +195,9 @@ async def extract_and_store_fact(
     except Exception as e:
         logger.warning(f"Fact extraction failed: {e}")
 
+
 # ---------------------------------------------------------------------------
-# Migration (JSON -> SQLite) — unchanged
+# Migration (JSON -> SQLite)
 # ---------------------------------------------------------------------------
 
 async def run_migration():

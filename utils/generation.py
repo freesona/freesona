@@ -277,7 +277,9 @@ def _build_input(
         payload.append({"type": "text", "text": clarification})
         payload.append({"type": "text", "text": f"[quoted from {reply['author']}]:\n{reply['content']}"})
 
-    user_text = f"{instruction_prefix}\n\n{text}".strip() if instruction_prefix else text
+    name_tag = f"[{username}]: " if username else ""
+    user_text = f"{instruction_prefix}\n\n{name_tag}{text}".strip() if instruction_prefix else f"{name_tag}{text}".strip()
+
     if user_text:
         payload.append({"type": "text", "text": user_text})
 
@@ -300,7 +302,7 @@ def _build_input(
         })
 
     if not payload:
-        payload.append({"type": "text", "text": "Hello"})
+        payload.append({"type": "text", "text": f"[{username}]: Hello" if username else "Hello"})
 
     return payload
 
@@ -310,6 +312,7 @@ def _build_gemini_contents(
     attachments: Optional[list[tuple[bytes, str]]],
     reply: Optional[dict],
     instruction_prefix: str,
+    username: str = "",
 ) -> list[Any]:
     contents: list[Any] = []
 
@@ -322,7 +325,9 @@ def _build_gemini_contents(
         contents.append(clarification)
         contents.append(f"[quoted from {reply['author']}]:\n{reply['content']}")
 
-    user_text = f"{instruction_prefix}\n\n{text}".strip() if instruction_prefix else text
+    name_tag = f"[{username}]: " if username else ""
+    user_text = f"{instruction_prefix}\n\n{name_tag}{text}".strip() if instruction_prefix else f"{name_tag}{text}".strip()
+
     if user_text:
         contents.append(user_text)
 
@@ -332,7 +337,7 @@ def _build_gemini_contents(
             contents.append(part)
 
     if not contents:
-        contents.append("Hello")
+        contents.append(f"[{username}]: Hello" if username else "Hello")
 
     return contents
 
@@ -402,8 +407,9 @@ async def generate(
         current_model = get_provider_model() or get_model_name()
 
         if provider_name != "gemini":
+            formatted_user_prompt = f"[{username}]: {text}" if username else text
             output = generate_text(
-                text,
+                formatted_user_prompt,
                 system_prompt=persona or "You are a helpful assistant.",
                 provider=provider_name,
                 model=current_model,
@@ -451,11 +457,10 @@ async def generate(
             output_text = getattr(interaction, "output_text", None)
             interaction_id = getattr(interaction, "id", None)
         else:
-            gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix)
+            gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix, username)
 
             system_instr = persona if (apply_persona and persona) else None
 
-            # Explicit dict construction to satisfy GenerateContentConfigDict / Pylance typing
             config_dict: dict[str, Any] = {
                 "max_output_tokens": 1024,
             }

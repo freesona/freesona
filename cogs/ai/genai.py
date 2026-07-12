@@ -313,6 +313,11 @@ class GenAICog(commands.Cog):
                     "Each idea must be separated clearly."
                 ),
                 apply_persona=True,
+                guild_id=ctx.guild.id,
+                user_id=ctx.author.id,
+                message_id=ctx.message.id if ctx.message else None,
+                channel_id=ctx.channel.id,
+                username=ctx.author.display_name,
                 attachments=attachments,
             )
         else:
@@ -327,6 +332,11 @@ class GenAICog(commands.Cog):
                         "Each idea must be separated clearly."
                     ),
                     apply_persona=True,
+                    guild_id=ctx.guild.id,
+                    user_id=ctx.author.id,
+                    message_id=ctx.message.id if ctx.message else None,
+                    channel_id=ctx.channel.id,
+                    username=ctx.author.display_name,
                     attachments=attachments,
                 )
 
@@ -357,6 +367,10 @@ class GenAICog(commands.Cog):
                     "Use newline breaks between sections. "
                     "Do NOT use markdown headings like ###."
                 ),
+                guild_id=ctx.guild.id,
+                user_id=ctx.author.id,
+                message_id=ctx.message.id if ctx.message else None,
+                channel_id=ctx.channel.id,
                 username=ctx.author.display_name,
                 attachments=attachments,
             )
@@ -370,6 +384,10 @@ class GenAICog(commands.Cog):
                         "Use newline breaks between sections. "
                         "Do NOT use markdown headings like ###."
                     ),
+                    guild_id=ctx.guild.id,
+                    user_id=ctx.author.id,
+                    message_id=ctx.message.id if ctx.message else None,
+                    channel_id=ctx.channel.id,
                     username=ctx.author.display_name,
                     attachments=attachments,
                 )
@@ -614,7 +632,7 @@ class GenAICog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def clear_memory(self, ctx: commands.Context):
         clear_interaction_id(ctx.channel.id)
-        await ctx.send("Conversation memory cleared.")
+        await ctx.send("Conversation memory cleared for this channel.")
 
     # -------------------------------------------------------------------
     # /memorylist (long-term SQLite)
