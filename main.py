@@ -161,7 +161,7 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    """Handle slash command errors so the bot always responds instead of silently failing."""
+    """Handle slash command errors safely without type or attribute exceptions."""
     raw_error = error.original if isinstance(error, app_commands.CommandInvokeError) else error
 
     if isinstance(raw_error, app_commands.MissingPermissions):
