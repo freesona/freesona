@@ -506,7 +506,7 @@ async def generate(
         if hasattr(client, "interactions"):
             kwargs_interaction: dict[str, Any] = {
                 "model": current_model,
-                "input": gemini_contents,
+                "input": {"contents": gemini_contents},
                 "generation_config": {"max_output_tokens": 1024},
             }
             if apply_persona and persona:
