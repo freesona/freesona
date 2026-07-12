@@ -271,10 +271,12 @@ def _consume_stream(client_obj, kwargs_dict):
     last_interaction_id = None
 
     for event in stream:
-        event_type = getattr(event, "event_type", None)
+        # The stream yields InteractionSSEStreamEvent objects with the actual event in .data
+        inner_event = getattr(event, "data", event)
+        event_type = getattr(inner_event, "event_type", None)
 
         if event_type == "step.delta":
-            delta = getattr(event, "delta", None)
+            delta = getattr(inner_event, "delta", None)
             if delta:
                 d_type = getattr(delta, "type", None)
 
@@ -290,13 +292,28 @@ def _consume_stream(client_obj, kwargs_dict):
                 elif hasattr(delta, "text"):
                     text_acc += str(delta.text)
 
-        elif hasattr(event, "text") and event.text:
-            text_acc += str(event.text)
+        elif hasattr(inner_event, "text") and inner_event.text:
+            text_acc += str(inner_event.text)
 
         elif event_type == "interaction.completed":
-            interaction = getattr(event, "interaction", None)
+            interaction = getattr(inner_event, "interaction", None)
             if interaction and getattr(interaction, "id", None):
                 last_interaction_id = str(interaction.id)
+
+        # Debug: log unrecognized events
+        else:
+            logger.debug(
+                "Unrecognized stream event type=%r, has_text=%r, dir=%r",
+                event_type,
+                hasattr(inner_event, "text"),
+                [a for a in dir(inner_event) if not a.startswith("_")][:20],
+            )
+
+    if not text_acc:
+        logger.error(
+            "Gemini stream produced no text. kwargs=%r",
+            {k: v for k, v in kwargs_dict.items() if k != "input"},
+        )
 
     return text_acc, last_interaction_id
 
