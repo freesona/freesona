@@ -15,8 +15,10 @@ from dotenv import load_dotenv
 
 try:
     from google import genai
+    from google.genai import types
 except Exception:
     genai = None
+    types = None
 
 from utils.memory import (
     get_interaction_id, set_interaction_id,
@@ -35,6 +37,9 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 BOT_NAME       = os.getenv("BOT_NAME", "Bot")
 
 PROVIDER = get_provider_name()
+
+# Global state tracking for rate limiting
+call_timestamps: list[float] = []
 
 # Split messaging - loaded from config
 def _get_split_min_length() -> int:
@@ -211,7 +216,7 @@ async def send_response(
         except discord.Forbidden:
             channel_id = getattr(channel, "id", "Unknown")
             logger.warning(f"Missing permissions to send messages in channel {channel_id}")
-            return  # Stop trying to send the rest of the segments
+            return
 
 # ---------------------------------------------------------------------------
 # Attachment helper
@@ -251,7 +256,7 @@ async def extract_attachments(message: Optional[discord.Message]) -> list[tuple[
     return results
 
 # ---------------------------------------------------------------------------
-# Input builder
+# Input builders
 # ---------------------------------------------------------------------------
 
 def _build_input(
@@ -261,10 +266,6 @@ def _build_input(
     instruction_prefix: str,
     username: str,
 ) -> list[dict[str, Any]]:
-    """
-    Assembles a multi-modal prompt payload compatible with the 
-    Generally Available (GA) client.interactions.create input schema.
-    """
     payload: list[dict[str, Any]] = []
 
     if reply:
@@ -303,6 +304,38 @@ def _build_input(
 
     return payload
 
+
+def _build_gemini_contents(
+    text: str,
+    attachments: Optional[list[tuple[bytes, str]]],
+    reply: Optional[dict],
+    instruction_prefix: str,
+) -> list[Any]:
+    contents: list[Any] = []
+
+    if reply:
+        clarification = (
+            "When replying to a message that quotes or replies to another user's message, "
+            "address the author of the most recent message. "
+            "Do not attack, blame, or assume intent unless explicitly requested."
+        )
+        contents.append(clarification)
+        contents.append(f"[quoted from {reply['author']}]:\n{reply['content']}")
+
+    user_text = f"{instruction_prefix}\n\n{text}".strip() if instruction_prefix else text
+    if user_text:
+        contents.append(user_text)
+
+    for att_bytes, att_mime in (attachments or []):
+        if types is not None:
+            part = types.Part.from_bytes(data=att_bytes, mime_type=att_mime)
+            contents.append(part)
+
+    if not contents:
+        contents.append("Hello")
+
+    return contents
+
 # ---------------------------------------------------------------------------
 # Core generation
 # ---------------------------------------------------------------------------
@@ -333,7 +366,6 @@ async def generate(
 
     text = sanitize_prompt(text)
 
-    # Build system instruction (persona + long-term user facts + optional vector memory)
     persona = current_persona if apply_persona else ""
     if apply_persona and guild_id and user_id:
         memory_block = await inject_user_memory(guild_id, user_id, username)
@@ -346,7 +378,6 @@ async def generate(
             knowledge_block = "\n".join(f"- {item}" for item in knowledge_hits)
             persona = f"{persona}\n\n[Relevant knowledge]\n{knowledge_block}"
 
-    # Assemble input
     input_payload = _build_input(text, attachments, reply, instruction_prefix, username)
 
     if channel_id is not None:
@@ -393,29 +424,48 @@ async def generate(
 
             return build_response(output)
 
-        kwargs: dict[str, Any] = {
-            "model": current_model,
-            "input": input_payload,
-            "generation_config": {"max_output_tokens": 1024},
-        }
-
-        if apply_persona and persona:
-            kwargs["system_instruction"] = persona
-
-        if prev_id:
-            kwargs["previous_interaction_id"] = prev_id
-
-        if client:
-            interaction = await asyncio.to_thread(client.interactions.create, **kwargs)
-        else:
-            # Handle non-Gemini path if needed, or ensure this branch is only reached for Gemini
+        if not client:
             raise RuntimeError("Gemini client not initialized.")
 
+        if hasattr(client, "interactions"):
+            kwargs_interaction: dict[str, Any] = {
+                "model": current_model,
+                "input": input_payload,
+                "generation_config": {"max_output_tokens": 1024},
+            }
+            if apply_persona and persona:
+                kwargs_interaction["system_instruction"] = persona
+            if prev_id:
+                kwargs_interaction["previous_interaction_id"] = prev_id
 
-        output_text = getattr(interaction, "output_text", None)
-        interaction_id = getattr(interaction, "id", None)
+            interaction = await asyncio.to_thread(client.interactions.create, **kwargs_interaction)
+            output_text = getattr(interaction, "output_text", None)
+            interaction_id = getattr(interaction, "id", None)
+        else:
+            gemini_contents = _build_gemini_contents(text, attachments, reply, instruction_prefix)
 
-        if not interaction or not output_text:
+            system_instr = persona if (apply_persona and persona) else None
+            if types is not None:
+                config_arg: Any = types.GenerateContentConfig(
+                    max_output_tokens=1024,
+                    system_instruction=system_instr,
+                )
+            else:
+                config_arg = {
+                    "max_output_tokens": 1024,
+                    "system_instruction": system_instr,
+                }
+
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=current_model,
+                contents=gemini_contents,
+                config=config_arg,
+            )
+            output_text = getattr(response, "text", None)
+            interaction_id = None
+
+        if not output_text:
             raise MalformedResponseError("Empty response from model.")
 
         output = clean_text(output_text)
@@ -424,9 +474,6 @@ async def generate(
             logger.warning("Output blocked by safety filter.")
             return build_response("I can't respond to that.")
 
-        # Persist interaction ID for conversation continuity.
-        # This must be scoped by guild/channel/user so replies from one user
-        # do not continue another user's Gemini interaction chain.
         if guild_id is not None and channel_id is not None and user_id is not None and role in ("user", "webhook"):
             if interaction_id:
                 set_interaction_id(guild_id, channel_id, user_id, str(interaction_id))
@@ -441,6 +488,7 @@ async def generate(
                 channel_id=channel_id,
                 client=client,
                 model_name=current_model,
+                provider_name=provider_name,
             ))
 
         return build_response(output)
@@ -449,7 +497,7 @@ async def generate(
         raise
     except Exception as e:
         classified = _classify_error(e)
-        logger.error(f"Gemini error [{type(classified).__name__}]: {e}")
+        logger.error(f"Generation error [{type(classified).__name__}]: {e}")
         raise classified from e
 
 async def safe_generate(

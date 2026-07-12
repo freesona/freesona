@@ -1,10 +1,12 @@
 import os
+import logging
 from typing import Any
 
 import requests
 
 from utils.config import get_model_name, get_provider_model as get_configured_provider_model, get_provider_name as get_configured_provider_name
 
+logger = logging.getLogger("FreesonaBot")
 
 DEFAULT_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
 OPENAI_COMPATIBLE_CONTENT_TYPE = "application/json"
@@ -56,16 +58,30 @@ def post_chat_completion(
     messages: list[dict[str, str]],
     max_output_tokens: int,
     token_field: str = "max_tokens",
+    extra_payload: dict[str, Any] | None = None,
 ) -> str:
     payload = {
         "model": model,
         "messages": messages,
         token_field: max_output_tokens,
     }
-    response = requests.post(url, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+    if extra_payload:
+        payload.update(extra_payload)
+
+    response = None
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        status_code = response.status_code if response is not None else "Unknown"
+        text = response.text if response is not None else str(e)
+        logger.error(f"HTTPError from {url} [{status_code}]: {text}")
+        raise e
+    except Exception as e:
+        logger.error(f"Request error calling {url}: {e}")
+        raise e
 
 
 def generate_text(
@@ -126,12 +142,22 @@ def generate_text(
             raise RuntimeError("NVIDIA_API_KEY or NIM_API_KEY missing.")
         url = os.getenv("NVIDIA_NIM_BASE_URL") or os.getenv("NIM_BASE_URL") or "https://integrate.api.nvidia.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": OPENAI_COMPATIBLE_CONTENT_TYPE}
+        
+        extra_payload = {}
+        target_model = model_name or "meta/llama-3.1-8b-instruct"
+
+        if "diffusiongemma" in target_model.lower():
+            max_output_tokens = max(max_output_tokens, 2048)
+        elif "mistral-small-4" in target_model.lower():
+            max_output_tokens = max(max_output_tokens, 2048)
+
         return post_chat_completion(
             url=url,
             headers=headers,
-            model=model_name or "meta/llama-3.1-8b-instruct",
+            model=target_model,
             messages=messages,
             max_output_tokens=max_output_tokens,
+            extra_payload=extra_payload,
         )
 
     if provider_name == "azure":

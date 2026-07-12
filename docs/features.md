@@ -186,7 +186,7 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 
 ### Example Usage
 
-```
+```sc
 /config show mvsep_poll_interval
 /config set mvsep_poll_interval 10
 /config set ytdlp_compress_target_mb 8.0
