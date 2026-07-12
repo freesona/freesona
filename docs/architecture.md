@@ -8,7 +8,7 @@ This document explains how Freesona is structured internally. It is intended for
 
 ```text
 Freesona/
-├── main.py                   # Bot startup, intents, prefix, on_ready
+├── main.py                   # Bot startup, intents, prefix, on_ready, HTTP server (port via HTTP_PORT env var, default 10000)
 ├── fastapi_server.py         # FastAPI health + MVSEP webhook receiver
 ├── cogs/
 │   ├── ai/
@@ -94,23 +94,23 @@ Messages in the conversation channel are held for 1.2 seconds before generating 
 
 ## Generation Pipeline (`utils/generation.py`)
 
-`safe_generate` wraps the Gemini Interactions API call with:
+`safe_generate` wraps the active provider call with:
 
 1. **Security pre-check** — `detect_injection(prompt)`: if the prompt contains a known injection attempt, `sanitize_prompt` redacts the matched phrase(s) before sending.
 2. **Persona injection** — `assemble_persona(PERSONA_DATA)` builds the system instruction from five structured fields.
 3. **Memory injection** — `get_user_facts_prompt(guild_id, user_id)` prepends known long-term facts to the system prompt.
-4. **Conversation continuity** — `get_interaction_id(channel_id)` retrieves the last `previous_interaction_id` for this channel, passing it to the Gemini Interactions API so conversation history is managed server-side.
-5. **Attachment multimodal processing** — `extract_attachments(message)` downloads and encodes images/PDFs/audio/video for Gemini's multimodal input pipeline.
-6. **Response storage** — the returned `interaction_id` from Gemini is saved via `set_interaction_id(channel_id, ...)` to continue the thread on the next message.
+4. **Conversation continuity** — `get_interaction_id(guild_id, channel_id, user_id)` retrieves the most recent provider-specific continuity token for that user-only scope when available; Gemini uses `previous_interaction_id` for server-side conversation continuity, while other providers remain stateless.
+5. **Attachment multimodal processing** — `extract_attachments(message)` downloads and encodes images/PDFs/audio/video for the active provider's multimodal input pipeline when supported.
+6. **Response storage** — the returned Gemini `interaction_id` is saved via `set_interaction_id(guild_id, channel_id, user_id, ...)` so a single user’s continuity chain stays isolated.
 7. **Output safety** — `unsafe_output(text)` checks the model's response for injection artifacts before sending.
 
 ---
 
 ## Memory System (`utils/memory.py`)
 
-### Short-term (per-channel, in-session)
+### Short-term (provider continuity, in-session)
 
-Conversation history is managed **server-side** by Gemini's Interactions API via `previous_interaction_id`. The bot stores only one ID per channel in memory (`_channel_interaction_id: dict[int, str]`). No conversation text is stored locally. Cleared via `/clearmemory` or on restart.
+Conversation history is managed **server-side** by Gemini's Interactions API via `previous_interaction_id` when the active provider supports it. The bot stores continuity per `(guild_id, channel_id, user_id)` rather than one global ID per channel, which keeps user-specific threads isolated. Non-Gemini providers do not assume this continuity path. Cleared via `/clearmemory` or on restart.
 
 ### Long-term (per-user, SQLite)
 
@@ -191,7 +191,7 @@ Enabled/disabled state persists in `config.json` under `"enabled_modules"`. The 
 **Dependency guard:** `mvsep` requires `ytdlp` — the admin cog enforces this at enable/disable time.
 
 > [!NOTE]
-> `/provider set` accepts `openai`, `anthropic`, and `nvidia-nim` as values and stores them in config, but the generation pipeline (`utils/generation.py`) only routes to Gemini on this branch. Setting any other provider will cause all AI commands to return an error. Full multi-provider routing is being developed in the `chromadb-multi-provider-support` branch.
+> `/provider set` now routes through the shared provider abstraction in `utils/providers.py`. Gemini uses server-side continuity when available; all other providers remain stateless and rely on the prompt plus the current user memory snapshot for context.
 
 ---
 

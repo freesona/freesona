@@ -2,53 +2,67 @@
 
 import asyncio
 import logging
-import time
+import os
 import re
+import time
 import urllib.parse
 from typing import Literal, Optional
 
-import discord
 import aiosqlite
+import discord
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
-import os
 
-from utils.config import load_config, save_config, embed_footer, LAST_DEBUG, get_model_name, get_provider_name
+from utils.config import (
+    LAST_DEBUG,
+    embed_footer,
+    get_model_name,
+    get_provider_name,
+    load_config,
+    save_config,
+)
 from utils.generation import (
-    safe_generate, send_response, extract_attachments,
-    ConversationResponse, build_response,
+    ConversationResponse,
+    build_response,
+    extract_attachments,
+    safe_generate,
+    send_response,
+)
+from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
+from utils.memory import clear_interaction_id, extract_and_store_fact, get_user_facts_prompt
+from utils.persona import (
+    CURRENT_PERSONA,
+    LEGACY_DETECTED,
+    PERSONA_DATA,
+    PERSONA_LOCKED,
+    assemble_persona,
+    default_persona_json,
+    load_profiles,
+    open_persona_panel,
+    save_persona_json,
+    save_profiles,
 )
 from utils.roles import resolve_message_role
-from utils.memory import clear_interaction_id, extract_and_store_fact, get_user_facts_prompt
-from utils.intent import evaluate_intent, FREQUENCY_THRESHOLD, INTENT_IGNORE
-from utils.persona import (
-    PERSONA_DATA, CURRENT_PERSONA, PERSONA_LOCKED, LEGACY_DETECTED,
-    open_persona_panel,
-    assemble_persona, save_persona_json, default_persona_json,
-    load_profiles, save_profiles,
-)
 
 load_dotenv()
 
-BOT_NAME         = os.getenv("BOT_NAME", "Bot")
+BOT_NAME = os.getenv("BOT_NAME", "Bot")
 MEMORY_FILE_PATH = os.getenv("MEMORY_FILE_PATH", "./memory.db")
 
 logger = logging.getLogger("FreesonaBot")
 
 # Debounce + autonomy state
-DEBOUNCE_SECONDS          = 1.2
-AUTONOMY_COOLDOWN_SECONDS = 120
-AUTONOMY_USER_COOLDOWN    = 60
-
-_pending_responses: dict[int, asyncio.Task] = {}
-_autonomy_cooldown: dict[int, float]        = {}
-_autonomy_user_cooldown: dict[int, float]   = {}
+_pending_responses: dict[tuple[int, int], asyncio.Task] = {}
+_autonomy_cooldown: dict[int, float] = {}
+_autonomy_user_cooldown: dict[int, float] = {}
 
 CHAT_RESPONSE_MODES = {"all", "mentions", "smart"}
 
 
-def should_respond_in_chat_channel(message: discord.Message, bot_user: discord.ClientUser | None, mode: str) -> bool:
+def should_respond_in_chat_channel(
+    message: discord.Message, bot_user: discord.ClientUser | None, mode: str
+) -> bool:
     if mode == "all":
         return True
 
@@ -67,10 +81,10 @@ def should_respond_in_chat_channel(message: discord.Message, bot_user: discord.C
 
 
 def clean_sources_block(sources_text: str, max_length: int = 1024) -> str:
-    links = re.findall(r'\[([^\]]+)\]\(([^)]+)\)', sources_text)
+    links = re.findall(r"\[([^\]]+)\]\(([^)]+)\)", sources_text)
 
     if not links:
-        lines = [line.strip() for line in sources_text.split('\n') if line.strip()]
+        lines = [line.strip() for line in sources_text.split("\n") if line.strip()]
         return "\n".join(lines[:5])[:max_length]
 
     cleaned_links = []
@@ -94,9 +108,10 @@ def clean_sources_block(sources_text: str, max_length: int = 1024) -> str:
 class GenAICog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-    
+
     async def cog_load(self):
         from utils.memory import init_db
+
         await init_db()
 
     async def cog_unload(self):
@@ -113,7 +128,8 @@ class GenAICog(commands.Cog):
             return
         if message.type not in (discord.MessageType.default, discord.MessageType.reply):
             return
-        if getattr(message, "interaction_metadata", None):
+        # Ignore interaction messages / slash command triggers
+        if message.interaction_metadata is not None:
             return
 
         prefix = await self.bot.get_prefix(message)
@@ -129,7 +145,7 @@ class GenAICog(commands.Cog):
         if message.author.id == bot_id:
             return
 
-        config    = load_config()
+        config = load_config()
         whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
 
         if message.author.bot and not message.webhook_id and message.author.id not in whitelist:
@@ -146,56 +162,68 @@ class GenAICog(commands.Cog):
             if not should_respond_in_chat_channel(message, self.bot.user, response_mode):
                 return
 
-            user_id           = message.author.id
-            channel_snapshot  = message.channel
+            user_id = message.author.id
+            channel_snapshot = message.channel
             username_snapshot = message.author.display_name
-            message_snapshot  = message
+            message_snapshot = message
             guild_id_snapshot = message.guild.id
 
             payload = {
-                "role":      role,
+                "role": role,
                 "author_id": user_id,
-                "username":  username_snapshot,
-                "content":   message.content,
-                "reply":     None,
+                "username": username_snapshot,
+                "content": message.content,
+                "reply": None,
             }
 
             if message.reference and isinstance(message.reference.resolved, discord.Message):
                 ref = message.reference.resolved
                 payload["reply"] = {
-                    "author":      ref.author.display_name,
-                    "author_id":   ref.author.id,
-                    "content":     ref.content or "",
-                    "is_bot":      ref.author.bot,
-                    "is_webhook":  ref.webhook_id is not None,
-                    "role":        resolve_message_role(ref, bot_id),
+                    "author": ref.author.display_name,
+                    "author_id": ref.author.id,
+                    "content": ref.content or "",
+                    "is_bot": ref.author.bot,
+                    "is_webhook": ref.webhook_id is not None,
+                    "role": resolve_message_role(ref, bot_id),
                 }
 
-            if user_id in _pending_responses:
-                _pending_responses[user_id].cancel()
-                logger.debug(f"Debounce: cancelled pending task for user {user_id}")
+            _debounce_key = (user_id, channel_snapshot.id)
+            if _debounce_key in _pending_responses:
+                _pending_responses[_debounce_key].cancel()
 
-            async def debounced_respond():
+            async def debounced_respond(_key=_debounce_key):
                 try:
-                    await asyncio.sleep(DEBOUNCE_SECONDS)
-                    attachments = await extract_attachments(message_snapshot)
-                    response = await safe_generate(
-                        payload,
-                        current_persona=CURRENT_PERSONA,
-                        channel_id=channel_snapshot.id,
-                        guild_id=guild_id_snapshot,
-                        user_id=user_id,
-                        message_id=message_snapshot.id,
-                        username=username_snapshot,
-                        attachments=attachments,
-                    )
-                    await send_response(response, channel_snapshot, reply_to=message_snapshot)
-                except asyncio.CancelledError:
-                    logger.debug(f"Debounce: task cancelled for user {user_id}")
-                finally:
-                    _pending_responses.pop(user_id, None)
+                    current_config = load_config()
+                    debounce_seconds = current_config.get("debounce_seconds", 1.2)
+                    await asyncio.sleep(debounce_seconds)
 
-            _pending_responses[user_id] = asyncio.create_task(debounced_respond())
+                    # Check bot permissions before processing
+                    guild = channel_snapshot.guild
+                    bot_member = guild.get_member(bot_id) if guild else None
+                    if bot_member and not channel_snapshot.permissions_for(bot_member).send_messages:
+                        return
+
+                    async with channel_snapshot.typing():
+                        attachments = await extract_attachments(message_snapshot)
+                        response = await safe_generate(
+                            payload,
+                            current_persona=CURRENT_PERSONA,
+                            channel_id=channel_snapshot.id,
+                            guild_id=guild_id_snapshot,
+                            user_id=user_id,
+                            message_id=message_snapshot.id,
+                            username=username_snapshot,
+                            attachments=attachments,
+                        )
+                        await send_response(response, channel_snapshot, reply_to=message_snapshot)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as exc:
+                    logger.error(f"Error in debounced response for user {user_id}: {exc}")
+                finally:
+                    _pending_responses.pop(_key, None)
+
+            _pending_responses[_debounce_key] = asyncio.create_task(debounced_respond())
             return
 
         # -------------------------------------------------------------------
@@ -204,95 +232,116 @@ class GenAICog(commands.Cog):
         autonomy_on = config.get("autonomy", False)
 
         if autonomy_on and role == "user":
-            # Guard: Verify write permissions before processing anything
             bot_member = message.guild.get_member(bot_id)
             if bot_member:
                 perms = message.channel.permissions_for(bot_member)
                 if not perms.send_messages:
                     return
 
-            # Timer calculations
-            frequency    = config.get("autonomy_frequency", "default")
-            threshold    = FREQUENCY_THRESHOLD.get(frequency, 0.50)
-            now          = time.time()
+            freq_setting = config.get("autonomy_frequency", "default")
+            threshold = FREQUENCY_THRESHOLD.get(freq_setting, 0.50)
+            now = time.time()
             last_channel = _autonomy_cooldown.get(message.channel.id, 0)
-            last_user    = _autonomy_user_cooldown.get(message.author.id, 0)
+            autonomy_cooldown_seconds = config.get("autonomy_cooldown_seconds", 120)
+            autonomy_user_cooldown = config.get("autonomy_user_cooldown", 60)
 
-            channel_ready = now - last_channel > AUTONOMY_COOLDOWN_SECONDS
-            user_ready    = now - last_user    > AUTONOMY_USER_COOLDOWN
+            last_user = _autonomy_user_cooldown.get(message.author.id, 0)
+
+            channel_ready = now - last_channel > autonomy_cooldown_seconds
+            user_ready = now - last_user > autonomy_user_cooldown
 
             if channel_ready and user_ready:
-                # Autonomy doesn't track a channel interaction ID, so we pass
-                # has_memory=False — it fires as a standalone contextual response.
                 intent = evaluate_intent(message, self.bot.user, False)
 
                 if intent.intent != INTENT_IGNORE and intent.confidence >= threshold:
-                    _autonomy_cooldown[message.channel.id]     = now
+                    _autonomy_cooldown[message.channel.id] = now
                     _autonomy_user_cooldown[message.author.id] = now
-                    logger.info(
-                        f"Autonomy firing | channel={message.channel.id} "
-                        f"confidence={intent.confidence:.2f} intent={intent.intent} "
-                        f"targets={intent.targets}"
-                    )
 
                     payload = {
-                        "role":      role,
+                        "role": role,
                         "author_id": message.author.id,
-                        "username":  message.author.display_name,
-                        "content":   message.content,
-                        "reply":     None,
+                        "username": message.author.display_name,
+                        "content": message.content,
+                        "reply": None,
                     }
 
                     if message.reference and isinstance(message.reference.resolved, discord.Message):
                         ref = message.reference.resolved
                         payload["reply"] = {
-                            "author":     ref.author.display_name,
-                            "author_id":  ref.author.id,
-                            "content":    ref.content or "",
-                            "is_bot":     ref.author.bot,
+                            "author": ref.author.display_name,
+                            "author_id": ref.author.id,
+                            "content": ref.content or "",
+                            "is_bot": ref.author.bot,
                             "is_webhook": ref.webhook_id is not None,
-                            "role":       resolve_message_role(ref, bot_id),
+                            "role": resolve_message_role(ref, bot_id),
                         }
 
-                    attachments = await extract_attachments(message)
-                    response = await safe_generate(
-                        payload,
-                        current_persona=CURRENT_PERSONA,
-                        channel_id=message.channel.id,
-                        guild_id=message.guild.id,
-                        user_id=message.author.id,
-                        message_id=message.id,
-                        username=message.author.display_name,
-                        attachments=attachments,
-                    )
-                    await send_response(response, message.channel, reply_to=message)
+                    async with message.channel.typing():
+                        attachments = await extract_attachments(message)
+                        response = await safe_generate(
+                            payload,
+                            current_persona=CURRENT_PERSONA,
+                            channel_id=message.channel.id,
+                            guild_id=message.guild.id,
+                            user_id=message.author.id,
+                            message_id=message.id,
+                            username=message.author.display_name,
+                            attachments=attachments,
+                        )
+                        await send_response(response, message.channel, reply_to=message)
 
     # -------------------------------------------------------------------
     # ~write
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='write', aliases=['w'], help='Ask the AI to write or create something.')
-    async def write_cmd(self, ctx, *, query: str):
+    @commands.hybrid_command(name="write", aliases=["w"], help="Ask the AI to write or create something.")
+    async def write_cmd(self, ctx: commands.Context, *, query: str):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
-        await ctx.defer()
-        attachments = await extract_attachments(ctx.message)
-        response = await safe_generate(
-            query,
-            current_persona=CURRENT_PERSONA,
-            instruction_prefix=(
-                "Return plain text only. "
-                "Use double newlines between paragraphs. "
-                "Do NOT use markdown, symbols, or headings. "
-                "Each idea must be separated clearly."
-            ),
-            apply_persona=True,
-            attachments=attachments,
-        )
+
+        attachments = await extract_attachments(ctx.message) if ctx.message else []
+
+        if ctx.interaction:
+            await ctx.defer()
+            response = await safe_generate(
+                query,
+                current_persona=CURRENT_PERSONA,
+                instruction_prefix=(
+                    "Return plain text only. "
+                    "Use double newlines between paragraphs. "
+                    "Do NOT use markdown, symbols, or headings. "
+                    "Each idea must be separated clearly."
+                ),
+                apply_persona=True,
+                guild_id=ctx.guild.id,
+                user_id=ctx.author.id,
+                message_id=ctx.message.id if ctx.message else None,
+                channel_id=ctx.channel.id,
+                username=ctx.author.display_name,
+                attachments=attachments,
+            )
+        else:
+            async with ctx.typing():
+                response = await safe_generate(
+                    query,
+                    current_persona=CURRENT_PERSONA,
+                    instruction_prefix=(
+                        "Return plain text only. "
+                        "Use double newlines between paragraphs. "
+                        "Do NOT use markdown, symbols, or headings. "
+                        "Each idea must be separated clearly."
+                    ),
+                    apply_persona=True,
+                    guild_id=ctx.guild.id,
+                    user_id=ctx.author.id,
+                    message_id=ctx.message.id if ctx.message else None,
+                    channel_id=ctx.channel.id,
+                    username=ctx.author.display_name,
+                    attachments=attachments,
+                )
+
         embed = discord.Embed(
-            title=f"{BOT_NAME} says...",
-            description=response.first_text(),
-            color=discord.Color.green()
+            title=f"{BOT_NAME} says...", description=response.first_text(), color=discord.Color.green()
         )
         embed.set_footer(text=embed_footer(ctx.author.display_name, query))
         await ctx.send(embed=embed)
@@ -300,28 +349,51 @@ class GenAICog(commands.Cog):
     # -------------------------------------------------------------------
     # ~ask
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='ask', aliases=['a'], help='Ask the AI a question.')
-    async def ask_cmd(self, ctx, *, query: str):
+    @commands.hybrid_command(name="ask", aliases=["a"], help="Ask the AI a question.")
+    async def ask_cmd(self, ctx: commands.Context, *, query: str):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
-        await ctx.defer() 
-        attachments = await extract_attachments(ctx.message)
-        response = await safe_generate(
-            query,
-            current_persona=CURRENT_PERSONA,
-            instruction_prefix=(
-                "Write in clean paragraphs. "
-                "Use newline breaks between sections. "
-                "Do NOT use markdown headings like ###."
-            ),
-            username=ctx.author.display_name,
-            attachments=attachments,
-        )
+
+        attachments = await extract_attachments(ctx.message) if ctx.message else []
+
+        if ctx.interaction:
+            await ctx.defer()
+            response = await safe_generate(
+                query,
+                current_persona=CURRENT_PERSONA,
+                instruction_prefix=(
+                    "Write in clean paragraphs. "
+                    "Use newline breaks between sections. "
+                    "Do NOT use markdown headings like ###."
+                ),
+                guild_id=ctx.guild.id,
+                user_id=ctx.author.id,
+                message_id=ctx.message.id if ctx.message else None,
+                channel_id=ctx.channel.id,
+                username=ctx.author.display_name,
+                attachments=attachments,
+            )
+        else:
+            async with ctx.typing():
+                response = await safe_generate(
+                    query,
+                    current_persona=CURRENT_PERSONA,
+                    instruction_prefix=(
+                        "Write in clean paragraphs. "
+                        "Use newline breaks between sections. "
+                        "Do NOT use markdown headings like ###."
+                    ),
+                    guild_id=ctx.guild.id,
+                    user_id=ctx.author.id,
+                    message_id=ctx.message.id if ctx.message else None,
+                    channel_id=ctx.channel.id,
+                    username=ctx.author.display_name,
+                    attachments=attachments,
+                )
+
         embed = discord.Embed(
-            title=f"{BOT_NAME} answers...",
-            description=response.first_text(),
-            color=discord.Color.blue()
+            title=f"{BOT_NAME} answers...", description=response.first_text(), color=discord.Color.blue()
         )
         embed.set_footer(text=embed_footer(ctx.author.display_name, query))
         await ctx.send(embed=embed)
@@ -329,16 +401,20 @@ class GenAICog(commands.Cog):
     # -------------------------------------------------------------------
     # ~search
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='search', aliases=['s'], help='Search the web and summarize with AI.')
-    async def search_cmd(self, ctx, *, query: str):
+    @commands.hybrid_command(name="search", aliases=["s"], help="Search the web and summarize with AI.")
+    async def search_cmd(self, ctx: commands.Context, *, query: str):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
 
-        await ctx.defer()
         from utils.search import web_search
 
-        result = await web_search(query)
+        if ctx.interaction:
+            await ctx.defer()
+            result = await web_search(query)
+        else:
+            async with ctx.typing():
+                result = await web_search(query)
 
         if result.failed:
             embed = discord.Embed(
@@ -347,7 +423,7 @@ class GenAICog(commands.Cog):
                     "Search is temporarily unavailable (the search models are "
                     "overloaded or unreachable right now). Try again in a bit."
                 ),
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
             url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
             embed.add_field(name="Full results", value=url, inline=False)
@@ -358,26 +434,35 @@ class GenAICog(commands.Cog):
         if result.has_sources:
             text = result.text[:4096]
         else:
-            # result.failed is False here, so result.text is real grounded
-            # output from Gemini, just without extractable source chunks.
-            # Safe to summarize — not a hallucination risk.
-            response = await safe_generate(
-                f"Summarize these search results:\n\n{result.text}",
-                current_persona=CURRENT_PERSONA,
-                apply_persona=False,
-                instruction_prefix=(
-                    "Write in natural, flowing paragraphs. "
-                    "Do not use bullet points or one-sentence sections. "
-                    "Use **Bold Text** only for key terms. "
-                    "Do not use markdown headers (#)."
+            if ctx.interaction:
+                response = await safe_generate(
+                    f"Summarize these search results:\n\n{result.text}",
+                    current_persona=CURRENT_PERSONA,
+                    apply_persona=False,
+                    instruction_prefix=(
+                        "Write in natural, flowing paragraphs. "
+                        "Do not use bullet points or one-sentence sections. "
+                        "Use **Bold Text** only for key terms. "
+                        "Do not use markdown headers (#)."
+                    ),
                 )
-            )
+            else:
+                async with ctx.typing():
+                    response = await safe_generate(
+                        f"Summarize these search results:\n\n{result.text}",
+                        current_persona=CURRENT_PERSONA,
+                        apply_persona=False,
+                        instruction_prefix=(
+                            "Write in natural, flowing paragraphs. "
+                            "Do not use bullet points or one-sentence sections. "
+                            "Use **Bold Text** only for key terms. "
+                            "Do not use markdown headers (#)."
+                        ),
+                    )
             text = response.first_text()[:4096]
 
         embed = discord.Embed(
-            title=f"Search: {query}",
-            description=text or "No results found.",
-            color=discord.Color.blue()
+            title=f"Search: {query}", description=text or "No results found.", color=discord.Color.blue()
         )
 
         if result.has_sources:
@@ -400,35 +485,46 @@ class GenAICog(commands.Cog):
     # -------------------------------------------------------------------
     # Persona lock / unlock
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='personalock', aliases=['plock'], help='Lock the persona to prevent changes (Owner only).')
+    @commands.hybrid_command(
+        name="personalock", aliases=["plock"], help="Lock the persona to prevent changes (Owner only)."
+    )
     @commands.is_owner()
-    async def persona_lock(self, ctx):
+    async def persona_lock(self, ctx: commands.Context):
         import utils.persona as p
+
         p.PERSONA_LOCKED = True
         await ctx.send("Persona locked.", ephemeral=True if ctx.interaction else False)
 
-    @commands.hybrid_command(name='personaunlock', aliases=['pulock'], help='Unlock the persona (Owner only).')
+    @commands.hybrid_command(
+        name="personaunlock", aliases=["pulock"], help="Unlock the persona (Owner only)."
+    )
     @commands.is_owner()
-    async def persona_unlock(self, ctx):
+    async def persona_unlock(self, ctx: commands.Context):
         import utils.persona as p
+
         p.PERSONA_LOCKED = False
         await ctx.send("Persona unlocked.", ephemeral=True if ctx.interaction else False)
 
     # -------------------------------------------------------------------
     # Persona profiles
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='personasave', aliases=['psave'], help='Save current persona as a named profile (Owner only).')
+    @commands.hybrid_command(
+        name="personasave", aliases=["psave"], help="Save current persona as a named profile (Owner only)."
+    )
     @commands.is_owner()
-    async def persona_save(self, ctx, name: str):
+    async def persona_save(self, ctx: commands.Context, name: str):
         profiles = load_profiles()
         profiles[name.lower()] = PERSONA_DATA.copy()
         save_profiles(profiles)
         await ctx.send(f"Saved persona as `{name.lower()}`.", ephemeral=True if ctx.interaction else False)
 
-    @commands.hybrid_command(name='personaload', aliases=['pload'], help='Load a saved persona profile (Owner only).')
+    @commands.hybrid_command(
+        name="personaload", aliases=["pload"], help="Load a saved persona profile (Owner only)."
+    )
     @commands.is_owner()
-    async def persona_load(self, ctx, name: str):
+    async def persona_load(self, ctx: commands.Context, name: str):
         import utils.persona as p
+
         if p.PERSONA_LOCKED:
             await ctx.send("Persona is locked.", ephemeral=True if ctx.interaction else False)
             return
@@ -447,9 +543,9 @@ class GenAICog(commands.Cog):
         save_persona_json(p.PERSONA_DATA)
         await ctx.send(f"Loaded persona `{key}`.", ephemeral=True if ctx.interaction else False)
 
-    @commands.hybrid_command(name='personalist', aliases=['plist'], help='List saved persona profiles.')
+    @commands.hybrid_command(name="personalist", aliases=["plist"], help="List saved persona profiles.")
     @commands.is_owner()
-    async def persona_list(self, ctx):
+    async def persona_list(self, ctx: commands.Context):
         profiles = load_profiles()
         if not profiles:
             await ctx.send("No saved profiles yet.")
@@ -457,9 +553,11 @@ class GenAICog(commands.Cog):
         names = "\n".join(f"- `{k}`" for k in profiles)
         await ctx.send(names, ephemeral=True if ctx.interaction else False)
 
-    @commands.hybrid_command(name='personadelete', aliases=['pdel'], help='Delete a saved persona profile (Owner only).')
+    @commands.hybrid_command(
+        name="personadelete", aliases=["pdel"], help="Delete a saved persona profile (Owner only)."
+    )
     @commands.is_owner()
-    async def persona_delete(self, ctx, name: str):
+    async def persona_delete(self, ctx: commands.Context, name: str):
         profiles = load_profiles()
         key = name.lower()
         if key not in profiles:
@@ -472,17 +570,22 @@ class GenAICog(commands.Cog):
     # -------------------------------------------------------------------
     # /setchannel + /clearchannel
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='setchannel', aliases=['sc'], help='Set the AI conversation channel (Admin only).')
+    @commands.hybrid_command(
+        name="setchannel", aliases=["sc"], help="Set the AI conversation channel (Admin only)."
+    )
+    @app_commands.describe(channel="The channel to set for AI conversations.")
     @commands.has_permissions(administrator=True)
-    async def set_channel(self, ctx, channel: discord.TextChannel):
+    async def set_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         config = load_config()
         config["chat_channel_id"] = channel.id
         save_config(config)
         await ctx.send(f"Conversation channel set to {channel.mention}.")
 
-    @commands.hybrid_command(name='clearchannel', aliases=['cc'], help='Remove the AI conversation channel (Admin only).')
+    @commands.hybrid_command(
+        name="clearchannel", aliases=["cc"], help="Remove the AI conversation channel (Admin only)."
+    )
     @commands.has_permissions(administrator=True)
-    async def clear_channel(self, ctx):
+    async def clear_channel(self, ctx: commands.Context):
         config = load_config()
         config.pop("chat_channel_id", None)
         save_config(config)
@@ -491,52 +594,63 @@ class GenAICog(commands.Cog):
     # -------------------------------------------------------------------
     # /debugpersona
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='debugpersona', aliases=['pdeb'], help='Show active persona and last prompt (Owner only).')
+    @commands.hybrid_command(
+        name="debugpersona", aliases=["pdeb"], help="Show active persona and last prompt (Owner only)."
+    )
     @commands.is_owner()
-    async def debug_persona(self, ctx):
+    async def debug_persona(self, ctx: commands.Context):
         import utils.persona as p
-        last   = LAST_DEBUG.get(ctx.channel.id, "*(no prompt sent in this channel yet)*")
+
+        last = LAST_DEBUG.get(ctx.channel.id, "*(no prompt sent in this channel yet)*")
         locked = "Yes" if p.PERSONA_LOCKED else "No"
         legacy = "Yes — migrate via `/setpersona`" if p.LEGACY_DETECTED else "No"
         config = load_config()
         autonomy_status = "On" if config.get("autonomy", False) else "Off"
-        autonomy_freq   = config.get("autonomy_frequency", "default")
-        response_mode   = config.get("conversation_response_mode", "all")
+        autonomy_freq = config.get("autonomy_frequency", "default")
+        response_mode = config.get("conversation_response_mode", "all")
         embed = discord.Embed(title="Persona Debug", color=discord.Color.yellow())
-        embed.add_field(name="Locked",      value=locked,  inline=True)
-        embed.add_field(name="Provider",    value=get_provider_name(), inline=True)
-        embed.add_field(name="Model",       value=get_model_name(), inline=True)
-        embed.add_field(name="Legacy Mode", value=legacy,  inline=True)
-        embed.add_field(name="Autonomy",    value=f"{autonomy_status} ({autonomy_freq})", inline=True)
-        embed.add_field(name="Chat Mode",   value=response_mode, inline=True)
-        embed.add_field(name="Assembled Persona",          value=f"```{p.CURRENT_PERSONA[:900]}```", inline=False)
-        embed.add_field(name="Last Prompt (this channel)", value=f"```{last[:900]}```",              inline=False)
+        embed.add_field(name="Locked", value=locked, inline=True)
+        embed.add_field(name="Provider", value=get_provider_name(), inline=True)
+        embed.add_field(name="Model", value=get_model_name(), inline=True)
+        embed.add_field(name="Legacy Mode", value=legacy, inline=True)
+        embed.add_field(name="Autonomy", value=f"{autonomy_status} ({autonomy_freq})", inline=True)
+        embed.add_field(name="Chat Mode", value=response_mode, inline=True)
+        embed.add_field(
+            name="Assembled Persona", value=f"```{p.CURRENT_PERSONA[:900]}```", inline=False
+        )
+        embed.add_field(name="Last Prompt (this channel)", value=f"```{last[:900]}```", inline=False)
         await ctx.send(embed=embed, ephemeral=True if ctx.interaction else False)
 
     # -------------------------------------------------------------------
     # /clearmemory
-    # Now clears the server-side interaction chain for the channel so the
-    # next message starts a fresh conversation with no previous_interaction_id.
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='clearmemory', aliases=['smcl'], help='Clear conversation memory for this channel (Admin only).')
+    @commands.hybrid_command(
+        name="clearmemory",
+        aliases=["smcl"],
+        help="Clear conversation memory for this channel (Admin only).",
+    )
     @commands.has_permissions(administrator=True)
-    async def clear_memory(self, ctx):
+    async def clear_memory(self, ctx: commands.Context):
         clear_interaction_id(ctx.channel.id)
-        await ctx.send("Conversation memory cleared.")
+        await ctx.send("Conversation memory cleared for this channel.")
 
     # -------------------------------------------------------------------
     # /memorylist (long-term SQLite)
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='memorylist', aliases=['meml'], help='List long-term memory facts for a user.')
+    @commands.hybrid_command(
+        name="memorylist", aliases=["meml"], help="List long-term memory facts for a user."
+    )
     @app_commands.describe(user="The user whose memory to list (defaults to you).")
-    async def memory_list(self, ctx, user: Optional[discord.User] = None):
+    async def memory_list(self, ctx: commands.Context, user: Optional[discord.User] = None):
         if ctx.guild is None:
             await ctx.send("Memory commands are server-only.")
             return
 
         target_user = user or ctx.author
-        member      = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
-        is_admin    = bool(member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild))
+        member = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
+        is_admin = bool(
+            member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
+        )
 
         if target_user.id != ctx.author.id and not is_admin:
             await ctx.send("❌ You can only view your own memory.", ephemeral=True)
@@ -546,7 +660,7 @@ class GenAICog(commands.Cog):
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT content, importance FROM user_facts WHERE guild_id = ? AND user_id = ? ORDER BY importance DESC",
-                (str(ctx.guild.id), str(target_user.id))
+                (str(ctx.guild.id), str(target_user.id)),
             ) as cursor:
                 rows = await cursor.fetchall()
 
@@ -566,18 +680,20 @@ class GenAICog(commands.Cog):
     # /memoryclear
     # -------------------------------------------------------------------
     @commands.hybrid_command(
-        name='memoryclear',
-        aliases=['memcl'],
-        help='Clear long-term facts. Users can clear their own; Admins can clear anyone.'
+        name="memoryclear",
+        aliases=["memcl"],
+        help="Clear long-term facts. Users can clear their own; Admins can clear anyone.",
     )
     @app_commands.describe(user="The user whose memory to clear (defaults to you).")
-    async def memory_clear_user(self, ctx, user: Optional[discord.User] = None):
+    async def memory_clear_user(self, ctx: commands.Context, user: Optional[discord.User] = None):
         if ctx.guild is None:
             return await ctx.send("Memory commands are server-only.")
 
         target_user = user or ctx.author
-        member      = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
-        is_admin    = bool(member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild))
+        member = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
+        is_admin = bool(
+            member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
+        )
 
         if target_user.id != ctx.author.id and not is_admin:
             await ctx.send("❌ You can only clear your own memory.", ephemeral=True)
@@ -586,21 +702,22 @@ class GenAICog(commands.Cog):
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             async with db.execute(
                 "SELECT COUNT(*) FROM user_facts WHERE guild_id = ? AND user_id = ?",
-                (str(ctx.guild.id), str(target_user.id))
+                (str(ctx.guild.id), str(target_user.id)),
             ) as cursor:
-                row   = await cursor.fetchone()
+                row = await cursor.fetchone()
                 count = row[0] if row else 0
 
             if count > 0:
                 await db.execute(
                     "DELETE FROM user_facts WHERE guild_id = ? AND user_id = ?",
-                    (str(ctx.guild.id), str(target_user.id))
+                    (str(ctx.guild.id), str(target_user.id)),
                 )
                 await db.commit()
-                if target_user.id == ctx.author.id:
-                    msg = f"✅ I have forgotten {count} facts about you in this server."
-                else:
-                    msg = f"✅ Cleared {count} facts for {target_user.mention}."
+                msg = (
+                    f"✅ I have forgotten {count} facts about you in this server."
+                    if target_user.id == ctx.author.id
+                    else f"✅ Cleared {count} facts for {target_user.mention}."
+                )
                 await ctx.send(msg, ephemeral=True)
             else:
                 await ctx.send(f"No facts found for {target_user.display_name}.", ephemeral=True)
@@ -608,15 +725,26 @@ class GenAICog(commands.Cog):
     # -------------------------------------------------------------------
     # /memorydelete
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='memorydelete', aliases=['memdel'], help='Delete a specific memory fact by its list number.')
-    @app_commands.describe(index="The list number of the fact to delete.", user="The user whose memory to delete (defaults to you).")
-    async def memory_delete_index(self, ctx, index: int, user: Optional[discord.User] = None):
+    @commands.hybrid_command(
+        name="memorydelete",
+        aliases=["memdel"],
+        help="Delete a specific memory fact by its list number.",
+    )
+    @app_commands.describe(
+        index="The list number of the fact to delete.",
+        user="The user whose memory to delete (defaults to you).",
+    )
+    async def memory_delete_index(
+        self, ctx: commands.Context, index: int, user: Optional[discord.User] = None
+    ):
         if ctx.guild is None:
             return
 
         target_user = user or ctx.author
-        member      = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
-        is_admin    = bool(member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild))
+        member = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
+        is_admin = bool(
+            member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
+        )
 
         if target_user.id != ctx.author.id and not is_admin:
             await ctx.send("❌ You can only delete your own memory facts.", ephemeral=True)
@@ -626,50 +754,57 @@ class GenAICog(commands.Cog):
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT message_id, content FROM user_facts WHERE guild_id = ? AND user_id = ? ORDER BY importance DESC",
-                (str(ctx.guild.id), str(target_user.id))
+                (str(ctx.guild.id), str(target_user.id)),
             ) as cursor:
-                rows: list = list(await cursor.fetchall())
+                rows = list(await cursor.fetchall())
 
             if not rows or index < 1 or index > len(rows):
-                await ctx.send(f"Invalid number. Use `/memorylist` to see the {len(rows)} stored facts.", ephemeral=True)
+                await ctx.send(
+                    f"Invalid number. Use `/memorylist` to see the {len(rows)} stored facts.", ephemeral=True
+                )
                 return
 
-        target_fact = rows[index - 1]
-        async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
-            await db.execute("DELETE FROM user_facts WHERE message_id = ?", (target_fact['message_id'],))
+            target_fact = rows[index - 1]
+            await db.execute("DELETE FROM user_facts WHERE message_id = ?", (target_fact["message_id"],))
             await db.commit()
 
-        await ctx.send(f"✅ Deleted fact #{index} for {target_user.display_name}: *{target_fact['content'][:50]}...*", ephemeral=True)
+        await ctx.send(
+            f"✅ Deleted fact #{index} for {target_user.display_name}: *{target_fact['content'][:50]}...*",
+            ephemeral=True,
+        )
 
     # -------------------------------------------------------------------
     # /migrate
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='migrate', help='Migrate JSON memory to SQLite (Admin only).')
+    @commands.hybrid_command(name="migrate", help="Migrate JSON memory to SQLite (Admin only).")
     @commands.has_permissions(administrator=True)
-    async def migrate_memory(self, ctx):
+    async def migrate_memory(self, ctx: commands.Context):
         await ctx.defer(ephemeral=True)
         from utils.memory import run_migration
+
         success, message = await run_migration()
         await ctx.send(f"{'✅' if success else '❌'} {message}", ephemeral=True)
 
     # -------------------------------------------------------------------
     # /chatmode
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name='chatmode', help='Set conversation channel response mode (Admin only).')
+    @commands.hybrid_command(name="chatmode", help="Set conversation channel response mode (Admin only).")
     @app_commands.describe(mode="Mode can be `all`, `mentions`, or `smart`.")
     @commands.has_permissions(administrator=True)
-    async def chat_mode(self, ctx, mode: str):
+    async def chat_mode(self, ctx: commands.Context, mode: str):
         mode = mode.lower().strip()
         if mode not in CHAT_RESPONSE_MODES:
-            await ctx.send("Mode must be `all`, `mentions`, or `smart`.", ephemeral=True if ctx.interaction else False)
+            await ctx.send(
+                "Mode must be `all`, `mentions`, or `smart`.", ephemeral=True if ctx.interaction else False
+            )
             return
         config = load_config()
         config["conversation_response_mode"] = mode
         save_config(config)
         descriptions = {
-            "all":      "respond to every message in the conversation channel",
+            "all": "respond to every message in the conversation channel",
             "mentions": "respond only to bot mentions or replies",
-            "smart":    "respond to bot mentions, replies, or attachments",
+            "smart": "respond to bot mentions, replies, or attachments",
         }
         await ctx.send(
             f"Conversation response mode set to `{mode}`: {descriptions[mode]}.",
@@ -682,7 +817,7 @@ class GenAICog(commands.Cog):
     @app_commands.command(name="autonomy", description="Configure autonomy mode settings (Admin only).")
     @app_commands.describe(
         action="on / off / frequency",
-        frequency="low / default / high — only used when action is 'frequency'"
+        frequency="low / default / high — only used when action is 'frequency'",
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def autonomy_cmd(
@@ -721,10 +856,14 @@ class GenAICog(commands.Cog):
     # -------------------------------------------------------------------
     # /botwhitelist add / remove / list
     # -------------------------------------------------------------------
-    @commands.hybrid_group(name='botwhitelist', aliases=['bw'], invoke_without_command=True, help='Manage whitelisted bot IDs (Admin only).')  # type: ignore[call-arg]
+    @commands.hybrid_group(name="botwhitelist", aliases=["bw"], help="Manage whitelisted bot IDs (Admin only).")
     @commands.has_permissions(administrator=True)
-    async def whitelist_group(self, ctx):
-        config    = load_config()
+    async def whitelist_group(self, ctx: commands.Context):
+        """Root group command displaying whitelisted bots if no subcommand is invoked."""
+        if ctx.invoked_subcommand is not None:
+            return
+
+        config = load_config()
         whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
         if not whitelist:
             await ctx.send("No bots are whitelisted.", ephemeral=True if ctx.interaction else False)
@@ -732,42 +871,57 @@ class GenAICog(commands.Cog):
         lines = "\n".join(f"- `{bot_id}`" for bot_id in whitelist)
         await ctx.send(f"Whitelisted bots:\n{lines}", ephemeral=True if ctx.interaction else False)
 
-    @whitelist_group.command(name='add', help='Add a bot ID to the whitelist.')  # type: ignore[attr-defined]
-    @app_commands.describe(bot_id='The Discord bot ID (integer snowflake) to whitelist.')
-    async def whitelist_add(self, ctx, bot_id: str):
+    @whitelist_group.command(name="add", help="Add a bot ID to the whitelist.")  # type: ignore[attr-defined]
+    @app_commands.describe(bot_id="The Discord bot ID (integer snowflake) to whitelist.")
+    async def whitelist_add(self, ctx: commands.Context, bot_id: str):
         try:
             bid = int(bot_id)
         except ValueError:
-            await ctx.send(f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.", ephemeral=True if ctx.interaction else False)
+            await ctx.send(
+                f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.",
+                ephemeral=True if ctx.interaction else False,
+            )
             return
-        config    = load_config()
+        config = load_config()
         whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
         if bid in whitelist:
-            await ctx.send(f"Bot `{bid}` is already whitelisted.", ephemeral=True if ctx.interaction else False)
+            await ctx.send(
+                f"Bot `{bid}` is already whitelisted.", ephemeral=True if ctx.interaction else False
+            )
             return
         whitelist.append(bid)
         config["whitelist_bot_ids"] = whitelist
         save_config(config)
-        await ctx.send(f"Successfully added bot `{bid}` to the whitelist.", ephemeral=True if ctx.interaction else False)
+        await ctx.send(
+            f"Successfully added bot `{bid}` to the whitelist.",
+            ephemeral=True if ctx.interaction else False,
+        )
 
-    @whitelist_group.command(name='remove', help='Remove a bot ID from the whitelist.')  # type: ignore[attr-defined]
-    @app_commands.describe(bot_id='The Discord bot ID (integer snowflake) to remove.')
-    async def whitelist_remove(self, ctx, bot_id: str):
+    @whitelist_group.command(name="remove", help="Remove a bot ID from the whitelist.")  # type: ignore[attr-defined]
+    @app_commands.describe(bot_id="The Discord bot ID (integer snowflake) to remove.")
+    async def whitelist_remove(self, ctx: commands.Context, bot_id: str):
         try:
             bid = int(bot_id)
         except ValueError:
-            await ctx.send(f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.", ephemeral=True if ctx.interaction else False)
+            await ctx.send(
+                f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.",
+                ephemeral=True if ctx.interaction else False,
+            )
             return
-        config    = load_config()
+        config = load_config()
         whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
         if bid not in whitelist:
-            await ctx.send(f"Bot `{bid}` is not in the whitelist.", ephemeral=True if ctx.interaction else False)
+            await ctx.send(
+                f"Bot `{bid}` is not in the whitelist.", ephemeral=True if ctx.interaction else False
+            )
             return
         whitelist.remove(bid)
         config["whitelist_bot_ids"] = whitelist
         save_config(config)
-        await ctx.send(f"Successfully removed bot `{bid}` from the whitelist.", ephemeral=True if ctx.interaction else False)
-
+        await ctx.send(
+            f"Successfully removed bot `{bid}` from the whitelist.",
+            ephemeral=True if ctx.interaction else False,
+        )
 
 async def setup(bot):
     await bot.add_cog(GenAICog(bot))

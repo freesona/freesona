@@ -45,3 +45,12 @@ matplotlib
 
 # symengine: Fast C++ backend for symbolic math (optional speedup).
 symengine
+
+# pypdf: PDF processing library for handling PDF files.
+pypdf
+
+# chromadb: Vector database for AI and machine learning applications.
+chromadb
+
+# onnxruntime: Inference engine for running ONNX models, used in AI cogs.
+onnxruntime

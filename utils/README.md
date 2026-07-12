@@ -4,8 +4,8 @@ Logic modules for Freesona. All cogs import from here; cogs do not import from e
 
 | Module | Responsibility |
 | :--- | :--- |
-| `generation.py` | Gemini API calls, `ConversationResponse`, `safe_generate`, `send_response`, multimodal attachment handling, injection pre/post-check wiring |
-| `memory.py` | Long-term per-user fact storage (SQLite); per-channel interaction ID store for Gemini server-side conversation continuity |
+| `generation.py` | Provider-agnostic generation pipeline, `ConversationResponse`, `safe_generate`, `send_response`, multimodal attachment handling, and provider-safe prompt injection |
+| `memory.py` | Long-term per-user fact storage (SQLite) plus scoped interaction continuity for Gemini, keyed by `guild_id + channel_id + user_id` |
 | `persona.py` | Persona data layer, structured field assembly, `/setpersona` modal panel, profile save/load |
 | `intent.py` | Confidence-scored intent evaluator for autonomy — signal scoring, threshold mapping, `IntentResult` type |
 | `security.py` | SSRF URL guard, prompt injection detection and redaction, output safety check, math AST allowlist helpers |
