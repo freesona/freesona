@@ -1,6 +1,9 @@
 # Freesona - The Discord Bot You Customize
 
-![Freesona Banner](assets/b_freesona-01.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/bd_freesona.png">
+  <img src="assets/bl_freesona.png" alt="Freesona Banner">
+</picture>
 
 Most AI Discord bots give you a product. Verba, MEE6, and every other hosted platform give you a personality someone else built, running on infrastructure you don't control, with a ceiling you'll eventually hit.
 
