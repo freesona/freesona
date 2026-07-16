@@ -5,6 +5,8 @@
 </picture>
 <!-- markdownlint-enable MD033 -->
 
+---
+
 # Freesona - The Discord Bot You Customize
 
 Most AI Discord bots give you a product. Verba, MEE6, and every other hosted platform give you a personality someone else built, running on infrastructure you don't control, with a ceiling you'll eventually hit.
@@ -115,10 +117,6 @@ GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
 # OPENROUTER_API_KEY=
 # OPENROUTER_SITE_URL=
 # OPENROUTER_SITE_NAME=Freesona
-
-# Search (optional legacy fallback for /search)
-GOOGLE_SEARCH_API_KEY=
-SEARCH_ENGINE_ID=
 
 # ChromaDB (optional — required for knowledge base retrieval)
 CHROMA_COLLECTION=freesona
