@@ -21,6 +21,7 @@ except Exception:
 from utils.memory import (
     inject_user_memory,
 )
+from utils.chroma import query_knowledge
 from utils.security import sanitize_prompt
 from utils.config import get_model_name, get_provider_name, get_provider_model, load_config
 from utils.providers import generate_text
@@ -33,6 +34,10 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 BOT_NAME       = os.getenv("BOT_NAME", "Bot")
 
 PROVIDER = get_provider_name()
+
+# Knowledge base config
+KB_TOP_K = int(os.getenv("KB_TOP_K", "3"))
+KB_ENABLED = os.getenv("KB_ENABLED", "true").lower() == "true"
 
 # Global state tracking for rate limiting
 call_timestamps: list[float] = []
@@ -285,6 +290,80 @@ def _consume_stream(client_obj, kwargs_dict):
     return text_acc, last_interaction_id
 
 # ---------------------------------------------------------------------------
+# Knowledge Base Retrieval
+# ---------------------------------------------------------------------------
+
+async def retrieve_knowledge_context(
+    query: str,
+    persona: str,
+    top_k: int = KB_TOP_K,
+) -> str:
+    """
+    Retrieves relevant knowledge base entries for the given persona and query.
+    
+    Args:
+        query: The user's message/query to search for.
+        persona: The active persona identifier.
+        top_k: Maximum number of entries to retrieve.
+    
+    Returns:
+        Formatted knowledge context string, or empty string if disabled/no results.
+    """
+    if not KB_ENABLED:
+        return ""
+    
+    if not persona or not persona.strip():
+        return ""
+    
+    try:
+        # Run query off-thread to avoid blocking
+        entries = await asyncio.to_thread(query_knowledge, query, limit=top_k, persona=persona)
+        
+        if not entries:
+            return ""
+        
+        # Format entries as context
+        lines = ["Relevant Canonical Context"]
+        for i, entry in enumerate(entries, 1):
+            meta = entry.get("metadata", {})
+            document = entry.get("document", "").strip()
+            source = meta.get("source", "unknown")
+            entry_type = meta.get("entry_type", "unknown")
+            scene = meta.get("scene", "")
+            speaker = meta.get("speaker", "")
+            chapter = meta.get("chapter", "")
+            timestamp = meta.get("timestamp", "")
+            canon_level = meta.get("canon_level", "")
+            
+            context_parts = [f"{i}. {document}"]
+            details = []
+            if source and source != "unknown":
+                details.append(f"Source: {source}")
+            if entry_type and entry_type != "unknown":
+                details.append(f"Type: {entry_type}")
+            if scene:
+                details.append(f"Scene: {scene}")
+            if speaker:
+                details.append(f"Speaker: {speaker}")
+            if chapter:
+                details.append(f"Chapter: {chapter}")
+            if timestamp:
+                details.append(f"Timestamp: {timestamp}")
+            if canon_level:
+                details.append(f"Canon: {canon_level}")
+            
+            if details:
+                context_parts.append(f"   ({', '.join(details)})")
+            
+            lines.extend(context_parts)
+        
+        return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"Knowledge base retrieval failed: {e}")
+        return ""
+
+
+# ---------------------------------------------------------------------------
 # Core generation
 # ---------------------------------------------------------------------------
 
@@ -300,17 +379,27 @@ async def generate(
     instruction_prefix: str = "",
     username: str = "",
     attachments: Optional[list[tuple[bytes, str]]] = None,
+    persona_id: str = "",
 ) -> ConversationResponse:
     await rate_limit()
 
     text = prompt.get("content", "") if isinstance(prompt, dict) else (prompt or "")
     text = sanitize_prompt(text)
     
+    # Retrieve knowledge base context for the active persona
+    kb_context = ""
+    if apply_persona and persona_id and KB_ENABLED:
+        kb_context = await retrieve_knowledge_context(text, persona_id, KB_TOP_K)
+    
     persona = current_persona if apply_persona else ""
     if apply_persona and guild_id and user_id:
         memory_block = await inject_user_memory(guild_id, user_id, username)
         if memory_block:
             persona = f"{current_persona}\n\n{memory_block}"
+    
+    # Inject knowledge base context into the persona if available
+    if kb_context:
+        persona = f"{persona}\n\n{kb_context}" if persona else kb_context
 
     input_payload = _build_input(text, attachments, None, instruction_prefix, username)
 
@@ -371,4 +460,4 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
     except Exception:
         return build_response("Something went wrong. Try again.")
 
-__all__ = ["ConversationResponse", "build_response", "extract_attachments", "safe_generate", "send_response"]
+__all__ = ["ConversationResponse", "build_response", "extract_attachments", "retrieve_knowledge_context", "safe_generate", "send_response"]

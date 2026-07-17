@@ -60,13 +60,84 @@ Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching crede
 
 ---
 
-## ChromaDB Knowledge Base
+## ChromaDB Knowledge Base (Persona-Agnostic RAG)
 
-An optional ChromaDB-backed retrieval layer is available for semantic lookups during generation. When enabled, relevant documents from the local vector store are injected into the system prompt context alongside user facts and the active persona.
+An optional ChromaDB-backed retrieval layer provides **persona-agnostic**, **provider-independent** semantic retrieval of canonical persona knowledge. When enabled, relevant entries from the local vector store are injected into the generation context alongside the active persona and user memory.
 
-Configure with `CHROMA_COLLECTION` and `CHROMA_PERSIST_DIRECTORY` in `.env`. The retrieval path is fully optional — if ChromaDB is not installed or the collection is empty, generation continues normally.
+The knowledge base implements a full **Persona Knowledge Base architecture** with standardized metadata, deterministic ingestion pipeline, and structured retrieval:
 
-The local KB now exposes `/kbsearch`, `/kbadd`, `/kblist`, and `/kbdelete` on top of that retrieval foundation for simple management from Discord.
+### Data Model
+Each entry is an **atomic semantic unit** (one dialogue exchange, one event, one narration) with standardized metadata:
+
+| Field | Required | Description |
+|-------|:---:|-------------|
+| `persona` | ✓ | Persona identifier |
+| `source` | ✓ | Original source (e.g., `Episode 06`, `Chapter 12`) |
+| `source_type` | ✓ | `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` |
+| `entry_type` | ✓ | `dialogue`, `narration`, `event`, `relationship`, `description` |
+| `topics` | ✓ | Semantic topics (non-empty list) |
+| `episode` | | Episode number |
+| `chapter` | | Chapter number |
+| `scene` | | Scene description |
+| `speaker` | | Speaking character (for dialogue) |
+| `timestamp` | | Source timestamp (e.g., `2023-01-15`, `S01E06 12:34`) |
+| `canon_level` | | `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` |
+| `tags` | | Additional indexing tags (comma-separated) |
+
+### Ingestion Pipeline
+The ingestion pipeline (`utils/chroma.py`) is fully deterministic and reproducible:
+1. **Clean** — Normalize line endings, remove excessive whitespace
+2. **Identify Speakers** — Extract speaker-attributed dialogue using regex patterns
+3. **Semantic Chunk** — Split into atomic units (one exchange, one event, one monologue)
+4. **Assign Metadata** — Apply base metadata + chunk-specific fields (speaker → `entry_type: dialogue`)
+5. **Embed & Store** — Generate embeddings and persist to ChromaDB
+
+Utility functions: `clean_source_text()`, `identify_speakers()`, `chunk_semantic_units()`, `assign_metadata()`, `ingest_source()`.
+
+### Retrieval & Context Format
+On each generation, `retrieve_knowledge_context(query, persona, top_k)` queries ChromaDB filtered by persona and returns the **Relevant Canonical Context** format:
+
+```
+Relevant Canonical Context
+1. Chisato: "I'll protect everyone!"
+   (Source: Episode 06, Type: dialogue, Scene: Aquarium, Speaker: Chisato, Chapter: , Timestamp: S01E06 12:34, Canon: canon)
+2. The aquarium shimmered with bioluminescent light.
+   (Source: Episode 06, Type: narration, Scene: Aquarium, Speaker: , Chapter: Chapter 12, Timestamp: , Canon: canon)
+```
+
+Context is injected **after** long-term memory in the generation priority:
+```
+System Prompt → Persona Definition → Conversation Memory → Long-Term Memory → Persona Knowledge Base (RAG) → Generation
+```
+
+### Discord Commands
+| Command | Action | Permissions |
+|---------|--------|-------------|
+| `/kbsearch <query>` | Search the knowledge base | Anyone |
+| `/kbadd <title> [content] [attachment]` | Add entry via modal UI with all metadata fields | Administrator |
+| `/kblist` | List newest entries | Administrator |
+| `/kbdelete <id>` | Delete entry by ID | Administrator |
+
+The `/kbadd` modal includes all required and optional metadata fields with validation.
+
+### Configuration
+Environment variables (`.env`):
+- `CHROMA_COLLECTION` — Collection name (default: `freesona`)
+- `CHROMA_PERSIST_DIRECTORY` — Storage path (default: `./.chroma`)
+
+Runtime config (`config.json`):
+- `kb_enabled` — Enable/disable KB retrieval (default: `true`)
+- `kb_top_k` — Entries to retrieve per query (default: `5`)
+- `kb_collection` — Override collection name
+- `kb_persist_directory` — Override storage path
+
+### Provider Independence
+The knowledge base:
+- Does **not** depend on any specific AI provider (Gemini, OpenAI, Ollama, etc.)
+- Does **not** use provider-native memory systems
+- Stores embeddings in ChromaDB (local or remote)
+- Provides identical retrieval behavior across all providers
+- Is fully **persona-agnostic** — adding a new persona requires only source material + metadata, no code changes
 
 ---
 

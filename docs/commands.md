@@ -11,9 +11,37 @@ Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as 
 | `~search <query>` (`/search`, alias `~s`) | Web search with AI summary | Anyone |
 | `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP | Anyone |
 | `/kbsearch <query>` | Search the local ChromaDB knowledge base | Anyone |
-| `/kbadd <title> [content] [attachment]` | Add text or a PDF/EPUB attachment to the local knowledge base | Administrator |
+| `/kbadd <title> [content] [attachment]` | Add text or a PDF/EPUB/TXT/JSON attachment to the local knowledge base (opens metadata modal) | Administrator |
 | `/kblist` | List the newest knowledge base entries | Administrator |
 | `/kbdelete <id>` | Delete a knowledge base entry by ID | Administrator |
+
+---
+
+### `/kbadd` Metadata Fields
+
+The `/kbadd` command opens a modal with the following fields:
+
+**Required:**
+| Field | Description | Example |
+|-------|-------------|---------|
+| Persona ID | Persona identifier | `chisato_nishikigi` |
+| Source | Original source reference | `Episode 06` |
+| Source Type | `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` | `anime` |
+| Entry Type | `dialogue`, `narration`, `event`, `relationship`, `description` | `dialogue` |
+| Topics | Comma-separated semantic topics | `friendship, optimism, coffee` |
+
+**Optional:**
+| Field | Description | Example |
+|-------|-------------|---------|
+| Scene | Scene/location description | `Aquarium visit` |
+| Speaker | Speaking character (auto-sets entry_type to dialogue) | `Chisato` |
+| Episode | Episode number | `06` |
+| Chapter | Chapter number/title | `Chapter 12` |
+| Timestamp | Source timestamp | `2023-01-15` or `S01E06 12:34` |
+| Canon Level | `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` | `canon` |
+| Tags | Comma-separated additional tags | `canon, emotional, key_moment` |
+
+---
 
 ## RSS / News
 

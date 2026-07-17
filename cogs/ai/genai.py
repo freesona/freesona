@@ -33,6 +33,7 @@ from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
 from utils.memory import clear_interaction_id, extract_and_store_fact, get_user_facts_prompt
 from utils.persona import (
     CURRENT_PERSONA,
+    CURRENT_PERSONA_ID,
     LEGACY_DETECTED,
     PERSONA_DATA,
     PERSONA_LOCKED,
@@ -208,6 +209,7 @@ class GenAICog(commands.Cog):
                         response = await safe_generate(
                             payload,
                             current_persona=CURRENT_PERSONA,
+                            persona_id=CURRENT_PERSONA_ID,
                             channel_id=channel_snapshot.id,
                             guild_id=guild_id_snapshot,
                             user_id=user_id,
@@ -281,6 +283,7 @@ class GenAICog(commands.Cog):
                         response = await safe_generate(
                             payload,
                             current_persona=CURRENT_PERSONA,
+                            persona_id=CURRENT_PERSONA_ID,
                             channel_id=message.channel.id,
                             guild_id=message.guild.id,
                             user_id=message.author.id,
@@ -306,6 +309,7 @@ class GenAICog(commands.Cog):
             response = await safe_generate(
                 query,
                 current_persona=CURRENT_PERSONA,
+                persona_id=CURRENT_PERSONA_ID,
                 instruction_prefix=(
                     "Return plain text only. "
                     "Use double newlines between paragraphs. "
@@ -325,6 +329,7 @@ class GenAICog(commands.Cog):
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,
+                    persona_id=CURRENT_PERSONA_ID,
                     instruction_prefix=(
                         "Return plain text only. "
                         "Use double newlines between paragraphs. "
@@ -362,6 +367,7 @@ class GenAICog(commands.Cog):
             response = await safe_generate(
                 query,
                 current_persona=CURRENT_PERSONA,
+                persona_id=CURRENT_PERSONA_ID,
                 instruction_prefix=(
                     "Write in clean paragraphs. "
                     "Use newline breaks between sections. "
@@ -379,6 +385,7 @@ class GenAICog(commands.Cog):
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,
+                    persona_id=CURRENT_PERSONA_ID,
                     instruction_prefix=(
                         "Write in clean paragraphs. "
                         "Use newline breaks between sections. "
@@ -438,6 +445,7 @@ class GenAICog(commands.Cog):
                 response = await safe_generate(
                     f"Summarize these search results:\n\n{result.text}",
                     current_persona=CURRENT_PERSONA,
+                    persona_id=CURRENT_PERSONA_ID,
                     apply_persona=False,
                     instruction_prefix=(
                         "Write in natural, flowing paragraphs. "
@@ -451,6 +459,7 @@ class GenAICog(commands.Cog):
                     response = await safe_generate(
                         f"Summarize these search results:\n\n{result.text}",
                         current_persona=CURRENT_PERSONA,
+                        persona_id=CURRENT_PERSONA_ID,
                         apply_persona=False,
                         instruction_prefix=(
                             "Write in natural, flowing paragraphs. "
@@ -540,6 +549,7 @@ class GenAICog(commands.Cog):
         else:
             p.PERSONA_DATA = loaded
             p.CURRENT_PERSONA = assemble_persona(p.PERSONA_DATA)
+        p.CURRENT_PERSONA_ID = key
         save_persona_json(p.PERSONA_DATA)
         await ctx.send(f"Loaded persona `{key}`.", ephemeral=True if ctx.interaction else False)
 

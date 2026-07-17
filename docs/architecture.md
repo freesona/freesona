@@ -177,6 +177,219 @@ The persona is stored as a structured JSON object with five fields:
 
 ---
 
+## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/generation.py`)
+
+### Definition
+
+**Persona Knowledge Base (PKB)** is the retrieval subsystem responsible for supplying canonical persona knowledge to the generation pipeline. It stores structured knowledge about a persona and provides relevant context during generation. It does not manage conversation state, user memory, or prompt construction.
+
+### Purpose
+
+The knowledge base stores **canonical, factual information** about a persona — dialogue, narration, events, relationships, and descriptions — sourced from original material (anime, novels, manga, games, etc.). It supplies canonical knowledge about a persona as one input to the generation pipeline and does not independently determine model behavior. It is **not** responsible for:
+- Conversation history (handled by provider continuity)
+- User long-term memory (handled by `utils/memory.py`)
+- Persona definition/prompt engineering (handled by `utils/persona.py`)
+- Safety instructions or model reasoning
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Ingestion Pipeline                           │
+├─────────────────────────────────────────────────────────────────┤
+│  Raw Source ──► Cleaning ──► Speaker ID ──► Semantic Chunking  │
+│       │                                                │        │
+│       ▼                                                ▼        │
+│  Metadata Assignment ──► Embedding ──► ChromaDB Storage        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Retrieval Pipeline                           │
+├─────────────────────────────────────────────────────────────────┤
+│  User Message ──► Embedding ──► Metadata Filtering ◄────────── │
+│       │                  │           Vector Search              │
+│       ▼                  ▼           ▼                           │
+│  Top-k Results ◄─── Re-ranking (optional) ◄─────────────────── │
+│       │                                                        │
+│       ▼                                                        │
+│  Context Assembly ──► Language Model (Persona + Memory + KB)   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Where supported by the vector database, metadata filtering occurs before or alongside vector search to reduce the candidate set. An optional re-ranking stage can be added later without changing the overall architecture.
+
+### Knowledge Lifecycle
+
+Embeddings, metadata schemas, and source material will inevitably change over the life of the project. The knowledge lifecycle acknowledges this:
+
+```
+Source Material
+      ↓
+Cleaning
+      ↓
+Chunking
+      ↓
+Metadata Assignment
+      ↓
+Embedding
+      ↓
+Validation
+      ↓
+Serving
+      ↓
+Updates / Re-embedding
+```
+
+When embedding models change or metadata schemas evolve, entries can be re-ingested with updated `schema_version` and `embedding_model` fields. The deterministic ingestion pipeline makes this process reproducible.
+
+### Data Model
+
+Each knowledge entry represents **one semantic unit** (atomic chunk):
+
+```json
+{
+  "id": "kb_abc123...",
+  "document": "Canonical dialogue or descriptive passage.",
+  "metadata": {
+    "persona": "chisato_nishikigi",
+    "source": "Episode 06",
+    "source_type": "anime",
+    "entry_type": "dialogue",
+    "topics": ["friendship", "optimism"],
+    "episode": "06",
+    "chapter": "",
+    "scene": "Aquarium",
+    "speaker": "Chisato",
+    "timestamp": "S01E06 12:34",
+    "canon_level": "canon",
+    "tags": "canon, emotional, key_moment",
+    "schema_version": 1,
+    "embedding_model": "text-embedding-3-large"
+  }
+}
+```
+
+#### Schema Versioning
+
+Knowledge entries include version metadata so future migrations remain manageable:
+
+| Field | Description |
+|-------|-------------|
+| `schema_version` | Schema version of the entry (default: `1`) |
+| `embedding_model` | Embedding model used to generate the vector |
+
+These fields are automatically populated during ingestion and should be treated as immutable for the lifetime of the entry.
+
+#### Design Principle: Store Canonical Facts, Not Interpretations
+
+Metadata should describe **objective facts** about the source material rather than inferred personality traits.
+
+**Prefer:**
+- `speaker` — Who is speaking
+- `episode` / `chapter` — Structural location in the source
+- `source_type` — Media format (anime, novel, manga, game, etc.)
+- `scene` — Setting or location
+- `topics` — Semantic subjects (e.g., `friendship`, `optimism`)
+- `canon_level` — Canonical priority
+
+**Avoid storing subjective interpretations such as:**
+- `tone` — (e.g., "cheerful", "melancholic")
+- `intent` — (e.g., "comforting", "manipulative")
+- `emotional_state` — (e.g., "happy", "angry")
+
+These inferences belong to the language model during generation. Storing them in the knowledge base would embed a single interpretation permanently, reducing flexibility across providers and prompting strategies.
+
+#### Required Metadata Fields
+| Field | Description |
+|-------|-------------|
+| `persona` | Persona identifier (e.g., `chisato_nishikigi`) |
+| `source` | Original source reference (e.g., `Episode 06`, `Chapter 12`) |
+| `source_type` | Media type: `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` |
+| `entry_type` | Content type: `dialogue`, `narration`, `event`, `relationship`, `description` |
+| `topics` | Semantic topics for retrieval (non-empty list) |
+
+#### Optional Metadata Fields
+| Field | Description |
+|-------|-------------|
+| `episode` | Episode number |
+| `chapter` | Chapter number |
+| `scene` | Scene description |
+| `speaker` | Speaking character (for dialogue) |
+| `timestamp` | Source timestamp (e.g., `2023-01-15`, `S01E06 12:34`) |
+| `canon_level` | Canon priority: `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` |
+| `tags` | Additional indexing tags (comma-separated) |
+
+### Ingestion Pipeline
+
+The ingestion pipeline (`utils/chroma.py`) provides utilities for deterministic, reproducible ingestion:
+
+1. **`clean_source_text(text)`** — Normalizes line endings, removes excessive blank lines
+2. **`identify_speakers(text, patterns?)`** — Extracts speaker-attributed dialogue lines
+3. **`chunk_semantic_units(text, max_size, min_size, speaker_data?)`** — Splits text into atomic semantic chunks (one exchange, one event, one monologue)
+4. **`assign_metadata(chunks, base_metadata)`** — Applies base metadata + chunk-specific fields (speaker → `entry_type: dialogue`)
+5. **`ingest_source(raw_text, base_metadata, ...)`** — Full pipeline: clean → identify → chunk → assign metadata
+
+Each stage is deterministic and can be tested independently.
+
+### Retrieval & Context Construction
+
+The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `utils/generation.py`:
+
+1. Embeds the user's message
+2. Queries ChromaDB with **metadata filtering (by `persona`) occurring before or alongside vector search** to reduce the candidate set
+3. Returns the **most relevant k entries** (where `k` is configurable via `kb_top_k`, default 5)
+4. An optional re-ranking stage can be added later without changing the overall architecture
+5. Assembles context in the **Relevant Canonical Context** format:
+
+```
+Relevant Canonical Context
+1. Document text...
+   (Source: Episode 06, Type: dialogue, Scene: Aquarium, Speaker: Chisato, Chapter: , Timestamp: S01E06 12:34, Canon: canon)
+2. Document text...
+   (Source: Chapter 12, Type: narration, Scene: , Speaker: , Chapter: Chapter 12, Timestamp: , Canon: canon)
+```
+
+This context is appended to the persona prompt **after** long-term memory, following the priority order:
+```
+System Prompt
+Persona Definition
+Conversation Memory
+Long-Term Memory (User Facts)
+Persona Knowledge Base (RAG)
+Generation
+```
+
+### Discord Integration
+
+- **`/kbadd`** — Modal UI (`MetadataModal` in `cogs/ai/chroma.py`) for adding entries with all required and optional metadata fields
+- **`/kbsearch`** — Semantic search with optional persona filter
+- **`/kblist`** — List recent entries
+- **`/kbdelete`** — Delete entry by ID
+
+### Provider Independence
+
+The knowledge base:
+- Does **not** depend on any specific AI provider (Gemini, OpenAI, Ollama, etc.)
+- Does **not** use provider-native memory systems
+- Stores embeddings in ChromaDB (local or remote)
+- Provides identical retrieval behavior across all providers
+- Is fully **persona-agnostic** — adding a new persona requires only source material + metadata, no code changes
+
+### Configuration
+
+Environment variables (see `.env.sample`):
+- `CHROMA_COLLECTION` — Collection name (default: `freesona`)
+- `CHROMA_PERSIST_DIRECTORY` — Storage path (default: `./.chroma`)
+
+Config keys (see `config.sample.json`):
+- `kb_enabled` — Enable/disable knowledge base retrieval (default: `true`)
+- `kb_top_k` — Number of entries to retrieve (default: `5`)
+- `kb_collection` — Override collection name
+- `kb_persist_directory` — Override storage path
+
+---
+
 ## Module System (`utils/modules.py`)
 
 Cogs are split into **core** (always loaded) and **optional** (can be toggled at runtime without restart):

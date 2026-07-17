@@ -48,6 +48,7 @@ ASSEMBLY_ORDER = [
 
 PERSONA_DATA:    dict = {}
 CURRENT_PERSONA: str  = ""
+CURRENT_PERSONA_ID: str = ""
 PERSONA_LOCKED:  bool = False
 LEGACY_DETECTED: bool = False
 
