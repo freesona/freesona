@@ -13,13 +13,10 @@ ENV/
 .env.*
 !.env.sample
 
-# Runtime / bot state
-memory.json
-persona.json
-memory.db
-warnings.db
-anniversaries.db
-.chroma/
+# Runtime databases
+*.db
+*.db-shm
+*.db-wal
 
 # User/private notes
 persona.txt
@@ -35,9 +32,17 @@ ATTRIBUTION_FIXES.md
 logs/
 *.log
 
+# Local/internal notes (optional)
+docs/internal/
+
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Local configs
+config.json
+persona.json
+.chroma/
 
 # IDE/editor
 .vscode/
@@ -56,3 +61,8 @@ htmlcov/
 debug.log
 commands_dump.yaml
 .continue/mcpServers/new-mcp-server.yaml
+pyright_output.json
+
+# Junie
+.junie/plans/
+.elogs/

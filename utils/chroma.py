@@ -194,7 +194,7 @@ def _validate_metadata(metadata: dict[str, Any] | None) -> tuple[bool, str]:
     if metadata is None:
         return False, "Metadata is required but was not provided."
 
-    missing = REQUIRED_METADATA_FIELDS - set(metadata.keys())
+    missing = REQUIRED_METADATA_FIELDS.difference(metadata.keys())
     if missing:
         return False, f"Missing required metadata fields: {', '.join(sorted(missing))}"
 
@@ -250,7 +250,7 @@ def _normalize_metadata(metadata: dict[str, Any]) -> dict[str, str]:
 # Ingestion Pipeline Utilities
 # =============================================================================
 
-def clean_source_text(text: str) -> str:
+def clean_source_text(text: str | None) -> str:
     """
     Cleans raw source text for ingestion.
     
@@ -328,6 +328,7 @@ def identify_speakers(text: str, speaker_patterns: list[str] | None = None) -> l
     return results
 
 
+# noinspection GrazieInspection
 def chunk_semantic_units(
     text: str,
     max_chunk_size: int = 1500,
@@ -358,7 +359,8 @@ def chunk_semantic_units(
         chunks = []
         current_chunk = ""
         current_speaker = None
-        
+
+        # noinspection GrazieInspection
         for entry in speaker_data:
             speaker = entry["speaker"]
             dialogue = entry["dialogue"]

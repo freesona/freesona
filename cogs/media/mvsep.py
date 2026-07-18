@@ -1,9 +1,9 @@
 # cogs/media/mvsep.py: MVSEP audio source separation (vocals/instrumental via BS Roformer)
 # YES I make mashups and I need this shut up. You may disable this module with /module disable mvsep if you don't care about separating audio;
-# But hey it's a fun party trick and it works surprisingly well for a free API.
+# But hey it's a fun party trick, and it works surprisingly well for a free API.
 
 # Current problem: no way to cancel; links expire after some time; only one job at a time on free tier.
-# But hey it works and it's free so I'm not complaining. My broke ass appreciates it.
+# But hey it works, and it's free, so I'm not complaining. My broke ass appreciates it.
 
 import os
 import asyncio
@@ -398,8 +398,9 @@ class MVSepCog(commands.Cog):
                             content=f"✅ Job submitted. Waiting for MVSEP webhook... (`{job_hash}`)"
                         )
                     else:
+                        poll_interval = _get_poll_interval()
                         await status_msg.edit(
-                            content=f"✅ Job submitted. Polling every {POLL_INTERVAL}s... (`{job_hash}`)"
+                            content=f"✅ Job submitted. Polling every {poll_interval}s... (`{job_hash}`)"
                         )
 
                     done = None
@@ -414,8 +415,9 @@ class MVSepCog(commands.Cog):
                                 status = webhook_payload.get("status")
                                 logger.warning(f"MVSEP webhook returned non-terminal status: {status}")
                         except asyncio.TimeoutError:
+                            poll_interval = _get_poll_interval()
                             await status_msg.edit(
-                                content=f"⚠️ Webhook timed out. Polling every {POLL_INTERVAL}s... (`{job_hash}`)"
+                                content=f"⚠️ Webhook timed out. Polling every {poll_interval}s... (`{job_hash}`)"
                             )
                         except RuntimeError as e:
                             await status_msg.edit(content=f"❌ {e}")
@@ -460,6 +462,6 @@ class MVSepCog(commands.Cog):
             logger.error(f"Separate error: {error}")
             await ctx.send(f"❌ Unexpected error: {error}")
 
-# Oh well that was unintuitive...
+# That was unintuitive...
 async def setup(bot):
     await bot.add_cog(MVSepCog(bot))

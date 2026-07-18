@@ -30,7 +30,8 @@ from utils.generation import (
     send_response,
 )
 from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
-from utils.memory import clear_interaction_id, extract_and_store_fact, get_user_facts_prompt
+from utils.conversation import clear_conversation
+from utils.memory import extract_and_store_fact, get_user_facts_prompt
 from utils.persona import (
     CURRENT_PERSONA,
     CURRENT_PERSONA_ID,
@@ -45,6 +46,7 @@ from utils.persona import (
     save_profiles,
 )
 from utils.roles import resolve_message_role
+from utils.guild_world import DiscordGuildWorldAccessor
 
 load_dotenv()
 
@@ -169,7 +171,7 @@ class GenAICog(commands.Cog):
             message_snapshot = message
             guild_id_snapshot = message.guild.id
 
-            payload = {
+            payload: dict[str, str | int | bool | dict[str, str | int | bool] | None] = {
                 "role": role,
                 "author_id": user_id,
                 "username": username_snapshot,
@@ -216,6 +218,7 @@ class GenAICog(commands.Cog):
                             message_id=message_snapshot.id,
                             username=username_snapshot,
                             attachments=attachments,
+                            guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
                         )
                         await send_response(response, channel_snapshot, reply_to=message_snapshot)
                 except asyncio.CancelledError:
@@ -259,7 +262,7 @@ class GenAICog(commands.Cog):
                     _autonomy_cooldown[message.channel.id] = now
                     _autonomy_user_cooldown[message.author.id] = now
 
-                    payload = {
+                    autonomy_payload: dict[str, str | int | None | dict[str, str | int | bool]] = {
                         "role": role,
                         "author_id": message.author.id,
                         "username": message.author.display_name,
@@ -269,7 +272,7 @@ class GenAICog(commands.Cog):
 
                     if message.reference and isinstance(message.reference.resolved, discord.Message):
                         ref = message.reference.resolved
-                        payload["reply"] = {
+                        autonomy_payload["reply"] = {
                             "author": ref.author.display_name,
                             "author_id": ref.author.id,
                             "content": ref.content or "",
@@ -281,7 +284,7 @@ class GenAICog(commands.Cog):
                     async with message.channel.typing():
                         attachments = await extract_attachments(message)
                         response = await safe_generate(
-                            payload,
+                            autonomy_payload,
                             current_persona=CURRENT_PERSONA,
                             persona_id=CURRENT_PERSONA_ID,
                             channel_id=message.channel.id,
@@ -290,6 +293,7 @@ class GenAICog(commands.Cog):
                             message_id=message.id,
                             username=message.author.display_name,
                             attachments=attachments,
+                            guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
                         )
                         await send_response(response, message.channel, reply_to=message)
 
@@ -301,6 +305,7 @@ class GenAICog(commands.Cog):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
+        assert ctx.guild is not None
 
         attachments = await extract_attachments(ctx.message) if ctx.message else []
 
@@ -359,6 +364,7 @@ class GenAICog(commands.Cog):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
+        assert ctx.guild is not None
 
         attachments = await extract_attachments(ctx.message) if ctx.message else []
 
@@ -641,7 +647,11 @@ class GenAICog(commands.Cog):
     )
     @commands.has_permissions(administrator=True)
     async def clear_memory(self, ctx: commands.Context):
-        clear_interaction_id(ctx.channel.id)
+        if ctx.guild is None:
+            await ctx.send("Conversation commands are server-only.")
+            return
+        assert ctx.guild is not None
+        await clear_conversation(ctx.guild.id, ctx.channel.id)
         await ctx.send("Conversation memory cleared for this channel.")
 
     # -------------------------------------------------------------------
@@ -655,9 +665,10 @@ class GenAICog(commands.Cog):
         if ctx.guild is None:
             await ctx.send("Memory commands are server-only.")
             return
+        assert ctx.guild is not None
 
         target_user = user or ctx.author
-        member = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
+        member = ctx.guild.get_member(ctx.author.id)
         is_admin = bool(
             member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
         )
@@ -698,9 +709,10 @@ class GenAICog(commands.Cog):
     async def memory_clear_user(self, ctx: commands.Context, user: Optional[discord.User] = None):
         if ctx.guild is None:
             return await ctx.send("Memory commands are server-only.")
+        assert ctx.guild is not None
 
         target_user = user or ctx.author
-        member = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
+        member = ctx.guild.get_member(ctx.author.id)
         is_admin = bool(
             member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
         )
@@ -749,9 +761,10 @@ class GenAICog(commands.Cog):
     ):
         if ctx.guild is None:
             return
+        assert ctx.guild is not None
 
         target_user = user or ctx.author
-        member = ctx.guild.get_member(ctx.author.id) if ctx.guild else None
+        member = ctx.guild.get_member(ctx.author.id)
         is_admin = bool(
             member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
         )

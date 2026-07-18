@@ -260,7 +260,7 @@ class MathCog(commands.Cog):
 
     async def query_short_answer(self, query: str) -> str | None:
         if not WOLFRAM_SHORT_APPID: return None
-        url = "http://api.wolframalpha.com/v1/result"
+        url = "https://api.wolframalpha.com/v1/result"
         params = {"appid": WOLFRAM_SHORT_APPID, "i": query, "units": "metric"}
         try:
             async with aiohttp.ClientSession() as session:

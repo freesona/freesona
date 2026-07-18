@@ -25,30 +25,62 @@ def build_messages(
     system_prompt: str,
     user_prompt: str,
     attachments: list[tuple[bytes, str]] | None = None,
+    *,
+    instruction_prefix: str = "",
+    username: str = "",
 ) -> list[dict[str, Any]]:
+    """
+    Build the message list for the provider API.
+    
+    Args:
+        system_prompt: The system instruction/prompt
+        user_prompt: The user's message content
+        attachments: Optional list of (bytes, mime_type) tuples for multimodal input
+        instruction_prefix: Optional prefix to prepend to user message (e.g., formatting instructions)
+        username: Optional username to tag in the message (e.g., "[username]: ")
+    
+    Returns:
+        List of message dicts in OpenAI-compatible format
+    """
     messages: list[dict[str, Any]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
+    # Format user message with optional instruction prefix and username tag
+    name_tag = f"[{username}]: " if username else ""
+    if instruction_prefix:
+        user_text = f"{instruction_prefix}\n\n{name_tag}{user_prompt}".strip()
+    else:
+        user_text = f"{name_tag}{user_prompt}".strip()
+
     if not attachments:
-        messages.append({"role": "user", "content": user_prompt})
+        messages.append({"role": "user", "content": user_text})
     else:
         # Standard OpenAI / NVIDIA NIM Multimodal Vision message format
         content_parts: list[dict[str, Any]] = []
         
-        # Guide the vision model explicitly when an attachment is provided
-        prompt_text = user_prompt or "Describe this image."
+        # Add the text part
         content_parts.append({
-            "type": "text", 
-            "text": f"[User provided an attached image. Address the visual contents directly]: {prompt_text}"
+            "type": "text",
+            "text": user_text
         })
 
+        # Add attachment parts
         for att_bytes, att_mime in attachments:
             b64 = base64.b64encode(att_bytes).decode("utf-8")
             if att_mime.startswith("image/"):
                 content_parts.append({
                     "type": "image_url",
                     "image_url": {"url": f"data:{att_mime};base64,{b64}"}
+                })
+            else:
+                # For non-image attachments (PDF, audio, video), use file format
+                content_parts.append({
+                    "type": "file",
+                    "file": {
+                        "filename": f"attachment.{att_mime.split('/')[-1]}",
+                        "file_data": f"data:{att_mime};base64,{b64}"
+                    }
                 })
 
         messages.append({"role": "user", "content": content_parts})
@@ -120,10 +152,18 @@ def generate_text(
     model: str | None = None,
     max_output_tokens: int = 1024,
     attachments: list[tuple[bytes, str]] | None = None,
+    instruction_prefix: str = "",
+    username: str = "",
 ) -> str:
     provider_name = normalize_provider_name(provider)
     model_name = (model or get_provider_model() or get_model_name()).strip() or get_model_name()
-    messages = build_messages(system_prompt, user_prompt, attachments)
+    messages = build_messages(
+        system_prompt, 
+        user_prompt, 
+        attachments,
+        instruction_prefix=instruction_prefix,
+        username=username,
+    )
 
     if provider_name == "gemini":
         from google import genai

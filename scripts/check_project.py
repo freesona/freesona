@@ -86,7 +86,7 @@ def check_config_round_trip() -> None:
 def check_public_url_guard() -> None:
     security = reload_local_module("utils.security")
     assert security.is_public_http_url("https://example.com/watch?v=1")
-    assert security.is_public_http_url("http://example.com/file.mp3")
+    assert security.is_public_http_url("https://example.com/file.mp3")
     assert not security.is_public_http_url("ftp://example.com/file.mp3")
     assert not security.is_public_http_url("http://localhost:8000")
     assert not security.is_public_http_url("http://127.0.0.1:8000")

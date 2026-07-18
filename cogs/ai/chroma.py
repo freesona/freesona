@@ -110,7 +110,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
     def __init__(self, document: str, title: str | None, attachment_filename: str | None):
         super().__init__()
         self.document = document
-        self.title = title
+        self.document_title = title or ""
         self.attachment_filename = attachment_filename
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -179,7 +179,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
             add_knowledge,
             self.document,
             source="discord",
-            title=self.title.strip() if self.title else None,
+            title=self.document_title.strip() if self.document_title else None,
             metadata=metadata,
         )
 
@@ -226,7 +226,7 @@ class ChromaCog(commands.Cog):
 
         response_text = "\n".join(lines)
 
-        # Ensure text fits within Discord's 2000 character limit
+        # Ensure text fits within Discord's 2000-character limit
         if len(response_text) > 1950:
             response_text = response_text[:1947] + "..."
 
@@ -290,7 +290,12 @@ class ChromaCog(commands.Cog):
         # Show modal to collect metadata
         modal = MetadataModal(document, title, attachment.filename if attachment else None)
         await ctx.send("Please provide metadata for this knowledge entry:", ephemeral=True)
-        await ctx.interaction.response.send_modal(modal)
+        interaction = ctx.interaction
+        if interaction is not None:
+            await interaction.response.send_modal(modal)
+        else:
+            # For prefix commands, we might need a different way to send modal or just fail
+            await ctx.send("Modals can only be sent in response to slash commands.", ephemeral=True)
 
     @commands.hybrid_command(name="kblist", help="List the newest knowledge base entries.")
     @app_commands.describe(persona="Optional persona to filter by", limit="Maximum entries to show (default 15)")

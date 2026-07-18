@@ -183,7 +183,7 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
 
 def _normalize_for_matching(text: str) -> str:
     """Collapse whitespace and strip zero-width/invisible chars so basic
-    spacing/unicode obfuscation doesn't trivially dodge substring checks."""
+    spacing/Unicode obfuscation doesn't trivially dodge substring checks."""
     text = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.lower()
