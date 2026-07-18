@@ -1,4 +1,4 @@
-# utils/memory.py: Long-term SQLite facts + per-channel interaction ID store.
+# utils/memory.py: Long-term SQLite facts.
 
 import os
 import json
@@ -30,42 +30,6 @@ FACT_EXTRACT_PROMPT = (
     '{"content": "<one concise fact>", "importance": <float 0.0-1.0>} '
     "or exactly: null"
 )
-
-# ---------------------------------------------------------------------------
-# Per-user interaction ID store
-# ---------------------------------------------------------------------------
-
-_interaction_store: dict[tuple[int, int, int], str] = {}
-
-
-def _interaction_key(guild_id: int, channel_id: int, user_id: int) -> tuple[int, int, int]:
-    return (guild_id, channel_id, user_id)
-
-
-def get_interaction_id(guild_id: int, channel_id: int, user_id: int) -> str | None:
-    return _interaction_store.get(_interaction_key(guild_id, channel_id, user_id))
-
-
-def set_interaction_id(guild_id: int, channel_id: int, user_id: int, interaction_id: str) -> None:
-    _interaction_store[_interaction_key(guild_id, channel_id, user_id)] = interaction_id
-
-
-def clear_interaction_id(channel_id: int, guild_id: int | None = None, user_id: int | None = None) -> None:
-    if guild_id is None and user_id is None:
-        for key in list(_interaction_store):
-            if key[1] == channel_id:
-                _interaction_store.pop(key, None)
-        return
-
-    if guild_id is None or user_id is None:
-        raise ValueError("guild_id and user_id must be provided together when clearing a single user chain.")
-
-    _interaction_store.pop(_interaction_key(guild_id, channel_id, user_id), None)
-
-
-# ---------------------------------------------------------------------------
-# Database core
-# ---------------------------------------------------------------------------
 
 async def init_db():
     async with aiosqlite.connect(MEMORY_FILE_PATH) as db:

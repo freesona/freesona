@@ -97,7 +97,7 @@ class MathCogTests(unittest.TestCase):
         self.assertEqual(self.cog.format_wolfram_text("Name | Value\nApple | Red"), "**Name ** | Value\n**Apple ** | Red")
         # Test stripping links and Wolfram ads
         self.assertEqual(
-            self.cog.format_wolfram_text("Wolfram Language code: foo\nResult:\n4\nplot: http://example.com/plot.png"),
+            self.cog.format_wolfram_text("Wolfram Language code: foo\nResult:\n4\nplot: https://example.com/plot.png"),
             "4"
         )
         self.assertEqual(self.cog.format_wolfram_text(""), "No result found.")

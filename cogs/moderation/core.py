@@ -244,7 +244,7 @@ class ModerationCog(commands.Cog):
     async def lock_cmd(self, ctx, *, reason: str = "No reason provided"):
         await ctx.defer()
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-        if overwrite.send_messages is False:
+        if not overwrite.send_messages:
             await ctx.send("This channel is already locked.")
             return
 
@@ -262,7 +262,7 @@ class ModerationCog(commands.Cog):
     async def unlock_cmd(self, ctx, *, reason: str = "No reason provided"):
         await ctx.defer()
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-        if overwrite.send_messages is not False:
+        if overwrite.send_messages:
             await ctx.send("This channel isn't locked.")
             return
 

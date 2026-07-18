@@ -253,7 +253,7 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             zf.writestr(
                 "OEBPS/content.opf",
                 """<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" version="3.0">
+<package xmlns="https://www.idpf.org/2007/opf" xmlns:dc="https://purl.org/dc/elements/1.1/" version="3.0">
   <metadata><dc:title>Example</dc:title></metadata>
   <manifest>
     <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>

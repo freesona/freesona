@@ -31,7 +31,7 @@ def _normalize_url(url: str) -> str:
     return url.replace("music.youtube.com", "www.youtube.com")
 
 
-async def _run(*cmd: str, timeout: int | None = None) -> int:
+def _clear_dir(directory: str) -> None:
     """Remove all files in a directory, ignoring errors."""
     for name in os.listdir(directory):
         try:
@@ -106,7 +106,7 @@ class YtDlp(commands.Cog):
         """
         Return ['--cookies', '<path>'] if a COOKIES_<PLATFORM> env var is set,
         its file exists, and the platform name appears in the URL hostname.
-        Otherwise return [] (no auth).
+        Otherwise, return [] (no auth).
         """
         import re
         from urllib.parse import urlparse

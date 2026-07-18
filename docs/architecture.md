@@ -31,12 +31,18 @@ Freesona/
 │       ├── hello.py          # ~hello
 │       └── random.py         # coinflip, roll, pick, randommember
 └── utils/
+    ├── canon.py              # Canon Framework — modular immutable identity components
+    ├── character_memory.py   # Character Memory — shared experiences, promises, relationships
     ├── config.py             # Config I/O (config.json), embed_footer
-    ├── generation.py         # Gemini API calls, ConversationResponse, send_response
+    ├── conversation.py       # ConversationManager — short-term memory, budgets, context
+    ├── generation.py         # Provider orchestration, PromptBuilder integration, send_response
+    ├── guild_world.py        # Guild World Context — environmental grounding
     ├── intent.py             # Confidence-scored intent evaluator for autonomy
-    ├── memory.py             # SQLite long-term facts + per-channel interaction ID store
+    ├── memory.py             # SQLite long-term facts (legacy interaction IDs deprecated)
     ├── modules.py            # Cog registry (OPTIONAL_MODULES, CORE_EXTENSIONS)
     ├── persona.py            # Persona data layer, /setpersona panel modals
+    ├── prompt_builder.py     # PromptBuilder & ContextProvider architecture
+    ├── prompt_builder_providers.py  # Concrete ContextProvider implementations
     ├── roles.py              # Role resolution for message author tagging
     ├── rss.py                # RSS/Atom XML parser, feed CRUD, seen-link deduplication
     ├── search.py             # Gemini grounding + Google Custom Search fallback
@@ -97,24 +103,37 @@ Messages in the conversation channel are held for 1.2 seconds before generating 
 `safe_generate` wraps the active provider call with:
 
 1. **Security pre-check** — `detect_injection(prompt)`: if the prompt contains a known injection attempt, `sanitize_prompt` redacts the matched phrase(s) before sending.
-2. **Persona injection** — `assemble_persona(PERSONA_DATA)` builds the system instruction from five structured fields.
-3. **Memory injection** — `get_user_facts_prompt(guild_id, user_id)` prepends known long-term facts to the system prompt.
-4. **Conversation continuity** — `get_interaction_id(guild_id, channel_id, user_id)` retrieves the most recent provider-specific continuity token for that user-only scope when available; Gemini uses `previous_interaction_id` for server-side conversation continuity, while other providers remain stateless.
-5. **Attachment multimodal processing** — `extract_attachments(message)` downloads and encodes images/PDFs/audio/video for the active provider's multimodal input pipeline when supported.
-6. **Response storage** — the returned Gemini `interaction_id` is saved via `set_interaction_id(guild_id, channel_id, user_id, ...)` so a single user’s continuity chain stays isolated.
-7. **Output safety** — `unsafe_output(text)` checks the model's response for injection artifacts before sending.
+2. **Prompt assembly** — `build_system_prompt()` via PromptBuilder assembles the system instruction from independent context providers (System, Persona, Canon, Conversation History, User Memory, Character Memory, Guild World, PKB).
+3. **Conversation history injection** — `ConversationHistoryProvider` injects recent conversation context (summary + messages) from ConversationManager into the system prompt. All providers receive identical context.
+4. **Attachment multimodal processing** — `extract_attachments(message)` downloads and encodes images/PDFs/audio/video for the active provider's multimodal input pipeline when supported.
+5. **Response storage** — Assistant responses are added to ConversationManager via `add_assistant_message()` for conversation continuity across all providers.
+6. **Output safety** — `unsafe_output(text)` checks the model's response for injection artifacts before sending.
 
 ---
 
-## Memory System (`utils/memory.py`)
+## Memory System
 
-### Short-term (provider continuity, in-session)
+### Short-term Memory — ConversationManager (`utils/conversation.py`)
 
-Conversation history is managed **server-side** by Gemini's Interactions API via `previous_interaction_id` when the active provider supports it. The bot stores continuity per `(guild_id, channel_id, user_id)` rather than one global ID per channel, which keeps user-specific threads isolated. Non-Gemini providers do not assume this continuity path. Cleared via `/clearmemory` or on restart.
+Freesona owns conversation history through the **ConversationManager** — a provider-agnostic short-term memory subsystem. All providers (Gemini, OpenAI, Ollama, NIM, Azure, Groq, OpenRouter) are now **stateless** and receive identical conversation context via the system prompt.
 
-### Long-term (per-user, SQLite)
+**ConversationManager responsibilities:**
 
-After each user message, a background task runs `extract_and_store_fact`. This makes a stateless Gemini call asking:
+- Stores recent messages per `(guild_id, channel_id, user_id)` scope
+- Enforces configurable limits:
+  - `conversation_max_messages` (default: 20)
+  - `conversation_token_budget` (default: 4000, rough estimation)
+  - `conversation_ttl_seconds` (default: 3600 / 1 hour)
+- Provides `build_conversation_context()` for prompt injection (summary + recent messages format)
+- Runs periodic cleanup of expired conversations
+
+**Provider-owned continuity has been removed.** The legacy Gemini Interactions API (`previous_interaction_id`) and `utils/memory.py::_interaction_store` are deprecated. The `/clearmemory` command now clears ConversationManager state via `clear_conversation()`.
+
+Conversation history is injected into the system prompt through `ConversationHistoryProvider` (priority 30 in PromptBuilder), ensuring all providers receive the same context regardless of native capabilities.
+
+### Long-term Memory — User Facts (`utils/memory.py`)
+
+After each user message, a background task runs `extract_and_store_fact`. This makes a stateless call asking:
 
 > *"Does this message reveal any fact worth remembering? Respond with `{content, importance}` or `null`."*
 
@@ -140,16 +159,16 @@ user_facts (
 
 When autonomy mode is enabled, the bot evaluates every message in non-conversation channels using a confidence-scored heuristic:
 
-| Signal | Score |
-| :--- | :--- |
-| Direct mention or reply to bot | +0.90 |
-| Attachment present | +0.50 |
-| Code block present | +0.40 |
+| Signal                                           | Score |
+|:-------------------------------------------------|:------|
+| Direct mention or reply to bot                   | +0.90 |
+| Attachment present                               | +0.50 |
+| Code block present                               | +0.40 |
 | Semantic trigger word (what, how, fix, explain…) | +0.40 |
-| Ends with question mark | +0.20 |
-| Channel has existing interaction memory | +0.10 |
-| Short filler message (lol, ok, emoji-only) | −0.30 |
-| Long monologue, no question and no mention | −0.20 |
+| Ends with question mark                          | +0.20 |
+| Channel has existing interaction memory          | +0.10 |
+| Short filler message (lol, ok, emoji-only)       | −0.30 |
+| Long monologue, no question and no mention       | −0.20 |
 
 Confidence is clamped to `[0.0, 1.0]`. The bot fires only if:
 
@@ -163,13 +182,13 @@ Confidence is clamped to `[0.0, 1.0]`. The bot fires only if:
 
 The persona is stored as a structured JSON object with five fields:
 
-| Field | Key |
-| :--- | :--- |
-| Core Personality & Traits | `core` |
-| Background & History | `background` |
-| Beliefs, Likes & Dislikes | `beliefs` |
-| Language & Communication Style | `style` |
-| System Instructions | `instructions` |
+| Field                          | Key            |
+|:-------------------------------|:---------------|
+| Core Personality & Traits      | `core`         |
+| Background & History           | `background`   |
+| Beliefs, Likes & Dislikes      | `beliefs`      |
+| Language & Communication Style | `style`        |
+| System Instructions            | `instructions` |
 
 `assemble_persona(data)` combines these into a single system instruction string injected on every generation call. Edits via `/setpersona` (a Discord modal UI) take effect immediately without restarting.
 
@@ -186,7 +205,7 @@ The persona is stored as a structured JSON object with five fields:
 ### Purpose
 
 The knowledge base stores **canonical, factual information** about a persona — dialogue, narration, events, relationships, and descriptions — sourced from original material (anime, novels, manga, games, etc.). It supplies canonical knowledge about a persona as one input to the generation pipeline and does not independently determine model behavior. It is **not** responsible for:
-- Conversation history (handled by provider continuity)
+- Conversation history (handled by **ConversationManager** in `utils/conversation.py`)
 - User long-term memory (handled by `utils/memory.py`)
 - Persona definition/prompt engineering (handled by `utils/persona.py`)
 - Safety instructions or model reasoning
@@ -274,9 +293,9 @@ Each knowledge entry represents **one semantic unit** (atomic chunk):
 
 Knowledge entries include version metadata so future migrations remain manageable:
 
-| Field | Description |
-|-------|-------------|
-| `schema_version` | Schema version of the entry (default: `1`) |
+| Field             | Description                                 |
+|-------------------|---------------------------------------------|
+| `schema_version`  | Schema version of the entry (default: `1`)  |
 | `embedding_model` | Embedding model used to generate the vector |
 
 These fields are automatically populated during ingestion and should be treated as immutable for the lifetime of the entry.
@@ -301,24 +320,24 @@ Metadata should describe **objective facts** about the source material rather th
 These inferences belong to the language model during generation. Storing them in the knowledge base would embed a single interpretation permanently, reducing flexibility across providers and prompting strategies.
 
 #### Required Metadata Fields
-| Field | Description |
-|-------|-------------|
-| `persona` | Persona identifier (e.g., `chisato_nishikigi`) |
-| `source` | Original source reference (e.g., `Episode 06`, `Chapter 12`) |
+| Field         | Description                                                                                 |
+|---------------|---------------------------------------------------------------------------------------------|
+| `persona`     | Persona identifier (e.g., `chisato_nishikigi`)                                              |
+| `source`      | Original source reference (e.g., `Episode 06`, `Chapter 12`)                                |
 | `source_type` | Media type: `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` |
-| `entry_type` | Content type: `dialogue`, `narration`, `event`, `relationship`, `description` |
-| `topics` | Semantic topics for retrieval (non-empty list) |
+| `entry_type`  | Content type: `dialogue`, `narration`, `event`, `relationship`, `description`               |
+| `topics`      | Semantic topics for retrieval (non-empty list)                                              |
 
 #### Optional Metadata Fields
-| Field | Description |
-|-------|-------------|
-| `episode` | Episode number |
-| `chapter` | Chapter number |
-| `scene` | Scene description |
-| `speaker` | Speaking character (for dialogue) |
-| `timestamp` | Source timestamp (e.g., `2023-01-15`, `S01E06 12:34`) |
+| Field         | Description                                                                  |
+|---------------|------------------------------------------------------------------------------|
+| `episode`     | Episode number                                                               |
+| `chapter`     | Chapter number                                                               |
+| `scene`       | Scene description                                                            |
+| `speaker`     | Speaking character (for dialogue)                                            |
+| `timestamp`   | Source timestamp (e.g., `2023-01-15`, `S01E06 12:34`)                        |
 | `canon_level` | Canon priority: `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` |
-| `tags` | Additional indexing tags (comma-separated) |
+| `tags`        | Additional indexing tags (comma-separated)                                   |
 
 ### Ingestion Pipeline
 
@@ -331,6 +350,35 @@ The ingestion pipeline (`utils/chroma.py`) provides utilities for deterministic,
 5. **`ingest_source(raw_text, base_metadata, ...)`** — Full pipeline: clean → identify → chunk → assign metadata
 
 Each stage is deterministic and can be tested independently.
+
+### Canonical Truth Invariant
+
+**Architectural Principle**: *No context provider may establish canonical truth about the character.*
+
+Only two sources are authorized to define objective facts about the persona:
+
+1. **Canon Framework** (`CanonContextProvider`, priority 25) — Authored, immutable canon blocks explaining the *why* behind behavior: core identity, core beliefs, core motivations, behavioral rules, world assumptions, canon explanations.
+2. **Persona Knowledge Base** (`PersonaKnowledgeBaseProvider`, priority 60) — Retrieved canonical knowledge from source material (RAG), filtered by `persona_id`.
+
+All other context providers are **strictly descriptive** and must never define what the character "is" or "believes" in a canonical sense:
+
+| Provider                      | Authority               | What It May Describe                                                                                    |
+|:------------------------------|:------------------------|:--------------------------------------------------------------------------------------------------------|
+| `SystemContextProvider`       | Hard constraints        | Model behavior constraints (safety, format, reasoning)                                                  |
+| `PersonaContextProvider`      | Identity expression     | Role, background, beliefs, language style (the *what*)                                                  |
+| `ConversationHistoryProvider` | Session continuity      | *What was said* in this conversation                                                                    |
+| `UserMemoryProvider`          | User facts              | *What the persona knows about the user* across sessions                                                 |
+| `CharacterMemoryProvider`     | Relationship history    | *What they've experienced together*: promises, shared events, recurring jokes, relationship progression |
+| `GuildWorldContextProvider`   | Environmental grounding | *Where they are*: server name, channel context, local norms                                             |
+
+**Enforcement**:
+- Canon and PKB are `IMMUTABLE` — they change only via explicit admin action (`/setpersona`, `/kbadd`, `/kbdelete`)
+- All other providers are `MUTABLE` — they evolve through interaction
+- Code review and tests must verify no `MUTABLE` provider writes canonical facts (e.g., "Chisato grew up in Osaka" must never appear in Character Memory)
+
+This invariant prevents **canon drift** — the gradual corruption of character identity through accumulated conversation context. It ensures the character remains authentic to their source material while still forming genuine, contextual relationships.
+
+---
 
 ### Retrieval & Context Construction
 
@@ -350,14 +398,9 @@ Relevant Canonical Context
    (Source: Chapter 12, Type: narration, Scene: , Speaker: , Chapter: Chapter 12, Timestamp: , Canon: canon)
 ```
 
-This context is appended to the persona prompt **after** long-term memory, following the priority order:
+This context is appended to the persona prompt **after** long-term memory, following the PromptBuilder priority order:
 ```
-System Prompt
-Persona Definition
-Conversation Memory
-Long-Term Memory (User Facts)
-Persona Knowledge Base (RAG)
-Generation
+System (10) → Persona (20) → Canon (25) → Conversation History (30) → User Memory (40) → Character Memory (50) → Guild World (55) → PKB (60) → Generation
 ```
 
 ### Discord Integration
@@ -404,7 +447,7 @@ Enabled/disabled state persists in `config.json` under `"enabled_modules"`. The 
 **Dependency guard:** `mvsep` requires `ytdlp` — the admin cog enforces this at enable/disable time.
 
 > [!NOTE]
-> `/provider set` now routes through the shared provider abstraction in `utils/providers.py`. Gemini uses server-side continuity when available; all other providers remain stateless and rely on the prompt plus the current user memory snapshot for context.
+> `/provider set` now routes through the shared provider abstraction in `utils/providers.py`. All providers are stateless and receive conversation context via the system prompt (ConversationHistoryProvider). The legacy Gemini Interactions API has been removed.
 
 ---
 
@@ -439,13 +482,13 @@ Expressions are validated by an AST-level safety checker (`is_safe_expression`) 
 
 ## Security (`utils/security.py`)
 
-| Layer | What it guards |
-| :--- | :--- |
-| `is_public_http_url(url)` | Blocks SSRF — rejects private/loopback IPs, obfuscated forms (hex, octal, decimal int), non-HTTP schemes, localhost, and cloud metadata endpoint (169.254.169.254) |
-| `detect_injection(prompt)` | Pattern matches against known prompt injection phrases ("ignore previous instructions", "jailbreak", etc.) |
-| `sanitize_prompt(prompt)` | Redacts matched injection phrases before forwarding to the model (does not just flag; actively removes) |
-| `unsafe_output(text)` | Checks model output for injection echo artifacts |
-| `is_safe_expression(expr)` | AST-level allowlist for SymPy expressions — blocks `eval`, `exec`, `import`, `__dunder__` access, and any call not in `SAFE_FUNCTIONS` |
+| Layer                      | What it guards                                                                                                                                                     |
+|:---------------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `is_public_http_url(url)`  | Blocks SSRF — rejects private/loopback IPs, obfuscated forms (hex, octal, decimal int), non-HTTP schemes, localhost, and cloud metadata endpoint (169.254.169.254) |
+| `detect_injection(prompt)` | Pattern matches against known prompt injection phrases ("ignore previous instructions", "jailbreak", etc.)                                                         |
+| `sanitize_prompt(prompt)`  | Redacts matched injection phrases before forwarding to the model (does not just flag; actively removes)                                                            |
+| `unsafe_output(text)`      | Checks model output for injection echo artifacts                                                                                                                   |
+| `is_safe_expression(expr)` | AST-level allowlist for SymPy expressions — blocks `eval`, `exec`, `import`, `__dunder__` access, and any call not in `SAFE_FUNCTIONS`                             |
 
 ---
 
@@ -455,11 +498,11 @@ The FastAPI server runs in a background async task (via `asyncio.gather`) alongs
 
 Current endpoints:
 
-| Endpoint | Purpose |
-| :--- | :--- |
-| `GET /` | Heartbeat — returns `{"status": "ok"}` |
-| `GET /health` | Health check for uptime monitors |
-| `POST /webhooks/mvsep` | MVSEP separation result callback |
+| Endpoint               | Purpose                                |
+|:-----------------------|:---------------------------------------|
+| `GET /`                | Heartbeat — returns `{"status": "ok"}` |
+| `GET /health`          | Health check for uptime monitors       |
+| `POST /webhooks/mvsep` | MVSEP separation result callback       |
 
 Future endpoints (planned in roadmap):
 
@@ -473,21 +516,21 @@ Future endpoints (planned in roadmap):
 
 All runtime-mutable settings are stored in `config.json`. Loaded fresh on every command via `load_config()` to avoid stale state across module reloads.
 
-| Key | Type | Description |
-| :--- | :--- | :--- |
-| `prefix` | str | Command prefix (default: `~`) |
-| `chat_channel_id` | int | Conversation channel ID |
-| `conversation_response_mode` | str | `all` / `mentions` / `smart` |
-| `autonomy` | bool | Autonomy mode enabled |
-| `autonomy_frequency` | str | `low` / `default` / `high` |
-| `model_name` | str | Active Gemini model |
-| `provider` | str | Active AI provider |
-| `timezone` | str | IANA timezone string |
-| `enabled_modules` | dict | Per-module enabled state |
-| `whitelist_bot_ids` | list[int] | Bot IDs allowed through on_message filter |
-| `rss_feeds` | dict | Custom feed name → URL |
-| `rss_disabled` | list[str] | Disabled built-in feed keys |
-| `rss_seen` | list[str] | Seen article links (dedup, capped at 500) |
+| Key                          | Type      | Description                               |
+|:-----------------------------|:----------|:------------------------------------------|
+| `prefix`                     | str       | Command prefix (default: `~`)             |
+| `chat_channel_id`            | int       | Conversation channel ID                   |
+| `conversation_response_mode` | str       | `all` / `mentions` / `smart`              |
+| `autonomy`                   | bool      | Autonomy mode enabled                     |
+| `autonomy_frequency`         | str       | `low` / `default` / `high`                |
+| `model_name`                 | str       | Active Gemini model                       |
+| `provider`                   | str       | Active AI provider                        |
+| `timezone`                   | str       | IANA timezone string                      |
+| `enabled_modules`            | dict      | Per-module enabled state                  |
+| `whitelist_bot_ids`          | list[int] | Bot IDs allowed through on_message filter |
+| `rss_feeds`                  | dict      | Custom feed name → URL                    |
+| `rss_disabled`               | list[str] | Disabled built-in feed keys               |
+| `rss_seen`                   | list[str] | Seen article links (dedup, capped at 500) |
 
 ---
 
@@ -495,22 +538,22 @@ All runtime-mutable settings are stored in `config.json`. Loaded fresh on every 
 
 See `.env.sample` for a full reference. Key variables:
 
-| Variable | Required | Description |
-| :--- | :--- | :--- |
-| `BOT_TOKEN` | ✅ | Discord bot token |
-| `CHANNEL_ID` | ✅ | Startup message channel |
-| `GOOGLE_API_KEY` | ✅ | Gemini API key |
-| `MODEL_NAME` | ✅ | Default Gemini model |
-| `CONFIG_FILE_PATH` | ✅ | Path to `config.json` |
-| `MEMORY_FILE_PATH` | ✅ | Path to `memory.db` |
-| `BOT_NAME` | — | Display name for startup messages |
-| `WOLFRAM_APPID_SHORT` | — | Wolfram Short Answer API key |
-| `WOLFRAM_APPID_LLM` | — | Wolfram LLM API key |
-| `MVSEP_API_KEY` | — | MVSEP separation API key |
-| `MVSEP_WEBHOOK_URL` | — | Public URL for MVSEP callbacks |
-| `COOKIES_<PLATFORM>` | — | Netscape cookies file for yt-dlp auth |
-| `GOOGLE_SEARCH_API_KEY` | — | Legacy Google Custom Search fallback |
-| `SEARCH_ENGINE_ID` | — | Legacy Google Custom Search engine ID |
+| Variable                | Required | Description                           |
+|:------------------------|:---------|:--------------------------------------|
+| `BOT_TOKEN`             | ✅        | Discord bot token                     |
+| `CHANNEL_ID`            | ✅        | Startup message channel               |
+| `GOOGLE_API_KEY`        | ✅        | Gemini API key                        |
+| `MODEL_NAME`            | ✅        | Default Gemini model                  |
+| `CONFIG_FILE_PATH`      | ✅        | Path to `config.json`                 |
+| `MEMORY_FILE_PATH`      | ✅        | Path to `memory.db`                   |
+| `BOT_NAME`              | —        | Display name for startup messages     |
+| `WOLFRAM_APPID_SHORT`   | —        | Wolfram Short Answer API key          |
+| `WOLFRAM_APPID_LLM`     | —        | Wolfram LLM API key                   |
+| `MVSEP_API_KEY`         | —        | MVSEP separation API key              |
+| `MVSEP_WEBHOOK_URL`     | —        | Public URL for MVSEP callbacks        |
+| `COOKIES_<PLATFORM>`    | —        | Netscape cookies file for yt-dlp auth |
+| `GOOGLE_SEARCH_API_KEY` | —        | Legacy Google Custom Search fallback  |
+| `SEARCH_ENGINE_ID`      | —        | Legacy Google Custom Search engine ID |
 
 ---
 

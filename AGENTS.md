@@ -4,7 +4,7 @@
 
 ---
 
-# Overview
+## Overview
 
 Freesona is a self-hosted, modular Discord AI framework designed around provider abstraction, extensibility, and maintainability.
 
@@ -14,7 +14,7 @@ This document defines architectural expectations for AI assistants contributing 
 
 ---
 
-# Core Principles
+## Core Principles
 
 ## Architecture First
 
@@ -55,7 +55,7 @@ Each module should have one primary responsibility.
 Examples:
 
 | Component    | Responsibility                    |
-| ------------ | --------------------------------- |
+|--------------|-----------------------------------|
 | `cogs/`      | Discord interactions              |
 | `utils/`     | Shared application logic          |
 | `providers/` | AI provider implementations       |
@@ -67,7 +67,7 @@ Business logic should never be tightly coupled to Discord-specific code.
 
 ---
 
-# Before Writing Code
+## Before Writing Code
 
 Always determine whether an existing solution already exists.
 
@@ -85,7 +85,7 @@ Prefer extending existing code over creating parallel systems.
 
 ---
 
-# Backwards Compatibility
+## Backwards Compatibility
 
 Avoid unnecessary breaking changes.
 
@@ -99,7 +99,7 @@ Breaking changes should be intentional rather than incidental.
 
 ---
 
-# Code Style
+## Code Style
 
 Prioritize:
 
@@ -113,7 +113,7 @@ Readable code is preferred over shorter code.
 
 ---
 
-# Type Hints
+## Type Hints
 
 Use type hints whenever practical.
 
@@ -121,7 +121,7 @@ New public interfaces should include appropriate typing.
 
 ---
 
-# Error Handling
+## Error Handling
 
 Never silently ignore exceptions.
 
@@ -140,7 +140,7 @@ Instead:
 
 ---
 
-# Logging
+## Logging
 
 Use the project's logging framework.
 
@@ -150,7 +150,7 @@ Log messages should provide actionable information.
 
 ---
 
-# Documentation
+## Documentation
 
 Documentation is part of the implementation.
 
@@ -165,7 +165,7 @@ The repository's `docs/` directory is the canonical source of documentation.
 
 ---
 
-# Configuration
+## Configuration
 
 Configuration belongs in:
 
@@ -187,7 +187,7 @@ Any new configuration option must also update:
 
 ---
 
-# AI Providers
+## AI Providers
 
 All providers should expose equivalent behavior through a common interface.
 
@@ -197,7 +197,7 @@ Conversation management, personas, and memory belong to Freesona—not individua
 
 ---
 
-# Memory Systems
+## Memory Systems
 
 Treat the following as separate systems:
 
@@ -229,7 +229,7 @@ Each exists for a different purpose.
 
 ---
 
-# Performance
+## Performance
 
 Optimize only after identifying measurable bottlenecks.
 
@@ -243,7 +243,7 @@ Typical priorities:
 
 ---
 
-# Security
+## Security
 
 Never introduce:
 
@@ -257,7 +257,7 @@ Validate external input whenever practical.
 
 ---
 
-# Dependencies
+## Dependencies
 
 Before adding a dependency:
 
@@ -269,7 +269,7 @@ Avoid adding libraries for trivial functionality.
 
 ---
 
-# Testing
+## Testing
 
 New functionality should include tests whenever practical.
 
@@ -279,7 +279,7 @@ Do not modify tests solely to make failing code pass.
 
 ---
 
-# Documentation Style
+## Documentation Style
 
 Documentation should:
 
@@ -290,7 +290,7 @@ Documentation should:
 
 ---
 
-# Design Philosophy
+## Design Philosophy
 
 Favor:
 
@@ -304,7 +304,7 @@ Avoid tightly coupling unrelated systems.
 
 ---
 
-# Feature Scope
+## Feature Scope
 
 Freesona is an AI framework first.
 
@@ -321,7 +321,7 @@ Avoid unrelated feature creep.
 
 ---
 
-# AI Assistance
+## AI Assistance
 
 AI-generated code is acceptable.
 
@@ -336,7 +336,7 @@ Generated code should never be accepted without verification.
 
 ---
 
-# Pull Request Expectations
+## Pull Request Expectations
 
 Contributions should:
 
@@ -350,7 +350,7 @@ Large architectural changes should be discussed before implementation.
 
 ---
 
-# Final Guideline
+## Final Guideline
 
 When uncertain, prioritize consistency with the existing architecture over introducing new patterns.
 
