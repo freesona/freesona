@@ -43,16 +43,37 @@ Unlike hosted services, Freesona is a **BYOK** (Bring Your Own Key) project. The
 
 ## Getting Started
 
+**Clone the repository:**
+
 ```bash
 git clone https://github.com/soquincy/Freesona.git
 cd Freesona
+python3 -m venv .venv # Set up a virtual environment
+```
+
+**Activate the environment:**
+
+```bash
+source .venv/bin/activate # For Linux systems
+pip install -r requirements.txt
+```
+
+**Windows: We recommend using PowerShell.**
+
+```powershell
+.\.venv\Scripts\activate.ps1 # PowerShell
+pip install -r requirements.txt
+```
+
+```cmd
+.venv\Scripts\activate.bat # Windows Command Prompt
 pip install -r requirements.txt
 ```
 
 Note for Windows users: Python's `zoneinfo` may lack IANA time zone data on some Windows installs. Install `tzdata` in your environment so `/settimezone` (and other `ZoneInfo` lookups) work correctly:
 
 ```powershell
-.venv\Scripts\pip.exe install tzdata
+pip install tzdata
 ```
 
 `tzdata` is included in `requirements.txt` so it will be installed with `pip install -r requirements.txt` on new setups.
@@ -96,7 +117,7 @@ CHANNEL_ID=YOUR_LOG_CHANNEL_ID
 BOT_NAME=Freesona
 
 # AI Provider
-AI_PROVIDER=gemini          # gemini | openai | ollama | nim | azure | groq | openrouter
+AI_PROVIDER=          # gemini | openai | ollama | nim | azure | groq | openrouter
 AI_PROVIDER_MODEL=          # override the default model for the chosen provider
 MODEL_NAME=gemini-flash-lite-latest
 GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
