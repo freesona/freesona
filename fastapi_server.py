@@ -3,14 +3,28 @@ import asyncio
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
 
-app = FastAPI()
 logger = logging.getLogger("FreesonaBot")
 
 _mvsep_jobs: dict[str, asyncio.Future] = {}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    yield
+    # Shutdown - clean up pending futures
+    for job_hash, future in list(_mvsep_jobs.items()):
+        if not future.done():
+            future.cancel()
+    _mvsep_jobs.clear()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/")

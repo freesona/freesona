@@ -14,6 +14,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from utils.config import load_config, save_config
 from utils.modules import CORE_EXTENSIONS, OPTIONAL_MODULES, load_enabled_modules
+from utils.conversation import start_cleanup_task, stop_cleanup_task
+from utils.character_memory import start_extraction_task, stop_extraction_task
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -43,6 +45,10 @@ class Freesona(commands.Bot):
         self._startup_sent = False        # guard: only send startup message once per session
 
     async def setup_hook(self):
+        # Start background cleanup tasks
+        await start_cleanup_task()
+        await start_extraction_task()
+
         enabled_modules = load_enabled_modules(self.config)
         extensions = CORE_EXTENSIONS + [
             ext for name, ext in OPTIONAL_MODULES.items()
@@ -57,6 +63,12 @@ class Freesona(commands.Bot):
 
         await self.tree.sync()
         logger.info(f"Synced slash commands for {self.user}")
+
+    async def close(self):
+        # Stop background cleanup tasks before closing
+        await stop_cleanup_task()
+        await stop_extraction_task()
+        await super().close()
 
     async def notify_owner_legacy(self, bot_name: str):
         """DM the bot owner about legacy persona.txt — called from genai cog."""
