@@ -220,11 +220,11 @@ class ContextBlock:
 
 ### Fields Required for Planned Providers
 
-| Field                               | Type            | Provider   | Status                                                                          |
-|:------------------------------------|:----------------|:-----------|:--------------------------------------------------------------------------------|
-| `guild_id`                          | `Optional[int]` | GuildWorld | ✅ Exists                                                                        |
-| `channel_id`                        | `Optional[int]` | GuildWorld | ✅ Exists                                                                        |
-| (Discord `guild`/`channel` objects) | —               | GuildWorld | **Not in context** — provider must fetch via bot reference or separate accessor |
+| Field                               | Type            | Provider   | Status                                                                                    |
+|:------------------------------------|:----------------|:-----------|:----------------------------------------------------------------------------------|
+| `guild_id`                          | `Optional[int]` | GuildWorld | ✅ Exists                                                                                  |
+| `channel_id`                        | `Optional[int]` | GuildWorld | ✅ Exists                                                                                  |
+| (Discord `guild`/`channel` objects) | —               | GuildWorld | **Not in context** — provider must fetch via bot reference or separate accessor           |
 
 > **Design Decision**: `GuildWorldContextProvider` will need access to Discord guild/channel metadata. Since `PromptBuildContext` is framework-agnostic, the provider will receive a `GuildWorldAccessor` protocol (injected at build time) rather than raw Discord objects.
 

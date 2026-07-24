@@ -491,6 +491,46 @@ async def enforce_memory_budget(
 _extraction_task: Optional[asyncio.Task] = None
 
 
+async def start_extraction_task(
+    interval_seconds: int = EXTRACTION_INTERVAL_SECONDS,
+) -> None:
+    """
+    Start the periodic extraction task.
+    
+    Note: This is a framework-level task. Actual extraction requires
+    knowing which (guild, channel, user, persona) scopes are active.
+    The genai cog should call run_extraction_cycle for active conversations.
+    """
+    global _extraction_task
+    if _extraction_task and not _extraction_task.done():
+        return
+
+    async def extraction_loop():
+        while True:
+            try:
+                await asyncio.sleep(interval_seconds)
+                # Note: Actual extraction requires knowing active scopes
+                # The genai cog should call run_extraction_cycle for active conversations
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Character memory extraction error: {e}")
+
+    _extraction_task = asyncio.create_task(extraction_loop())
+
+
+async def stop_extraction_task() -> None:
+    """Stop the periodic extraction task."""
+    global _extraction_task
+    if _extraction_task and not _extraction_task.done():
+        _extraction_task.cancel()
+        try:
+            await _extraction_task
+        except asyncio.CancelledError:
+            pass
+        _extraction_task = None
+
+
 async def run_extraction_cycle(
     guild_id: int,
     channel_id: int,
@@ -519,32 +559,6 @@ async def run_extraction_cycle(
                     f"guild={guild_id}, user={user_id}, persona={persona_id}")
         return stored
     return 0
-
-
-async def start_extraction_task(
-    interval_seconds: int = EXTRACTION_INTERVAL_SECONDS,
-) -> None:
-    """
-    Start the periodic extraction task.
-    
-    Note: This is a framework-level task. Actual extraction requires
-    knowing which (guild, channel, user, persona) scopes are active.
-    The genai cog should call run_extraction_cycle for active conversations.
-    """
-    global _extraction_task
-    if _extraction_task and not _extraction_task.done():
-        return
-
-
-async def stop_extraction_task() -> None:
-    """Stop the periodic extraction task."""
-    global _extraction_task
-    if _extraction_task and not _extraction_task.done():
-        _extraction_task.cancel()
-        try:
-            await _extraction_task
-        except asyncio.CancelledError:
-            pass
 
 
 __all__ = [
