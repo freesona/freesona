@@ -6,6 +6,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from utils.conversation import clear_conversation
+from utils.memory import clear_user_facts
 
 from .genai_common import MEMORY_FILE_PATH
 
@@ -20,16 +21,27 @@ class GenAIMemoryCog(commands.Cog):
     @commands.hybrid_command(
         name="clearmemory",
         aliases=["smcl"],
-        help="Clear conversation memory for this channel (Admin only).",
+        help="Clear conversation memory for this channel (Admin only). Optionally clear long-term facts.",
     )
     @commands.has_permissions(administrator=True)
-    async def clear_memory(self, ctx: commands.Context):
+    @app_commands.describe(
+        clear_facts="Also clear long-term memory facts for all users in this channel (default: False)."
+    )
+    async def clear_memory(self, ctx: commands.Context, clear_facts: bool = False):
         guild = ctx.guild
         if guild is None:
             await ctx.send("Conversation commands are server-only.")
             return
+        
+        # Clear short-term conversation memory for all users in this channel
         await clear_conversation(guild.id, ctx.channel.id)
-        await ctx.send("Conversation memory cleared for this channel.")
+        
+        if clear_facts:
+            # Clear long-term facts for all users in this guild
+            await clear_user_facts(guild.id)
+            await ctx.send("Conversation memory and long-term facts cleared for this channel.")
+        else:
+            await ctx.send("Conversation memory cleared for this channel.")
 
     # -------------------------------------------------------------------
     # /memorylist (long-term SQLite)

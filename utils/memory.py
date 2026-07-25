@@ -7,6 +7,7 @@ import logging
 import aiosqlite
 import re
 from datetime import datetime, timezone
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -73,6 +74,26 @@ async def get_user_facts_prompt(guild_id: int, user_id: int, display_name: str) 
 
 async def inject_user_memory(guild_id: int, user_id: int, display_name: str) -> str:
     return await get_user_facts_prompt(guild_id, user_id, display_name)
+
+
+async def clear_user_facts(guild_id: int, user_id: Optional[int] = None) -> int:
+    """Clear long-term memory facts for a guild, optionally for a specific user.
+    
+    Returns the number of facts deleted.
+    """
+    async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
+        if user_id is not None:
+            cursor = await db.execute(
+                "DELETE FROM user_facts WHERE guild_id = ? AND user_id = ?",
+                (str(guild_id), str(user_id))
+            )
+        else:
+            cursor = await db.execute(
+                "DELETE FROM user_facts WHERE guild_id = ?",
+                (str(guild_id),)
+            )
+        await db.commit()
+        return cursor.rowcount
 
 
 # ---------------------------------------------------------------------------

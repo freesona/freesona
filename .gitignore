@@ -69,3 +69,4 @@ pyright_output.json
 docs/reports
 diags.txt
 /part_class.txt
+out.txt

@@ -199,14 +199,16 @@ class TestBuildConversationContext(unittest.IsolatedAsyncioTestCase):
         await add_user_message(1, 2, 3, "Hello", 100, "testuser")
         result = await build_conversation_context(1, 2, 3)
         self.assertIn("[Conversation History]", result)
-        self.assertIn("User (testuser, ID: 3): Hello", result)
+        self.assertIn("User (testuser, ID: 3):", result)
+        self.assertIn("Message:\nHello", result)
 
     async def test_with_user_and_assistant_messages(self):
         await add_user_message(1, 2, 3, "Hello", 100, "testuser")
         await add_assistant_message(1, 2, 3, "Hi there!")
         result = await build_conversation_context(1, 2, 3)
         self.assertIn("[Conversation History]", result)
-        self.assertIn("User (testuser, ID: 3): Hello", result)
+        self.assertIn("User (testuser, ID: 3):", result)
+        self.assertIn("Message:\nHello", result)
         self.assertIn("Assistant: Hi there!", result)
 
     async def test_with_summary(self):
@@ -216,14 +218,16 @@ class TestBuildConversationContext(unittest.IsolatedAsyncioTestCase):
         # We'll just verify the function still works without the summary parameter
         result = await build_conversation_context(1, 2, 3)
         self.assertIn("[Conversation History]", result)
-        self.assertIn("User (user, ID: 3): New message", result)
+        self.assertIn("User (user, ID: 3):", result)
+        self.assertIn("Message:\nNew message", result)
 
     async def test_without_summary_flag(self):
         # Add a message first to create the conversation state
         await add_user_message(1, 2, 3, "New message", 100, "user")
         result = await build_conversation_context(1, 2, 3)
         self.assertIn("[Conversation History]", result)
-        self.assertIn("User (user, ID: 3): New message", result)
+        self.assertIn("User (user, ID: 3):", result)
+        self.assertIn("Message:\nNew message", result)
 
 
 class TestClearConversation(unittest.IsolatedAsyncioTestCase):
@@ -406,20 +410,26 @@ class TestConversationFormat(unittest.IsolatedAsyncioTestCase):
         
         expected_parts = [
             "[Conversation History]",
-            "User (Alice, ID: 3): Hello",
+            "User (Alice, ID: 3):",
+            "Message:\nHello",
             "Assistant: Hi Alice!",
-            "User (Alice, ID: 3): How are you?",
+            "User (Alice, ID: 3):",
+            "Message:\nHow are you?",
         ]
         
         for part in expected_parts:
             self.assertIn(part, result)
         
         # Verify order
-        idx_user1 = result.index("User (Alice, ID: 3): Hello")
+        idx_user1 = result.index("User (Alice, ID: 3):")
+        idx_msg1 = result.index("Message:\nHello")
         idx_assistant = result.index("Assistant: Hi Alice!")
-        idx_user2 = result.index("User (Alice, ID: 3): How are you?")
-        self.assertLess(idx_user1, idx_assistant)
+        idx_user2 = result.index("User (Alice, ID: 3):", idx_assistant)
+        idx_msg2 = result.index("Message:\nHow are you?")
+        self.assertLess(idx_user1, idx_msg1)
+        self.assertLess(idx_msg1, idx_assistant)
         self.assertLess(idx_assistant, idx_user2)
+        self.assertLess(idx_user2, idx_msg2)
 
 
 if __name__ == "__main__":

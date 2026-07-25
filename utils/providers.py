@@ -207,11 +207,11 @@ def generate_text(
 
         # Build contents as a list of Parts for proper Gemini API format
         user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
-        contents: list[types.Part] = [types.Part.from_text(user_text)]
+        contents = [types.Part.from_text(user_text)]
         if attachments:
             for att_bytes, att_mime in attachments:
                 # Use inline_data (via from_bytes) for all MIME types when sending bytes directly
-                contents.append(types.Part.from_bytes(data=att_bytes, mime_type=att_mime))
+                contents.append(types.Part.from_bytes(data=att_bytes, mime_type=att_mime)) # type: ignore
 
         response = client.models.generate_content(
             model=model_name,
