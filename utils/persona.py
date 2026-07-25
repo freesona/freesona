@@ -92,11 +92,10 @@ def assemble_persona(data: dict) -> str:
         "background":          "background",
         "beliefs":             "beliefs",
         "language":            "language",
+        "temperature":         "temperature",
     }
     parts = []
     for f in ASSEMBLY_ORDER:
-        if f == "temperature":
-            continue  # Skip temperature since it doesn't use an XML tag
         tag   = xml_tags[f]
         value = data.get(f, "").strip()
         if value:
