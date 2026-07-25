@@ -173,9 +173,35 @@ class MathCog(commands.Cog):
         try:
             clean_query = query.replace('^', '**')
             
+            # Handle function definitions/equations (e.g., f(x)=x^2, y=mx+b)
+            # Check for single = but not comparison operators
+            if '=' in clean_query and '==' not in clean_query and '!=' not in clean_query and '<=' not in clean_query and '>=' not in clean_query:
+                try:
+                    # Try to parse as sympy equation and solve
+                    lhs_str, rhs_str = clean_query.split('=', 1)
+                    lhs = sympy.sympify(lhs_str.strip(), evaluate=False)  # type: ignore[call-arg]
+                    rhs = sympy.sympify(rhs_str.strip(), evaluate=False)  # type: ignore[call-arg]
+                    equation = sympy.Eq(lhs, rhs)
+                    
+                    # Find free symbols to solve for
+                    free_symbols = equation.free_symbols
+                    if free_symbols:
+                        # Solve for the first free symbol (typically x)
+                        solutions = sympy.solve(equation, list(free_symbols)[0], dict=True)
+                        if solutions:
+                            # Format solutions nicely
+                            result_parts = []
+                            for sol in solutions:
+                                for var, val in sol.items():
+                                    result_parts.append(f"{var} = {val}")
+                            return "; ".join(result_parts)
+                except Exception:
+                    # If equation parsing fails, fall through to normal evaluation
+                    pass
+            
             # 1. Critical safety validation
             if not is_safe_expression(clean_query):
-                logging.warning(f"Unsafe expression blocked: {query}")
+                logging.debug(f"Expression not valid for local eval (will try Wolfram): {query}")
                 return None
                 
             parsed_expr = sympy.sympify(clean_query, evaluate=False)  # type: ignore[call-arg]
@@ -263,9 +289,11 @@ class MathCog(commands.Cog):
     async def math(self, ctx, *, query: str):
         await ctx.defer()
         
-        # Handle Plotting
-        if "plot" in query.lower():
-            func = query.lower().replace("plot", "").strip()
+        # Handle Plotting (both "plot" and "graph" keywords)
+        query_lower = query.lower()
+        if "plot" in query_lower or "graph" in query_lower:
+            # Remove the first occurrence of "plot" or "graph"
+            func = query_lower.replace("plot", "").replace("graph", "", 1).strip()
             await self.plot_function(ctx, func)
             return
 
