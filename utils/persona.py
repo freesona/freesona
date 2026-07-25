@@ -24,6 +24,7 @@ PERSONA_FIELDS = [
     "beliefs",
     "language",
     "system_instructions",
+    "temperature",
 ]
 
 PERSONA_LABELS = {
@@ -32,6 +33,7 @@ PERSONA_LABELS = {
     "beliefs":             "Beliefs, Likes & Dislikes",
     "language":            "Language & Communication Style",
     "system_instructions": "System Instructions",
+    "temperature":         "Temperature (0.0-2.0)",
 }
 
 ASSEMBLY_ORDER = [
@@ -40,6 +42,7 @@ ASSEMBLY_ORDER = [
     "background",
     "beliefs",
     "language",
+    "temperature",
 ]
 
 # ---------------------------------------------------------------------------
@@ -171,11 +174,19 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
         max_length=1024,
         placeholder="Origin, backstory, relevant history.",
     )
+    temperature = ui.TextInput(
+        label="Temperature (0.0-2.0)",
+        style=discord.TextStyle.short,
+        required=False,
+        max_length=4,
+        placeholder="0.7",
+    )
 
     def __init__(self, data: dict):
         super().__init__()
         self.core_personality.default = data.get("core_personality", "")
         self.background.default = data.get("background", "")
+        self.temperature.default = str(data.get("temperature", ""))
 
     async def on_submit(self, interaction: discord.Interaction):
         global PERSONA_DATA, CURRENT_PERSONA
@@ -184,6 +195,12 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
             return
         PERSONA_DATA["core_personality"] = self.core_personality.value.strip()
         PERSONA_DATA["background"] = self.background.value.strip()
+        temp_val = self.temperature.value.strip()
+        if temp_val:
+            try:
+                PERSONA_DATA["temperature"] = float(temp_val)
+            except ValueError:
+                PERSONA_DATA["temperature"] = 0.7
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
         try:
             save_persona_json(PERSONA_DATA)
@@ -274,6 +291,13 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
         style=discord.TextStyle.paragraph,
         required=False,
         max_length=1024,
+    )
+    temperature = ui.TextInput(
+        label="Temperature (0.0-2.0)",
+        style=discord.TextStyle.short,
+        required=False,
+        max_length=4,
+        placeholder="0.7",
     )
 
     def __init__(self, data: dict):

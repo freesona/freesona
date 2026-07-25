@@ -21,6 +21,27 @@ def get_provider_model() -> str:
     return get_configured_provider_model()
 
 
+def format_user_text(
+    user_prompt: str, 
+    instruction_prefix: str = "", 
+    username: str = "", 
+    user_id: int | str | None = None
+) -> str:
+    """Helper to format the user message with prefix, username, and ID tags."""
+    if user_id and username:
+        name_tag = f"[{username} (ID: {user_id})]: "
+    elif user_id:
+        name_tag = f"[ID: {user_id}]: "
+    elif username:
+        name_tag = f"[{username}]: "
+    else:
+        name_tag = ""
+
+    if instruction_prefix:
+        return f"{instruction_prefix}\n\n{name_tag}{user_prompt}".strip()
+    return f"{name_tag}{user_prompt}".strip()
+
+
 def build_messages(
     system_prompt: str,
     user_prompt: str,
@@ -28,6 +49,7 @@ def build_messages(
     *,
     instruction_prefix: str = "",
     username: str = "",
+    user_id: int | str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Build the message list for the provider API.
@@ -38,6 +60,7 @@ def build_messages(
         attachments: Optional list of (bytes, mime_type) tuples for multimodal input
         instruction_prefix: Optional prefix to prepend to user message (e.g., formatting instructions)
         username: Optional username to tag in the message (e.g., "[username]: ")
+        user_id: Optional user ID to tag in the message
     
     Returns:
         List of message dicts in OpenAI-compatible format
@@ -46,12 +69,7 @@ def build_messages(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
-    # Format user message with optional instruction prefix and username tag
-    name_tag = f"[{username}]: " if username else ""
-    if instruction_prefix:
-        user_text = f"{instruction_prefix}\n\n{name_tag}{user_prompt}".strip()
-    else:
-        user_text = f"{name_tag}{user_prompt}".strip()
+    user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
 
     if not attachments:
         messages.append({"role": "user", "content": user_text})
@@ -155,6 +173,7 @@ def generate_text(
     attachments: list[tuple[bytes, str]] | None = None,
     instruction_prefix: str = "",
     username: str = "",
+    user_id: int | str | None = None,
 ) -> str:
     provider_name = normalize_provider_name(provider)
     model_name = (model or get_provider_model() or get_model_name()).strip() or get_model_name()
@@ -165,6 +184,7 @@ def generate_text(
         attachments,
         instruction_prefix=instruction_prefix,
         username=username,
+        user_id=user_id,
     )
 
     if provider_name == "gemini":
@@ -175,14 +195,27 @@ def generate_text(
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY missing.")
         client = genai.Client(api_key=api_key)
-        generation_config = types.GenerateContentConfig(
-            system_instruction=system_prompt or "You are a helpful assistant.",
-            max_output_tokens=max_output_tokens,
-            temperature=temp,
-        )
+
+        # Build generation config - only include system_instruction if provided
+        generation_config_kwargs: dict[str, Any] = {
+            "max_output_tokens": max_output_tokens,
+            "temperature": temp,
+        }
+        if system_prompt:
+            generation_config_kwargs["system_instruction"] = system_prompt
+        generation_config = types.GenerateContentConfig(**generation_config_kwargs)
+
+        # Build contents as a list of Parts for proper Gemini API format
+        user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
+        contents: list[types.Part] = [types.Part.from_text(user_text)]
+        if attachments:
+            for att_bytes, att_mime in attachments:
+                # Use inline_data (via from_bytes) for all MIME types when sending bytes directly
+                contents.append(types.Part.from_bytes(data=att_bytes, mime_type=att_mime))
+
         response = client.models.generate_content(
             model=model_name,
-            contents=user_prompt,
+            contents=contents,
             config=generation_config,
         )
         return getattr(response, "text", "") or ""
