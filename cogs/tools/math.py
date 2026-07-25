@@ -225,7 +225,7 @@ def _generate_implicit_plot(func_str: str) -> io.BytesIO:
         # Convert expression to a form suitable for contour plotting
         # For Eq(lhs, rhs), we plot lhs - rhs = 0
         if isinstance(expr, sympy.Eq):
-            implicit_expr = expr.lhs - expr.rhs
+            implicit_expr = expr.lhs - expr.rhs # type: ignore
         else:
             implicit_expr = expr
         

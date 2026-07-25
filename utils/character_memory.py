@@ -372,6 +372,8 @@ async def extract_memories_from_conversation(
             model=model_name,
             max_output_tokens=1024,
         )
+        res = raw or ""
+        raw = res[0] if isinstance(res, tuple) else res
         raw = (raw or "").strip()
 
         if not raw or raw.lower() == "null" or raw == "[]":
