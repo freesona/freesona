@@ -12,7 +12,13 @@ Freesona/
 ├── fastapi_server.py         # FastAPI health + MVSEP webhook receiver
 ├── cogs/
 │   ├── ai/
-│   │   └── genai.py          # AI commands (ask, write, search), autonomy, persona/memory management
+│   │   ├── genai.py          # Aggregate AI extension loader (registers split AI cogs)
+│   │   ├── genai_listener.py # on_message pipeline + passive autonomy response path
+│   │   ├── genai_generation.py # write / ask / search commands
+│   │   ├── genai_persona.py  # setpersona + persona profile/lock/debug commands
+│   │   ├── genai_memory.py   # conversation + long-term memory commands
+│   │   ├── genai_channel.py  # setchannel / clearchannel / chatmode
+│   │   └── genai_autonomy.py # autonomy + botwhitelist runtime controls
 │   ├── media/
 │   │   ├── mvsep.py          # Audio stem separation via MVSEP API
 │   │   └── ytdlp.py          # Video/audio downloader via yt-dlp + ffmpeg
@@ -55,7 +61,7 @@ All cogs depend on `utils/`. Cogs do not import from each other, except that `mv
 
 ## Message Lifecycle
 
-Every incoming Discord message that the bot sees passes through a linear pipeline inside `GenAICog.on_message`:
+Every incoming Discord message that the bot sees passes through a linear pipeline inside `GenAIListenerCog.on_message`:
 
 ```text
 Discord Message
@@ -94,7 +100,7 @@ Discord Message
 
 ### Debounce
 
-Messages in the conversation channel are held for 1.2 seconds before generating a response. If the same user sends another message within that window, the first task is cancelled and the timer resets. This prevents the bot from responding to mid-thought partial messages.
+Messages in the conversation channel are held for 1.2 seconds before generating a response. If the same user sends another message within that window, the first task is canceled and the timer resets. This prevents the bot from responding to mid-thought partial messages.
 
 ---
 
@@ -205,14 +211,15 @@ The persona is stored as a structured JSON object with five fields:
 ### Purpose
 
 The knowledge base stores **canonical, factual information** about a persona — dialogue, narration, events, relationships, and descriptions — sourced from original material (anime, novels, manga, games, etc.). It supplies canonical knowledge about a persona as one input to the generation pipeline and does not independently determine model behavior. It is **not** responsible for:
+
 - Conversation history (handled by **ConversationManager** in `utils/conversation.py`)
 - User long-term memory (handled by `utils/memory.py`)
 - Persona definition/prompt engineering (handled by `utils/persona.py`)
 - Safety instructions or model reasoning
 
-### Architecture
+### Architecture Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Ingestion Pipeline                           │
 ├─────────────────────────────────────────────────────────────────┤
@@ -242,7 +249,7 @@ Where supported by the vector database, metadata filtering occurs before or alon
 
 Embeddings, metadata schemas, and source material will inevitably change over the life of the project. The knowledge lifecycle acknowledges this:
 
-```
+```text
 Source Material
       ↓
 Cleaning
@@ -305,6 +312,7 @@ These fields are automatically populated during ingestion and should be treated 
 Metadata should describe **objective facts** about the source material rather than inferred personality traits.
 
 **Prefer:**
+
 - `speaker` — Who is speaking
 - `episode` / `chapter` — Structural location in the source
 - `source_type` — Media format (anime, novel, manga, game, etc.)
@@ -313,6 +321,7 @@ Metadata should describe **objective facts** about the source material rather th
 - `canon_level` — Canonical priority
 
 **Avoid storing subjective interpretations such as:**
+
 - `tone` — (e.g., "cheerful", "melancholic")
 - `intent` — (e.g., "comforting", "manipulative")
 - `emotional_state` — (e.g., "happy", "angry")
@@ -320,6 +329,7 @@ Metadata should describe **objective facts** about the source material rather th
 These inferences belong to the language model during generation. Storing them in the knowledge base would embed a single interpretation permanently, reducing flexibility across providers and prompting strategies.
 
 #### Required Metadata Fields
+
 | Field         | Description                                                                                 |
 |---------------|---------------------------------------------------------------------------------------------|
 | `persona`     | Persona identifier (e.g., `chisato_nishikigi`)                                              |
@@ -329,6 +339,7 @@ These inferences belong to the language model during generation. Storing them in
 | `topics`      | Semantic topics for retrieval (non-empty list)                                              |
 
 #### Optional Metadata Fields
+
 | Field         | Description                                                                  |
 |---------------|------------------------------------------------------------------------------|
 | `episode`     | Episode number                                                               |
@@ -357,7 +368,7 @@ Each stage is deterministic and can be tested independently.
 
 Only two sources are authorized to define objective facts about the persona:
 
-1. **Canon Framework** (`CanonContextProvider`, priority 25) — Authored, immutable canon blocks explaining the *why* behind behavior: core identity, core beliefs, core motivations, behavioral rules, world assumptions, canon explanations.
+1. **Canon Framework** (`CanonContextProvider`, priority 25) — Authored, immutable canon blocks that give the reason for behavior: core identity, core beliefs, core motivations, behavioral rules, world assumptions, and canon explanations.
 2. **Persona Knowledge Base** (`PersonaKnowledgeBaseProvider`, priority 60) — Retrieved canonical knowledge from source material (RAG), filtered by `persona_id`.
 
 All other context providers are **strictly descriptive** and must never define what the character "is" or "believes" in a canonical sense:
@@ -372,6 +383,7 @@ All other context providers are **strictly descriptive** and must never define w
 | `GuildWorldContextProvider`   | Environmental grounding | *Where they are*: server name, channel context, local norms                                             |
 
 **Enforcement**:
+
 - Canon and PKB are `IMMUTABLE` — they change only via explicit admin action (`/setpersona`, `/kbadd`, `/kbdelete`)
 - All other providers are `MUTABLE` — they evolve through interaction
 - Code review and tests must verify no `MUTABLE` provider writes canonical facts (e.g., "Chisato grew up in Osaka" must never appear in Character Memory)
@@ -390,7 +402,7 @@ The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `u
 4. An optional re-ranking stage can be added later without changing the overall architecture
 5. Assembles context in the **Relevant Canonical Context** format:
 
-```
+```text
 Relevant Canonical Context
 1. Document text...
    (Source: Episode 06, Type: dialogue, Scene: Aquarium, Speaker: Chisato, Chapter: , Timestamp: S01E06 12:34, Canon: canon)
@@ -399,7 +411,8 @@ Relevant Canonical Context
 ```
 
 This context is appended to the persona prompt **after** long-term memory, following the PromptBuilder priority order:
-```
+
+```text
 System (10) → Persona (20) → Canon (25) → Conversation History (30) → User Memory (40) → Character Memory (50) → Guild World (55) → PKB (60) → Generation
 ```
 
@@ -413,6 +426,7 @@ System (10) → Persona (20) → Canon (25) → Conversation History (30) → Us
 ### Provider Independence
 
 The knowledge base:
+
 - Does **not** depend on any specific AI provider (Gemini, OpenAI, Ollama, etc.)
 - Does **not** use provider-native memory systems
 - Stores embeddings in ChromaDB (local or remote)
@@ -422,10 +436,12 @@ The knowledge base:
 ### Configuration
 
 Environment variables (see `.env.sample`):
+
 - `CHROMA_COLLECTION` — Collection name (default: `freesona`)
 - `CHROMA_PERSIST_DIRECTORY` — Storage path (default: `./.chroma`)
 
 Config keys (see `config.sample.json`):
+
 - `kb_enabled` — Enable/disable knowledge base retrieval (default: `true`)
 - `kb_top_k` — Number of entries to retrieve (default: `5`)
 - `kb_collection` — Override collection name
@@ -441,6 +457,8 @@ Cogs are split into **core** (always loaded) and **optional** (can be toggled at
 CORE_EXTENSIONS = [help, ping, status, admin]
 OPTIONAL_MODULES = {genai, math, news, ytdlp, mvsep, moderation, warns, hello, random}
 ```
+
+`genai` maps to `cogs.ai.genai`, an aggregate extension that registers multiple AI cogs by command type.
 
 Enabled/disabled state persists in `config.json` under `"enabled_modules"`. The `/module enable`, `/module disable`, and `/module reload` commands call `bot.load_extension` / `unload_extension` / `reload_extension` at runtime and re-sync slash commands automatically.
 

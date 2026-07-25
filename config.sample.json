@@ -5,6 +5,7 @@
     "conversation_response_mode": "all",
     "provider": "gemini",
     "provider_model": "",
+    "model_temperature": 0.7,
     "chroma_collection": "freesona",
     "chroma_persist_directory": "./.chroma",
     "debounce_seconds": 1.2,

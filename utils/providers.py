@@ -5,7 +5,7 @@ from typing import Any
 import requests
 import base64
 
-from utils.config import get_model_name, get_provider_model as get_configured_provider_model, get_provider_name as get_configured_provider_name
+from utils.config import get_model_name, get_provider_model as get_configured_provider_model, get_provider_name as get_configured_provider_name, get_model_temperature
 
 logger = logging.getLogger("FreesonaBot")
 
@@ -57,13 +57,10 @@ def build_messages(
         messages.append({"role": "user", "content": user_text})
     else:
         # Standard OpenAI / NVIDIA NIM Multimodal Vision message format
-        content_parts: list[dict[str, Any]] = []
-        
-        # Add the text part
-        content_parts.append({
+        content_parts: list[dict[str, Any]] = [{
             "type": "text",
             "text": user_text
-        })
+        }]
 
         # Add attachment parts
         for att_bytes, att_mime in attachments:
@@ -119,12 +116,15 @@ def post_chat_completion(
     max_output_tokens: int,
     token_field: str = "max_tokens",
     extra_payload: dict[str, Any] | None = None,
+    temperature: float | None = None,
 ) -> str:
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         token_field: max_output_tokens,
     }
+    if temperature is not None:
+        payload["temperature"] = temperature
     if extra_payload:
         payload.update(extra_payload)
 
@@ -151,12 +151,14 @@ def generate_text(
     provider: str | None = None,
     model: str | None = None,
     max_output_tokens: int = 1024,
+    temperature: float | None = None,
     attachments: list[tuple[bytes, str]] | None = None,
     instruction_prefix: str = "",
     username: str = "",
 ) -> str:
     provider_name = normalize_provider_name(provider)
     model_name = (model or get_provider_model() or get_model_name()).strip() or get_model_name()
+    temp = get_model_temperature() if temperature is None else temperature
     messages = build_messages(
         system_prompt, 
         user_prompt, 
@@ -167,15 +169,21 @@ def generate_text(
 
     if provider_name == "gemini":
         from google import genai
+        from google.genai import types
 
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY missing.")
         client = genai.Client(api_key=api_key)
+        generation_config = types.GenerateContentConfig(
+            system_instruction=system_prompt or "You are a helpful assistant.",
+            max_output_tokens=max_output_tokens,
+            temperature=temp,
+        )
         response = client.models.generate_content(
             model=model_name,
             contents=user_prompt,
-            config={"system_instruction": system_prompt or "You are a helpful assistant.", "max_output_tokens": max_output_tokens},
+            config=generation_config,
         )
         return getattr(response, "text", "") or ""
 
@@ -191,6 +199,7 @@ def generate_text(
             model=model_name or "gpt-4o-mini",
             messages=messages,
             max_output_tokens=max_output_tokens,
+            temperature=temp,
         )
 
     if provider_name == "ollama":
@@ -199,6 +208,7 @@ def generate_text(
             "model": model_name or "llama3.1",
             "messages": messages,
             "stream": False,
+            "options": {"temperature": temp},
         }
         response = requests.post(url, json=payload, timeout=60)
         response.raise_for_status()
@@ -233,6 +243,7 @@ def generate_text(
             model=target_model,
             messages=messages,
             max_output_tokens=max_output_tokens,
+            temperature=temp,
             extra_payload=extra_payload,
         )
 
@@ -250,6 +261,7 @@ def generate_text(
             model=model_name or "gpt-4o-mini",
             messages=messages,
             max_output_tokens=max_output_tokens,
+            temperature=temp,
         )
 
     if provider_name == "groq":
@@ -264,6 +276,7 @@ def generate_text(
             model=model_name or "llama-3.3-70b-versatile",
             messages=messages,
             max_output_tokens=max_output_tokens,
+            temperature=temp,
             token_field="max_completion_tokens",
         )
 
@@ -285,6 +298,7 @@ def generate_text(
             model=model_name or "meta-llama/llama-3.3-70b-instruct:free",
             messages=messages,
             max_output_tokens=max_output_tokens,
+            temperature=temp,
             token_field="max_completion_tokens",
         )
 

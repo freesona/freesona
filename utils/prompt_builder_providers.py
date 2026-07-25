@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 from utils.prompt_builder import ContextProvider, PromptBuildContext, ProviderPriority, ContextBlock, Mutability
 
@@ -54,8 +53,15 @@ class SystemContextProvider(ContextProvider):
                 content=""
             )
         
+        # Add Discord-specific instructions for proper mention format
+        discord_instructions = (
+            "When mentioning users on Discord, ALWAYS use the <@USER_ID> format "
+            "(e.g., <@123456789012345678>). Do NOT use @username format — it will not ping the user. "
+            "User IDs are provided in message context when available."
+        )
+        
         # Match current XML tag format from persona.py assemble_persona()
-        content = f"<system_instructions>\n{system_instructions}\n</system_instructions>"
+        content = f"<system_instructions>\n{system_instructions}\n\n{discord_instructions}\n</system_instructions>"
         return ContextBlock(
             name=self.name,
             priority=self.priority,
@@ -241,7 +247,9 @@ class ConversationHistoryProvider(ContextProvider):
                 mutability=self.mutability,
                 content=""
             )
-        if not context.guild_id or not context.user_id:
+        guild_id = context.guild_id
+        user_id = context.user_id
+        if guild_id is None or user_id is None:
             return ContextBlock(
                 name=self.name,
                 priority=self.priority,
@@ -250,7 +258,7 @@ class ConversationHistoryProvider(ContextProvider):
             )
         
         # channel_id must be provided; if missing, we cannot scope the conversation
-        channel_id = getattr(context, "channel_id", None)
+        channel_id = context.channel_id
         if channel_id is None:
             return ContextBlock(
                 name=self.name,
@@ -262,9 +270,9 @@ class ConversationHistoryProvider(ContextProvider):
         try:
             from utils.conversation import build_conversation_context
             history = await build_conversation_context(
-                guild_id=context.guild_id,
+                guild_id=guild_id,
                 channel_id=channel_id,
-                user_id=context.user_id,
+                user_id=user_id,
             )
             return ContextBlock(
                 name=self.name,
@@ -477,7 +485,7 @@ class GuildWorldContextProvider(ContextProvider):
             )
         
         # Import here to avoid circular imports
-        from utils.guild_world import build_guild_world_context, GuildWorldAccessor, NULL_ACCESSOR
+        from utils.guild_world import build_guild_world_context, NULL_ACCESSOR
         
         # Get accessor from context (injected by caller) or use null accessor
         accessor = getattr(context, "guild_world_accessor", None) or NULL_ACCESSOR

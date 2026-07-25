@@ -3,17 +3,12 @@ import sys
 import unittest
 import tempfile
 import aiosqlite
+from pathlib import Path
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.memory import (
-    init_db,
-    get_user_facts_prompt,
-    inject_user_memory,
-    extract_and_store_fact,
-    run_migration,
     MAX_FACTS_PER_USER,
-    MIN_IMPORTANCE,
 )
 
 
@@ -91,6 +86,8 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
         
         call_count = [0]
         async def mock_generate_text(prompt, **kwargs):
+            _ = prompt
+            _ = kwargs
             call_count[0] += 1
             if call_count[0] <= 25:
                 return '{"content": "Fact ' + str(call_count[0]) + '", "importance": ' + str(0.5 + call_count[0] * 0.01) + '}'
@@ -137,6 +134,8 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
         
         call_count = [0]
         def mock_generate_text(prompt, **kwargs):
+            _ = prompt
+            _ = kwargs
             call_count[0] += 1
             if call_count[0] == 1:
                 return '{"content": "High importance fact", "importance": 0.9}'

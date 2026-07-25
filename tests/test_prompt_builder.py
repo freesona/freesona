@@ -1,12 +1,12 @@
 # tests/test_prompt_builder.py: Tests for PromptBuilder and ContextProviders
 
-import os
 import sys
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
+from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.prompt_builder import (
     ContextProvider,
@@ -167,7 +167,10 @@ class TestSystemContextProvider(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.name, "system")
         self.assertEqual(result.priority, ProviderPriority.SYSTEM)
         self.assertEqual(result.mutability, Mutability.IMMUTABLE)
-        self.assertEqual(result.content, "<system_instructions>\nYou are a helpful assistant.\n</system_instructions>")
+        # System instructions should be present, plus Discord mention instruction appended
+        self.assertIn("<system_instructions>\nYou are a helpful assistant.", result.content)
+        self.assertIn("When mentioning users on Discord, ALWAYS use the <@USER_ID> format", result.content)
+        self.assertTrue(result.content.endswith("</system_instructions>"))
     
     async def test_build_returns_empty_when_no_system_instructions(self):
         provider = SystemContextProvider()
@@ -568,16 +571,18 @@ class TestGuildWorldContextProvider(unittest.IsolatedAsyncioTestCase):
     
     async def test_build_formats_context_correctly(self):
         """With a mock accessor, should format guild/channel info."""
-        from utils.guild_world import GuildWorldAccessor
-        
         class MockAccessor:
             async def get_guild_name(self, guild_id):
+                _ = guild_id
                 return "Test Server"
             async def get_channel_name(self, channel_id):
+                _ = channel_id
                 return "general"
             async def get_channel_topic(self, channel_id):
+                _ = channel_id
                 return "Welcome channel"
             async def get_guild_member_count(self, guild_id):
+                _ = guild_id
                 return 100
         
         provider = GuildWorldContextProvider()
@@ -612,7 +617,7 @@ class TestPromptBuildContext(unittest.TestCase):
         self.assertEqual(context.current_persona_assembled, "")
         self.assertTrue(context.apply_persona)
         self.assertTrue(context.kb_enabled)
-        self.assertEqual(context.kb_top_k, 3)
+        self.assertEqual(context.kb_top_k, 5)
         self.assertEqual(context.user_message, "")
         self.assertEqual(context.instruction_prefix, "")
     
@@ -658,7 +663,8 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
             username="Alice",
             apply_persona=True,
         )
-        self.assertIn("<system_instructions>\nGlobal sys\n</system_instructions>", result)
+        self.assertIn("Global sys", result)
+        self.assertIn("When mentioning users on Discord, ALWAYS use the <@USER_ID> format", result)
         self.assertIn("<role>\nGlobal core\n</role>", result)
     
     @patch("utils.memory.get_user_facts_prompt")
@@ -673,7 +679,8 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
             apply_persona=True,
             persona_data={"system_instructions": "Provided sys", "core_personality": "Provided core"}
         )
-        self.assertIn("<system_instructions>\nProvided sys\n</system_instructions>", result)
+        self.assertIn("Provided sys", result)
+        self.assertIn("When mentioning users on Discord, ALWAYS use the <@USER_ID> format", result)
         self.assertIn("<role>\nProvided core\n</role>", result)
 
 
@@ -770,6 +777,171 @@ class TestPromptBuilderCustomProviders(unittest.TestCase):
         """PromptBuilder can be created with empty provider list."""
         builder = PromptBuilder(providers=[])
         self.assertEqual(builder.get_provider_names(), [])
+
+
+class TestTokenBudgetEnforcement(unittest.IsolatedAsyncioTestCase):
+    """Test token budget enforcement in PromptBuilder.build()."""
+    
+    def test_context_block_estimate_tokens(self):
+        """ContextBlock.estimate_tokens should return rough token count."""
+        block = ContextBlock("test", 10, Mutability.IMMUTABLE, "a" * 100)
+        self.assertEqual(block.estimate_tokens(), 25)  # 100 chars / 4
+        
+        block = ContextBlock("test", 10, Mutability.IMMUTABLE, "")
+        self.assertEqual(block.estimate_tokens(), 0)
+    
+    async def test_build_respects_token_budget_within_limit(self):
+        """When total tokens within budget, all blocks should be included."""
+        # Create mock providers with known content sizes
+        class SmallProvider(ContextProvider):
+            def __init__(self, name, priority, mutability, content):
+                self._name = name
+                self._priority = priority
+                self._mutability = mutability
+                self._content = content
+            @property
+            def name(self): return self._name
+            @property
+            def priority(self): return self._priority
+            @property
+            def mutability(self): return self._mutability
+            async def build(self, context):
+                return ContextBlock(self._name, self._priority, self._mutability, self._content)
+        
+        # 4 chars = ~1 token, so 100 chars = ~25 tokens
+        providers = [
+            SmallProvider("immutable1", 10, Mutability.IMMUTABLE, "x" * 100),  # ~25 tokens
+            SmallProvider("mutable1", 30, Mutability.MUTABLE, "x" * 100),       # ~25 tokens
+            SmallProvider("mutable2", 40, Mutability.MUTABLE, "x" * 100),       # ~25 tokens
+        ]
+        # Total ~75 tokens, budget 100 - should keep all
+        builder = PromptBuilder.with_providers(providers, token_budget=100)
+        context = PromptBuildContext(apply_persona=True)
+        result = await builder.build(context)
+        
+        # All three blocks should be present
+        self.assertEqual(result.count("x" * 100), 3)
+    
+    async def test_build_drops_mutable_blocks_in_reverse_priority_order(self):
+        """When over budget, MUTABLE blocks dropped in reverse priority order."""
+        class SmallProvider(ContextProvider):
+            def __init__(self, name, priority, mutability, content):
+                self._name = name
+                self._priority = priority
+                self._mutability = mutability
+                self._content = content
+            @property
+            def name(self): return self._name
+            @property
+            def priority(self): return self._priority
+            @property
+            def mutability(self): return self._mutability
+            async def build(self, context):
+                return ContextBlock(self._name, self._priority, self._mutability, self._content)
+        
+        # 100 chars = ~25 tokens each
+        providers = [
+            SmallProvider("immutable1", 10, Mutability.IMMUTABLE, "A" * 100),  # ~25 tokens
+            SmallProvider("mutable_low", 30, Mutability.MUTABLE, "B" * 100),    # ~25 tokens
+            SmallProvider("mutable_mid", 40, Mutability.MUTABLE, "C" * 100),    # ~25 tokens
+            SmallProvider("mutable_high", 50, Mutability.MUTABLE, "D" * 100),   # ~25 tokens
+            SmallProvider("immutable2", 60, Mutability.IMMUTABLE, "E" * 100),   # ~25 tokens
+        ]
+        # Total ~125 tokens, budget 100
+        # Should drop mutable_high (50) first, then mutable_mid (40) if needed
+        # But immutable are never dropped (10 + 60 = 20 priority values, ~50 tokens)
+        # So remaining budget for mutable = 100 - 50 = 50 tokens
+        # Can fit mutable_low (30, 25 tokens) and mutable_mid (40, 25 tokens) = 50 tokens
+        # mutable_high (50) should be dropped
+        builder = PromptBuilder.with_providers(providers, token_budget=100)
+        context = PromptBuildContext(apply_persona=True)
+        result = await builder.build(context)
+        
+        # Immutable blocks should always be present
+        self.assertIn("A" * 100, result)
+        self.assertIn("E" * 100, result)
+        # Low and mid priority mutable should be present
+        self.assertIn("B" * 100, result)
+        self.assertIn("C" * 100, result)
+        # High priority mutable should be dropped
+        self.assertNotIn("D" * 100, result)
+    
+    async def test_build_never_drops_immutable_blocks(self):
+        """IMMUTABLE blocks should never be dropped regardless of budget."""
+        class SmallProvider(ContextProvider):
+            def __init__(self, name, priority, mutability, content):
+                self._name = name
+                self._priority = priority
+                self._mutability = mutability
+                self._content = content
+            @property
+            def name(self): return self._name
+            @property
+            def priority(self): return self._priority
+            @property
+            def mutability(self): return self._mutability
+            async def build(self, context):
+                return ContextBlock(self._name, self._priority, self._mutability, self._content)
+        
+        # 100 chars = ~25 tokens each
+        providers = [
+            SmallProvider("immutable1", 10, Mutability.IMMUTABLE, "A" * 100),  # ~25 tokens
+            SmallProvider("immutable2", 20, Mutability.IMMUTABLE, "B" * 100),  # ~25 tokens
+            SmallProvider("immutable3", 25, Mutability.IMMUTABLE, "C" * 100),  # ~25 tokens
+            SmallProvider("mutable1", 30, Mutability.MUTABLE, "D" * 100),      # ~25 tokens
+        ]
+        # Total ~100 tokens, budget 75
+        # Immutable use 75 tokens, mutable would need 25 more
+        # All immutable should be kept, mutable dropped
+        builder = PromptBuilder.with_providers(providers, token_budget=75)
+        context = PromptBuildContext(apply_persona=True)
+        result = await builder.build(context)
+        
+        # All immutable should be present
+        self.assertIn("A" * 100, result)
+        self.assertIn("B" * 100, result)
+        self.assertIn("C" * 100, result)
+        # Mutable should be dropped
+        self.assertNotIn("D" * 100, result)
+    
+    async def test_build_with_placeholder_mutability(self):
+        """PLACEHOLDER mutability blocks should be skipped (empty content)."""
+        class SmallProvider(ContextProvider):
+            def __init__(self, name, priority, mutability, content):
+                self._name = name
+                self._priority = priority
+                self._mutability = mutability
+                self._content = content
+            @property
+            def name(self): return self._name
+            @property
+            def priority(self): return self._priority
+            @property
+            def mutability(self): return self._mutability
+            async def build(self, context):
+                return ContextBlock(self._name, self._priority, self._mutability, self._content)
+        
+        providers = [
+            SmallProvider("immutable", 10, Mutability.IMMUTABLE, "A" * 100),
+            SmallProvider("placeholder", 20, Mutability.PLACEHOLDER, "B" * 100),
+            SmallProvider("mutable", 30, Mutability.MUTABLE, "C" * 100),
+        ]
+        builder = PromptBuilder.with_providers(providers, token_budget=50)
+        context = PromptBuildContext(apply_persona=True)
+        result = await builder.build(context)
+        
+        # Placeholder should not appear (empty content or skipped)
+        self.assertIn("A" * 100, result)
+        # Note: PLACEHOLDER blocks with content ARE included if not empty
+        # But is_empty check should skip them if content is empty/whitespace
+    
+    async def test_build_with_default_providers_and_token_budget(self):
+        """PromptBuilder.with_default_providers should accept token_budget parameter."""
+        builder = PromptBuilder.with_default_providers(token_budget=4000)
+        self.assertEqual(builder.token_budget, 4000)
+        
+        builder = PromptBuilder.with_default_providers()
+        self.assertEqual(builder.token_budget, 8000)
 
 
 if __name__ == "__main__":

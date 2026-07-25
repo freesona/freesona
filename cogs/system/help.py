@@ -5,7 +5,7 @@
 import logging
 import os
 import discord
-from typing import Optional
+from typing import Optional, cast
 from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
@@ -93,51 +93,79 @@ class HelpView(discord.ui.View):
 
     @discord.ui.button(label="AI & Persona", style=discord.ButtonStyle.primary, emoji="🤖")
     async def ai_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.update_help(interaction, "AI Persona")
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "AI Persona")
 
     @discord.ui.button(label="Media", style=discord.ButtonStyle.secondary, emoji="📥")
     async def media_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.update_help(interaction, "Media")
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "Media")
 
     @discord.ui.button(label="News/RSS", style=discord.ButtonStyle.secondary, emoji="📰")
     async def news_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.update_help(interaction, "News")
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "News")
 
     @discord.ui.button(label="Utility", style=discord.ButtonStyle.secondary, emoji="🔧")
     async def util_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.update_help(interaction, "Utility")
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "Utility")
 
     @discord.ui.button(label="Fun", style=discord.ButtonStyle.success, emoji="🎲")
     async def fun_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.update_help(interaction, "Fun")
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "Fun")
 
     @discord.ui.button(label="Moderation", style=discord.ButtonStyle.danger, emoji="🛡️")
     async def mod_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.update_help(interaction, "Moderation")
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "Moderation")
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=1)
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_category and self.page_index > 0:
-            await self.update_help(interaction, self.current_category, self.page_index - 1)
+        _ = button
+        view = cast("HelpView", self)
+        if view.current_category and view.page_index > 0:
+            await view.update_help(interaction, view.current_category, view.page_index - 1)
 
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=1)
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_category:
-            content = self.categories.get(self.current_category, "")
+        _ = button
+        view = cast("HelpView", self)
+        if view.current_category:
+            content = view.categories.get(view.current_category, "")
             total_pages = len(_split_embed_text(content))
-            if self.page_index < total_pages - 1:
-                await self.update_help(interaction, self.current_category, self.page_index + 1)
+            if view.page_index < total_pages - 1:
+                await view.update_help(interaction, view.current_category, view.page_index + 1)
 
 class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        self.ai_commands = {
+            'write', 'ask', 'search',
+            'personalock', 'personaunlock', 'personasave', 'personaload',
+            'personalist', 'personadelete', 'debugpersona', 'setchannel',
+            'clearchannel', 'clearmemory', 'memorylist', 'memorydelete', 'memoryclear',
+            'migrate', 'chatmode', 'botwhitelist', 'autonomy', 'setpersona',
+        }
+
     @commands.hybrid_command(name='help', help='Shows help information for commands.')
     @app_commands.describe(command_name="The name of the command you want details for.")
     async def help_cmd(self, ctx, *, command_name: Optional[str] = None):
-        prefix = self.bot.command_prefix
-        if callable(prefix):
-            prefix = prefix(self.bot, ctx.message)
+        raw_prefix = self.bot.command_prefix
+        if callable(raw_prefix):
+            raw_prefix = raw_prefix(self.bot, ctx.message)
+        if isinstance(raw_prefix, (list, tuple)):
+            prefix = str(raw_prefix[0]) if raw_prefix else "~"
+        else:
+            prefix = str(raw_prefix)
 
         if not command_name:
             cats = {
@@ -151,22 +179,17 @@ class HelpCog(commands.Cog):
 
                 entry = f"`{cmd.name}` - {cmd.help or 'No description'}"
 
-                if cmd.name in ['hello', 'write', 'ask', 'randommember', 'coinflip', 'roll', 'pick']:
+                if cmd.name in ['hello', 'randommember', 'coinflip', 'roll', 'pick']:
                     cats["Fun"].append(entry)
-                elif cmd.name in ['kick', 'purge', 'removetimeout', 'timeout', 'ban', 'unban', 'softban', 'warn', 'warns', 'delwarn', 'clearwarns', 'warnthresholds']:
+                elif cmd.name in ['kick', 'purge', 'removetimeout', 'timeout', 'ban', 'unban', 'softban', 'warn', 'warns', 'delwarn', 'clearwarns', 'warnthresholds', 'slowmode', 'lock', 'unlock']:
                     cats["Moderation"].append(entry)
-                elif cmd.name in ['math', 'search', 'help', 'ping']:
+                elif cmd.name in ['math', 'plot', 'help', 'ping']:
                     cats["Utility"].append(entry)
                 elif cmd.name in ['download', 'audio', 'separate']:
                     cats["Media"].append(entry)
                 elif cmd.name == 'rss':
                     cats["News"].append("`/rss list`, `/rss latest`, `/rss add`, `/rss setchannel`...")
-                elif cmd.name in [
-                    'personalock', 'personaunlock', 'personasave', 'personaload',
-                    'personalist', 'personadelete', 'debugpersona', 'setchannel',
-                    'clearchannel', 'clearmemory', 'memorylist', 'memorydelete',
-                    'migrate', 'chatmode', 'botwhitelist', 'model', 'module'
-                ]:
+                elif cmd.name in self.ai_commands:
                     cats["AI Persona"].append(entry)
 
             formatted_cats = {k: "\n".join(v) if v else "None" for k, v in cats.items()}
@@ -186,7 +209,9 @@ class HelpCog(commands.Cog):
                 description=f"Click the buttons below to see commands.\n\n**Current Prefix:** `{prefix}`",
                 color=discord.Color.blue()
             )
-            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+            bot_user = self.bot.user
+            if bot_user is not None:
+                embed.set_thumbnail(url=bot_user.display_avatar.url)
 
             view = HelpView(self.bot, ctx, formatted_cats, prefix)
             await ctx.send(embed=embed, view=view)
@@ -214,9 +239,11 @@ class HelpCog(commands.Cog):
 
             app_command = self.find_app_command(search_name)
             if app_command:
+                app_command_name = getattr(app_command, "name", search_name)
+                app_command_description = getattr(app_command, "description", None)
                 embed = discord.Embed(
-                    title=f"Help: `/{app_command.name}`",
-                    description=app_command.description or "No description provided.",
+                    title=f"Help: `/{app_command_name}`",
+                    description=app_command_description or "No description provided.",
                     color=discord.Color.green()
                 )
                 await ctx.send(embed=embed)

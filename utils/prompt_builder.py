@@ -46,6 +46,10 @@ class ContextBlock:
     
     def __len__(self) -> int:
         return len(self.content)
+    
+    def estimate_tokens(self) -> int:
+        """Rough token estimate: ~4 characters per token."""
+        return len(self.content) // 4
 
 
 # =============================================================================
@@ -122,7 +126,7 @@ class PromptBuildContext:
     # Feature flags
     apply_persona: bool = True
     kb_enabled: bool = True
-    kb_top_k: int = 3
+    kb_top_k: int = 5
     
     # Raw user message (for KB retrieval)
     user_message: str = ""
@@ -188,38 +192,101 @@ class PromptBuilder:
     - Framework-agnostic: no Discord or provider-specific dependencies
     """
     providers: list[ContextProvider] = field(default_factory=list)
+    token_budget: int = 8000  # Total token budget for assembled prompt
     
     def __post_init__(self):
         # Sort by priority (lower = earlier in prompt)
         self.providers.sort(key=lambda p: p.priority)
     
     @classmethod
-    def with_default_providers(cls) -> PromptBuilder:
+    def with_default_providers(cls, token_budget: int = 8000) -> PromptBuilder:
         """Create a PromptBuilder with the standard provider set from the registry."""
-        return cls(providers=_get_default_providers())
+        return cls(providers=_get_default_providers(), token_budget=token_budget)
     
     @classmethod
-    def with_providers(cls, providers: list[ContextProvider]) -> PromptBuilder:
+    def with_providers(cls, providers: list[ContextProvider], token_budget: int = 8000) -> PromptBuilder:
         """Create a PromptBuilder with a custom provider list (for testing/extension)."""
-        return cls(providers=providers)
+        return cls(providers=providers, token_budget=token_budget)
     
     async def build(self, context: PromptBuildContext) -> str:
         """
-        Assemble the complete system prompt from all providers.
+        Assemble the complete system prompt from all providers with token budget enforcement.
+        
+        Budget enforcement (per ADR-0003):
+        - IMMUTABLE blocks (priority 10, 20, 25, 60) are NEVER dropped
+        - MUTABLE blocks (priority 30, 40, 50, 55) are dropped in REVERSE priority order
+        - PLACEHOLDER blocks contribute zero tokens and are skipped
         
         Returns:
             The concatenated system prompt string (could be empty).
         """
+        # Build all context blocks
         blocks = []
         for provider in self.providers:
             try:
                 context_block = await provider.build(context)
                 if not context_block.is_empty:
-                    blocks.append(context_block.content)
+                    blocks.append(context_block)
             except Exception as e:
                 logger.warning(f"Context provider '{provider.name}' failed: {e}")
                 # Fail open — continue with other providers
-        return "\n\n".join(blocks)
+        
+        # Enforce token budget
+        blocks = self._enforce_token_budget(blocks)
+        
+        return "\n\n".join(block.content for block in blocks)
+    
+    def _enforce_token_budget(self, blocks: list[ContextBlock]) -> list[ContextBlock]:
+        """
+        Enforce token budget by dropping MUTABLE blocks in reverse priority order.
+        
+        Per ADR-0003:
+        - IMMUTABLE blocks (10, 20, 25, 60) are NEVER dropped
+        - MUTABLE blocks (30, 40, 50, 55) are dropped in reverse priority order
+        """
+        total_tokens = sum(b.estimate_tokens() for b in blocks)
+        
+        if total_tokens <= self.token_budget:
+            return blocks
+        
+        # Separate immutable and mutable blocks
+        immutable_blocks = [b for b in blocks if b.mutability == Mutability.IMMUTABLE]
+        mutable_blocks = [b for b in blocks if b.mutability == Mutability.MUTABLE]
+        
+        # Sort mutable blocks by priority DESCENDING (highest priority number = dropped first)
+        mutable_blocks.sort(key=lambda b: b.priority, reverse=True)
+        
+        # Calculate tokens used by immutable blocks
+        immutable_tokens = sum(b.estimate_tokens() for b in immutable_blocks)
+        
+        # Add mutable blocks back in priority order (lowest priority number first)
+        # until we hit the budget
+        kept_mutable = []
+        current_tokens = immutable_tokens
+        
+        for block in sorted(mutable_blocks, key=lambda b: b.priority):
+            block_tokens = block.estimate_tokens()
+            if current_tokens + block_tokens <= self.token_budget:
+                kept_mutable.append(block)
+                current_tokens += block_tokens
+            else:
+                logger.info(
+                    f"Token budget exceeded ({current_tokens + block_tokens}/{self.token_budget}), "
+                    f"dropping mutable block '{block.name}' (priority {block.priority}, "
+                    f"~{block_tokens} tokens)"
+                )
+        
+        # Combine: immutable blocks first (already in priority order), then kept mutable
+        result = immutable_blocks + kept_mutable
+        # Re-sort by priority to maintain assembly order
+        result.sort(key=lambda b: b.priority)
+        
+        logger.debug(
+            f"Token budget enforced: {total_tokens} -> {current_tokens} tokens "
+            f"({len(blocks)} -> {len(result)} blocks)"
+        )
+        
+        return result
     
     async def inspect(self, context: PromptBuildContext) -> dict[str, ContextBlock]:
         """
@@ -303,6 +370,7 @@ async def build_system_prompt(
     while preserving byte-for-byte identical output.
     """
     from utils.persona import PERSONA_DATA as GLOBAL_PERSONA_DATA
+    from utils.config import get_prompt_token_budget
     
     # Use provided persona_data or fall back to global (for backwards compat during transition)
     pd = persona_data if persona_data is not None else GLOBAL_PERSONA_DATA
@@ -323,7 +391,7 @@ async def build_system_prompt(
         guild_world_accessor=guild_world_accessor,
     )
     
-    builder = PromptBuilder.with_default_providers()
+    builder = PromptBuilder.with_default_providers(token_budget=get_prompt_token_budget())
     return await builder.build(context)
 
 

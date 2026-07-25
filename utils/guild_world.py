@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
@@ -50,15 +49,19 @@ class NullGuildWorldAccessor:
     """Null implementation that returns no data — safe default for testing/fallback."""
     
     async def get_guild_name(self, guild_id: int) -> Optional[str]:
+        _ = guild_id
         return None
     
     async def get_channel_name(self, channel_id: int) -> Optional[str]:
+        _ = channel_id
         return None
     
     async def get_channel_topic(self, channel_id: int) -> Optional[str]:
+        _ = channel_id
         return None
     
     async def get_guild_member_count(self, guild_id: int) -> Optional[int]:
+        _ = guild_id
         return None
 
 

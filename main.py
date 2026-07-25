@@ -7,10 +7,11 @@ import os
 import logging
 import asyncio
 import uvicorn
+from pathlib import Path
 from fastapi_server import app
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 from utils.config import load_config, save_config
 from utils.modules import CORE_EXTENSIONS, OPTIONAL_MODULES, load_enabled_modules
@@ -34,6 +35,7 @@ except ValueError:
 
 def get_prefix(bot, message):
     """Reads the prefix from the in-memory bot config."""
+    _ = message
     return getattr(bot, "config", {}).get("prefix", "~")
 
 # --- Bot Class Definition ---
@@ -43,6 +45,14 @@ class Freesona(commands.Bot):
         self.config = load_config()  # Cache config in memory to eliminate disk read on prefix checks
         self._legacy_notice_sent = False  # guard: only DM once per session
         self._startup_sent = False        # guard: only send startup message once per session
+
+    @property
+    def startup_sent(self) -> bool:
+        return self._startup_sent
+
+    @startup_sent.setter
+    def startup_sent(self, value: bool) -> None:
+        self._startup_sent = value
 
     async def setup_hook(self):
         # Start background cleanup tasks
@@ -92,10 +102,10 @@ class Freesona(commands.Bot):
 
 # Initialize Bot
 intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.dm_messages = True
-intents.guilds = True
+setattr(intents, "message_content", True)
+setattr(intents, "members", True)
+setattr(intents, "dm_messages", True)
+setattr(intents, "guilds", True)
 
 bot = Freesona(command_prefix=get_prefix, intents=intents)
 bot.remove_command('help')
@@ -125,8 +135,8 @@ async def change_prefix(ctx, new_prefix: str):
 async def on_ready():
     logger.info(f'Logged in as {bot.user}')
 
-    if not bot._startup_sent:
-        bot._startup_sent = True
+    if not bot.startup_sent:
+        bot.startup_sent = True
         channel = bot.get_channel(CHANNEL_ID)
         if isinstance(channel, abc.Messageable):
             bot_name = os.getenv("BOT_NAME", "Bot")

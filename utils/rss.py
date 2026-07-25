@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 import html
 import re
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as element_tree
 
 from utils.config import load_config, save_config
 
@@ -125,7 +125,7 @@ def strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(text)).strip()
 
 
-def child_text(node: ET.Element, names: tuple[str, ...]) -> str:
+def child_text(node: element_tree.Element, names: tuple[str, ...]) -> str:
     for child in list(node):
         tag = child.tag.rsplit("}", 1)[-1].lower()
         if tag in names and child.text:
@@ -133,7 +133,7 @@ def child_text(node: ET.Element, names: tuple[str, ...]) -> str:
     return ""
 
 
-def child_attr(node: ET.Element, name: str, attr: str) -> str:
+def child_attr(node: element_tree.Element, name: str, attr: str) -> str:
     for child in list(node):
         tag = child.tag.rsplit("}", 1)[-1].lower()
         if tag == name:
@@ -152,7 +152,7 @@ def normalize_date(value: str) -> str:
         return value
 
 def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
-    root = ET.fromstring(xml_text)
+    root = element_tree.fromstring(xml_text)
     root_tag = root.tag.rsplit("}", 1)[-1].lower()
     if root_tag == "rss":
         channel = next(

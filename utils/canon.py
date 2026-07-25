@@ -23,7 +23,7 @@ import uuid
 import logging
 import aiosqlite
 from datetime import datetime, timezone
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, List, Dict, Any
 
@@ -142,11 +142,12 @@ class CanonComponent:
     def format_for_prompt(self) -> str:
         """Format this component for inclusion in the system prompt."""
         tag = COMPONENT_XML_TAGS[self.component_type]
-        lines = [f"<{tag}>"]
-        lines.append(self.content.strip())
-        if self.explanation:
-            lines.append(f"\n<!-- Why: {self.explanation.strip()} -->")
-        lines.append(f"</{tag}>")
+        lines = [
+            f"<{tag}>",
+            self.content.strip(),
+            *( [f"\n<!-- Why: {self.explanation.strip()} -->"] if self.explanation else []),
+            f"</{tag}>",
+        ]
         return "\n".join(lines)
 
 

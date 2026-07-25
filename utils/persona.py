@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 
 import discord
-from discord import ui, app_commands
+from discord import ui
 from discord.ext import commands
 from dotenv import load_dotenv
 

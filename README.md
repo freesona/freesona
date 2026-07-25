@@ -5,78 +5,80 @@
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-# Freesona - The Discord Bot You Control
+# Freesona
 
-Freesona is an open-source, self-hosted AI Discord bot built around characters, conversations, and server communities. Instead of treating AI as a chatbot with a personality prompt, Freesona models identity, memory, knowledge, and environment as separate systems that work together to create natural interactions.
+Freesona is an open-source, self-hosted Discord AI bot. It keeps persona,
+conversation, long-term memory, knowledge, and environment as separate systems.
 
-Bring your own API key, choose your preferred AI provider, and run everything on your own infrastructure. Whether you're building a faithful character, a server companion, or a utility bot with personality, Freesona gives you the architecture instead of locking you into someone else's platform.
+Provide an API key, select an AI provider, and run the bot on your own
+infrastructure. Use Freesona to build a character, server companion, or utility
+bot with a defined persona.
 
-Unlike hosted services, Freesona is a **BYOK** (Bring Your Own Key) project. There are no credits, subscriptions, or artificial limits imposed by the project itself—your capabilities are determined by the provider and infrastructure you choose.
+Freesona uses the **BYOK** (Bring Your Own Key) model. The selected provider
+and your infrastructure set the available capacity and cost.
 
 → [Features](docs/features.md) · [Commands](docs/commands.md) · [Discord](https://discord.gg/vXPRs2cHSE)
 
 ---
 
-## What makes it worth forking
+## Main features
 
-**It remembers people.** Facts about each user are extracted from conversation, scored by importance, and persisted to SQLite — injected automatically into future conversations. The identity key is the Discord `guild_id + user_id`, so memory stays isolated even in busy multi-user channels.
-
-**It remembers relationships.** Character Memory stores shared experiences — promises, recurring jokes, unfinished activities, relationship progression — scoped to each guild. Relationships persist across channels within a server, just like a real Discord user.
-
-**It can retrieve context semantically.** When ChromaDB is enabled, relevant knowledge chunks are queried and injected alongside the user's fact memory, giving the active provider a provider-neutral retrieval layer.
-
-**All providers are stateless.** Conversation history is owned by Freesona through the ConversationManager, not by individual providers. Every provider receives identical context via the system prompt — no provider-specific continuity paths.
-
-**It won't double-reply.** A per-user-per-channel debounce collapses rapid successive messages into one response.
-
-**It can chime in on its own — intelligently.** Autonomous mode uses a confidence-scored intent evaluator, not random chance. Per-channel cooldowns prevent it from dominating a conversation.
-
-**It handles more than text.** Attach images, PDFs, audio, video, or code files — all processed through the active provider's multimodal pipeline.
-
-**It can target multiple AI backends.** The generation pipeline supports Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, and OpenRouter through a shared provider abstraction. The same commands work across all of them.
-
-**It has an optional local knowledge base.** ChromaDB-backed semantic retrieval is available for injecting relevant documents into generation context, and the bot ships with `/kbsearch`, `/kbadd`, `/kblist`, and `/kbdelete` for local knowledge-base management.
-
-**It's built to be extended.** Logic lives in `utils/` — generation, memory, persona, intent, security, search, config, provider routing, and ChromaDB are all separate modules. See [utils/README.md](utils/README.md).
+- User Memory stores user facts in SQLite. The `guild_id + user_id` key keeps
+  facts separate between Discord servers.
+- Character Memory stores shared experiences for a guild, user, and persona.
+  It works across channels in the same server.
+- ChromaDB can get relevant knowledge and add it to a generation request.
+- `ConversationManager` owns conversation history. AI providers remain
+  stateless and receive the same context through the system prompt.
+- A per-user, per-channel debounce combines rapid messages into one response.
+- Autonomous mode evaluates message intent and applies a per-channel cooldown.
+- The bot can process images, PDFs, audio, video, and code files.
+- The shared provider interface supports Gemini, OpenAI, Ollama, NVIDIA NIM,
+  Azure AI Foundry, Groq, and OpenRouter.
+- The optional knowledge base provides `/kbsearch`, `/kbadd`, `/kblist`, and
+  `/kbdelete` commands.
+- Shared logic is in `utils/`. See [the utilities guide](utils/README.md).
 
 ---
 
 ## Getting Started
 
-**Clone the repository:**
+1. Clone the repository and create a virtual environment.
 
 ```bash
 git clone https://github.com/soquincy/Freesona.git
 cd Freesona
-python3 -m venv .venv # Set up a virtual environment
+python3 -m venv .venv
 ```
 
-**Activate the environment:**
+1. Activate the environment and install the dependencies.
 
 ```bash
-source .venv/bin/activate # For Linux systems
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Windows: We recommend using PowerShell.**
+For Windows PowerShell, run:
 
 ```powershell
-.\.venv\Scripts\activate.ps1 # PowerShell
+.\.venv\Scripts\activate.ps1
 pip install -r requirements.txt
 ```
 
 ```cmd
-.venv\Scripts\activate.bat # Windows Command Prompt
+.venv\Scripts\activate.bat
 pip install -r requirements.txt
 ```
 
-Note for Windows users: Python's `zoneinfo` may lack IANA time zone data on some Windows installs. Install `tzdata` in your environment so `/settimezone` (and other `ZoneInfo` lookups) work correctly:
+On some Windows installations, Python `zoneinfo` does not include IANA time
+zone data. Install `tzdata` so `/settimezone` and other `ZoneInfo` calls work.
 
 ```powershell
 pip install tzdata
 ```
 
-`tzdata` is included in `requirements.txt` so it will be installed with `pip install -r requirements.txt` on new setups.
+`requirements.txt` includes `tzdata`. The dependency-installation command adds
+it to a new environment.
 
 Before pushing changes, run the local checks:
 
@@ -198,6 +200,8 @@ Conversation history is maintained by **ConversationManager** (provider-agnostic
 ## Runtime Controls
 
 Admins can control optional modules without editing `main.py`:
+
+The `genai` module is an aggregate loader that registers AI commands by type-specific cogs (listener, generation, persona, memory, channel, autonomy).
 
 ```text
 /module list

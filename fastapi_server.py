@@ -2,7 +2,6 @@
 import asyncio
 import json
 import logging
-import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -14,7 +13,8 @@ _mvsep_jobs: dict[str, asyncio.Future] = {}
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(fastapi_app: FastAPI):
+    _ = fastapi_app
     # Startup
     yield
     # Shutdown - clean up pending futures
@@ -76,7 +76,9 @@ async def mvsep_webhook(request: Request):
         return {"status": "ok"}
 
     if not _is_valid_mvsep_payload(payload):
-        logger.warning(f"MVSEP webhook rejected invalid payload from {request.client.host if request.client else 'unknown'}")
+        client = request.client
+        client_host = client.host if client is not None else "unknown"
+        logger.warning("MVSEP webhook rejected invalid payload from %s", client_host)
         return Response(status_code=400)
 
     job_hash = _mvsep_hash(payload)
