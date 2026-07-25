@@ -7,7 +7,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 logger = logging.getLogger("FreesonaBot")
 
@@ -191,12 +191,12 @@ class PromptBuilder:
     - Extensibility: new providers register via priority, no code changes to builder
     - Framework-agnostic: no Discord or provider-specific dependencies
     """
-    providers: list[ContextProvider] = field(default_factory=list)
+    providers: Sequence[ContextProvider] = field(default_factory=list)
     token_budget: int = 8000  # Total token budget for assembled prompt
     
     def __post_init__(self):
         # Sort by priority (lower = earlier in prompt)
-        self.providers.sort(key=lambda p: p.priority)
+        self.providers = sorted(self.providers, key=lambda p: p.priority)
     
     @classmethod
     def with_default_providers(cls, token_budget: int = 8000) -> PromptBuilder:
@@ -204,7 +204,7 @@ class PromptBuilder:
         return cls(providers=_get_default_providers(), token_budget=token_budget)
     
     @classmethod
-    def with_providers(cls, providers: list[ContextProvider], token_budget: int = 8000) -> PromptBuilder:
+    def with_providers(cls, providers: Sequence[ContextProvider], token_budget: int = 8000) -> PromptBuilder:
         """Create a PromptBuilder with a custom provider list (for testing/extension)."""
         return cls(providers=providers, token_budget=token_budget)
     

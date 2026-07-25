@@ -27,6 +27,8 @@ DEFAULT_CONFIG = {
     "generation_split_delay_per_char": 0.012,
     "generation_split_delay_max": 3.5,
     "generation_rate_limit": 5,
+    # Model settings
+    "model_temperature": 0.7,
 }
 
 DEFAULT_MODEL_NAME = os.getenv("MODEL_NAME", "gemini-flash-lite-latest")

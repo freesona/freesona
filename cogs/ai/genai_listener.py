@@ -10,6 +10,63 @@ from utils.guild_world import DiscordGuildWorldAccessor
 from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
 from utils.persona import CURRENT_PERSONA, CURRENT_PERSONA_ID
 from utils.roles import resolve_message_role
+from utils.conversation import start_cleanup_task, stop_cleanup_task
+
+from typing import TypedDict, TypeAlias
+
+class MentionPayload(TypedDict):
+    id: int
+    name: str
+    mention: str
+
+class ReplyPayload(TypedDict, total=False):
+    author: str
+    author_id: int
+    content: str
+    is_bot: bool
+    is_webhook: bool
+    role: str
+
+PayloadValue: TypeAlias = str | int | bool | None | list[MentionPayload] | ReplyPayload
+PayloadDict: TypeAlias = dict[str, PayloadValue]
+
+
+def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDict:
+    """
+    Build a standardized payload from a Discord message.
+    
+    Eliminates duplicated payload construction between conversation and autonomy paths.
+    """
+    payload: PayloadDict = {
+        "role": role,
+        "author_id": message.author.id,
+        "username": message.author.display_name,
+        "author_mention": message.author.mention,
+        "content": message.content,
+        "mentions": [
+            {
+                "id": member.id,
+                "name": member.display_name,
+                "mention": member.mention,
+            }
+            for member in message.mentions
+        ],
+        "reply": None,
+    }
+
+    if message.reference and isinstance(message.reference.resolved, discord.Message):
+        ref = message.reference.resolved
+        payload["reply"] = {
+            "author": ref.author.display_name,
+            "author_id": ref.author.id,
+            "content": ref.content or "",
+            "is_bot": ref.author.bot,
+            "is_webhook": ref.webhook_id is not None,
+            "role": resolve_message_role(ref, bot_id),
+        }
+
+    return payload
+
 
 from .genai_common import (
     _autonomy_cooldown,
@@ -29,11 +86,13 @@ class GenAIListenerCog(commands.Cog):
         from utils.memory import init_db
 
         await init_db()
+        await start_cleanup_task()
 
     async def cog_unload(self):
         for task in _pending_responses.values():
             task.cancel()
         _pending_responses.clear()
+        await stop_cleanup_task()
 
     # -------------------------------------------------------------------
     # on_message
@@ -87,24 +146,7 @@ class GenAIListenerCog(commands.Cog):
             message_snapshot = message
             guild_id_snapshot = message.guild.id
 
-            payload: dict[str, str | int | bool | dict[str, str | int | bool] | None] = {
-                "role": role,
-                "author_id": user_id,
-                "username": username_snapshot,
-                "content": message.content,
-                "reply": None,
-            }
-
-            if message.reference and isinstance(message.reference.resolved, discord.Message):
-                ref = message.reference.resolved
-                payload["reply"] = {
-                    "author": ref.author.display_name,
-                    "author_id": ref.author.id,
-                    "content": ref.content or "",
-                    "is_bot": ref.author.bot,
-                    "is_webhook": ref.webhook_id is not None,
-                    "role": resolve_message_role(ref, bot_id),
-                }
+            payload = build_payload(message, role, bot_id)
 
             _debounce_key = (user_id, channel_snapshot.id)
             if _debounce_key in _pending_responses:
@@ -179,24 +221,7 @@ class GenAIListenerCog(commands.Cog):
                     _autonomy_cooldown[message.channel.id] = now
                     _autonomy_user_cooldown[message.author.id] = now
 
-                    autonomy_payload: dict[str, str | int | None | dict[str, str | int | bool]] = {
-                        "role": role,
-                        "author_id": message.author.id,
-                        "username": message.author.display_name,
-                        "content": message.content,
-                        "reply": None,
-                    }
-
-                    if message.reference and isinstance(message.reference.resolved, discord.Message):
-                        ref = message.reference.resolved
-                        autonomy_payload["reply"] = {
-                            "author": ref.author.display_name,
-                            "author_id": ref.author.id,
-                            "content": ref.content or "",
-                            "is_bot": ref.author.bot,
-                            "is_webhook": ref.webhook_id is not None,
-                            "role": resolve_message_role(ref, bot_id),
-                        }
+                    autonomy_payload = build_payload(message, role, bot_id)
 
                     async with message.channel.typing():
                         attachments = await extract_attachments(message)

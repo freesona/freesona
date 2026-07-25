@@ -27,6 +27,8 @@ class ConversationMessage:
     message_id: Optional[int] = None
     user_id: Optional[int] = None
     username: Optional[str] = None
+    mentions: Optional[list[dict]] = None
+    reply: Optional[dict] = None
 
 
 @dataclass
@@ -85,6 +87,8 @@ async def add_message(
     content: str,
     message_id: Optional[int] = None,
     username: Optional[str] = None,
+    mentions: Optional[list[dict]] = None,
+    reply: Optional[dict] = None,
 ) -> None:
     """Add a message to the conversation history."""
     if not content or not content.strip():
@@ -98,6 +102,8 @@ async def add_message(
         message_id=message_id,
         user_id=user_id,
         username=username,
+        mentions=mentions,
+        reply=reply,
     )
     state.messages.append(msg)
     await _enforce_limits(state)
@@ -110,9 +116,11 @@ async def add_user_message(
     content: str,
     message_id: Optional[int] = None,
     username: Optional[str] = None,
+    mentions: Optional[list[dict]] = None,
+    reply: Optional[dict] = None,
 ) -> None:
     """Add a user message to the conversation history."""
-    await add_message(guild_id, channel_id, user_id, "user", content, message_id, username)
+    await add_message(guild_id, channel_id, user_id, "user", content, message_id, username, mentions, reply)
 
 
 async def add_assistant_message(
@@ -149,8 +157,21 @@ async def build_conversation_context(
     
     Format:
     [Conversation History]
-    User: message
-    Assistant: response
+    User (name, @mention):
+    
+    mentions:
+    - name (@mention, ID)
+    ...
+    
+    Message:
+    content
+    
+    Reply to:
+    role (name, @mention): content
+    ...
+    
+    Assistant:
+    content
     ...
     """
     state = await get_conversation(guild_id, channel_id, user_id)
@@ -161,9 +182,42 @@ async def build_conversation_context(
     parts = ["[Conversation History]"]
     
     for msg in state.messages:
-        role_label = "User" if msg.role == "user" else "Assistant"
-        name_part = f" ({msg.username})" if msg.username and msg.role == "user" else ""
-        parts.append(f"{role_label}{name_part}: {msg.content}")
+        if msg.role == "user":
+            # Build user header with name and mention
+            name_parts = []
+            if msg.username:
+                name_parts.append(msg.username)
+            if msg.user_id:
+                name_parts.append(f"ID: {msg.user_id}")
+            name_part = f" ({', '.join(name_parts)})" if name_parts else ""
+            
+            parts.append(f"User{name_part}:")
+            
+            # Add mentions if present
+            if msg.mentions:
+                parts.append("mentions:")
+                for mention in msg.mentions:
+                    if isinstance(mention, dict):
+                        m_name = mention.get("name", "Unknown")
+                        m_id = mention.get("id", "Unknown")
+                        m_mention = mention.get("mention", f"<@{m_id}>")
+                        parts.append(f"  - {m_name} ({m_mention}, ID: {m_id})")
+            
+            # Add reply context if present
+            if msg.reply:
+                parts.append("Reply to:")
+                reply = msg.reply
+                if isinstance(reply, dict):
+                    r_role = reply.get("role", "user")
+                    r_author = reply.get("author", "Unknown")
+                    r_author_id = reply.get("author_id", "Unknown")
+                    r_content = reply.get("content", "")
+                    parts.append(f"  {r_role.capitalize()} ({r_author}, ID: {r_author_id}): {r_content}")
+            
+            parts.append(f"Message:\n{msg.content}")
+            
+        else:
+            parts.append(f"Assistant: {msg.content}")
     
     return "\n".join(parts)
 

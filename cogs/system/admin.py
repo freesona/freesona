@@ -6,7 +6,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ui import View, Select, Modal, TextInput
+from discord.ui import View, Select, Modal, TextInput, Button
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from utils.config import load_config, save_config, get_provider_name, DEFAULT_CONFIG
@@ -94,6 +94,145 @@ def get_config_type(key: str) -> type:
 def get_default_value(key: str):
     """Get the default value for a config key."""
     return DEFAULT_CONFIG.get(key, None)
+
+
+class ConfigCategoryButton(Button):
+    """Button for a config category in the panel view."""
+
+    def __init__(self, category: str, style: discord.ButtonStyle = discord.ButtonStyle.primary):
+        super().__init__(label=category, style=style)
+        self.category = category
+
+    async def callback(self, interaction: discord.Interaction):
+        view: ConfigPanelView = self.view  # type: ignore
+        await view.show_category(interaction, self.category)
+
+
+class ConfigPanelView(View):
+    """Button panel view for /config list and /config edit - similar to PersonaPanelView."""
+
+    def __init__(self, bot: commands.Bot, mode: str = "list"):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.mode = mode  # "list" or "edit"
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("Owner only.", ephemeral=True)
+            return False
+        return True
+
+    async def show_category(self, interaction: discord.Interaction, category: str):
+        """Show keys in a category as an embed with buttons for editing."""
+        keys = CONFIG_CATEGORIES.get(category, [])
+        config = load_config()
+        defaults = DEFAULT_CONFIG
+
+        if self.mode == "list":
+            # Show embed with all keys in category
+            lines = []
+            for k in keys:
+                if k in defaults:
+                    desc = CONFIG_DESCRIPTIONS.get(k, "No description available")
+                    v = config.get(k, defaults[k])
+                    diff_marker = " ⚠" if v != defaults[k] else ""
+                    lines.append(f"`{k}` = `{v}`{diff_marker} — {desc}")
+            if not lines:
+                await interaction.response.send_message(f"No keys in category `{category}`.", ephemeral=True)
+                return
+
+            embed = discord.Embed(
+                title=f"Config Keys: {category}",
+                description="\n".join(lines),
+                color=discord.Color.green(),
+            )
+            embed.set_footer(text="⚠ = differs from default | Use /config edit to change values")
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+            # Edit mode: show buttons for each key
+            view = ConfigKeySelectView(self.bot, category)
+            embed = discord.Embed(
+                title=f"Edit Config: {category}",
+                description="Select a key to edit:",
+                color=discord.Color.blurple(),
+            )
+            await interaction.response.edit_message(embed=embed, view=view)
+
+    @classmethod
+    async def create_initial_embed(cls, mode: str) -> discord.Embed:
+        """Create the initial embed showing all categories."""
+        if mode == "list":
+            title = "Config List"
+            description = "Click a category button below to view its configuration keys."
+        else:
+            title = "Config Editor"
+            description = "Click a category button below to edit its configuration keys."
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=discord.Color.yellow(),
+        )
+        embed.add_field(
+            name="Categories",
+            value="\n".join(f"• {cat}" for cat in CONFIG_CATEGORIES.keys()),
+            inline=False,
+        )
+        return embed
+
+
+class ConfigKeySelectView(View):
+    """View with buttons for each config key in a category."""
+
+    def __init__(self, bot: commands.Bot, category: str):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.category = category
+
+        # Add buttons for each key in the category
+        keys = CONFIG_CATEGORIES.get(category, [])
+        config = load_config()
+        defaults = DEFAULT_CONFIG
+
+        for key in keys:
+            if key in defaults:
+                current_val = config.get(key, defaults[key])
+                diff_marker = " ⚠" if current_val != defaults[key] else ""
+                btn = ConfigKeyButton(key, f"`{key}`{diff_marker}")
+                self.add_item(btn)
+
+        # Add back button
+        self.add_item(ConfigBackButton())
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("Owner only.", ephemeral=True)
+            return False
+        return True
+
+
+class ConfigKeyButton(Button):
+    """Button for a specific config key - opens modal to edit."""
+
+    def __init__(self, key: str, label: str):
+        # Truncate label if too long
+        display_label = label[:80]
+        super().__init__(label=display_label, style=discord.ButtonStyle.secondary)
+        self.key = key
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ConfigModal(self.key, self.view.bot))  # type: ignore
+
+
+class ConfigBackButton(Button):
+    """Back button to return to category list."""
+
+    def __init__(self):
+        super().__init__(label="← Back", style=discord.ButtonStyle.danger, row=4)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: ConfigPanelView = self.view  # type: ignore
+        embed = await ConfigPanelView.create_initial_embed(view.mode)
+        await interaction.response.edit_message(embed=embed, view=ConfigPanelView(view.bot, view.mode))
 
 
 class ConfigSelectView(View):
@@ -303,7 +442,6 @@ class ConfigModal(Modal):
             embed.add_field(name="Default Value", value=f"`{default_val}` (now matches)", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
 
 
 async def module_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -682,51 +820,17 @@ class AdminCog(commands.Cog):
     @config_group.command(name="list", help="List all configurable keys with descriptions grouped by category.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def config_list(self, ctx):
-        embeds = []
-        for category in CONFIG_CATEGORIES:
-            keys = CONFIG_CATEGORIES[category]
-            lines = []
-            for k in keys:
-                if k in DEFAULT_CONFIG:
-                    desc = CONFIG_DESCRIPTIONS.get(k, "No description available")
-                    lines.append(f"`{k}` — {desc}")
-            if lines:
-                embed = discord.Embed(
-                    title=f"Config Keys: {category}",
-                    description="\n".join(lines),
-                    color=discord.Color.green(),
-                )
-                embeds.append(embed)
+        embed = await ConfigPanelView.create_initial_embed("list")
+        view = ConfigPanelView(self.bot, mode="list")
+        await ctx.send(embed=embed, view=view, ephemeral=True if ctx.interaction else False)
 
-        # Add any uncategorized keys
-        categorized_keys = set()
-        for keys in CONFIG_CATEGORIES.values():
-            categorized_keys.update(keys)
-        other_keys = [k for k in sorted(DEFAULT_CONFIG.keys()) if k not in categorized_keys]
-        if other_keys:
-            lines = []
-            for k in other_keys:
-                desc = CONFIG_DESCRIPTIONS.get(k, "No description available")
-                lines.append(f"`{k}` — {desc}")
-            embed = discord.Embed(
-                title="Config Keys: Other",
-                description="\n".join(lines),
-                color=discord.Color.green(),
-            )
-            embeds.append(embed)
-
-        if embeds:
-            for embed in embeds:
-                await ctx.send(embed=embed, ephemeral=True if ctx.interaction else False)
-        else:
-            await ctx.send("No configuration keys found.", ephemeral=True if ctx.interaction else False)
-
-    @config_group.command(name="edit", help="Open an interactive dropdown to edit a config value via modal.")  # type: ignore[attr-defined]
+    @config_group.command(name="edit", help="Open an interactive button panel to edit config values via modal.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def config_edit(self, ctx):
-        """Open a dropdown to select a config key, then a modal to edit it."""
-        view = ConfigSelectView(self.bot, mode="edit")
-        await ctx.send("Select a config key to edit:", view=view, ephemeral=True if ctx.interaction else False)
+        """Open a button panel to select a config category, then a key, then a modal to edit it."""
+        embed = await ConfigPanelView.create_initial_embed("edit")
+        view = ConfigPanelView(self.bot, mode="edit")
+        await ctx.send(embed=embed, view=view, ephemeral=True if ctx.interaction else False)
 
     @config_group.command(name="view", help="Open an interactive dropdown to view a config value in detail.")  # type: ignore[attr-defined]
     @commands.is_owner()

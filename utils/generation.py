@@ -338,12 +338,21 @@ async def generate(
 ) -> ConversationResponse:
     await rate_limit()
 
-    text = prompt.get("content", "") if isinstance(prompt, dict) else (prompt or "")
+    # Extract content and metadata from prompt dict (payload from listener)
+    if isinstance(prompt, dict):
+        text = prompt.get("content", "")
+        mentions = prompt.get("mentions", [])
+        reply = prompt.get("reply")
+    else:
+        text = prompt or ""
+        mentions = []
+        reply = None
+    
     text = sanitize_prompt(text)
 
     # Add user message to conversation history (short-term memory)
     if guild_id and channel_id and user_id:
-        await add_user_message(guild_id, channel_id, user_id, text, message_id, username)
+        await add_user_message(guild_id, channel_id, user_id, text, message_id, username, mentions, reply)
 
     # Build system prompt using PromptBuilder (includes conversation history via ConversationHistoryProvider)
     persona = await build_system_prompt(
@@ -381,6 +390,7 @@ async def generate(
             attachments=attachments,
             instruction_prefix=instruction_prefix,
             username=username,
+            user_id=user_id,
         )
         output_text = output or "Something went wrong."
 
