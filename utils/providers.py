@@ -42,6 +42,27 @@ def format_user_text(
     return f"{name_tag}{user_prompt}".strip()
 
 
+def format_user_text(
+    user_prompt: str, 
+    instruction_prefix: str = "", 
+    username: str = "", 
+    user_id: int | str | None = None
+) -> str:
+    """Helper to format the user message with prefix, username, and ID tags."""
+    if user_id and username:
+        name_tag = f"[{username} (ID: {user_id})]: "
+    elif user_id:
+        name_tag = f"[ID: {user_id}]: "
+    elif username:
+        name_tag = f"[{username}]: "
+    else:
+        name_tag = ""
+
+    if instruction_prefix:
+        return f"{instruction_prefix}\n\n{name_tag}{user_prompt}".strip()
+    return f"{name_tag}{user_prompt}".strip()
+
+
 def build_messages(
     system_prompt: str,
     user_prompt: str,
@@ -49,6 +70,7 @@ def build_messages(
     *,
     instruction_prefix: str = "",
     username: str = "",
+    user_id: int | str | None = None,
     user_id: int | str | None = None,
 ) -> list[dict[str, Any]]:
     """
@@ -61,6 +83,7 @@ def build_messages(
         instruction_prefix: Optional prefix to prepend to user message (e.g., formatting instructions)
         username: Optional username to tag in the message (e.g., "[username]: ")
         user_id: Optional user ID to tag in the message
+        user_id: Optional user ID to tag in the message
     
     Returns:
         List of message dicts in OpenAI-compatible format
@@ -69,6 +92,7 @@ def build_messages(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
+    user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
     user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
 
     if not attachments:
@@ -174,6 +198,7 @@ def generate_text(
     instruction_prefix: str = "",
     username: str = "",
     user_id: int | str | None = None,
+    user_id: int | str | None = None,
 ) -> str:
     provider_name = normalize_provider_name(provider)
     model_name = (model or get_provider_model() or get_model_name()).strip() or get_model_name()
@@ -184,6 +209,7 @@ def generate_text(
         attachments,
         instruction_prefix=instruction_prefix,
         username=username,
+        user_id=user_id,
         user_id=user_id,
     )
 
@@ -215,6 +241,7 @@ def generate_text(
 
         response = client.models.generate_content(
             model=model_name,
+            contents=contents,
             contents=contents,
             config=generation_config,
         )
