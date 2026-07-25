@@ -110,6 +110,161 @@ def get_provider_config() -> dict[str, Any]:
     }
 
 
+# File size threshold for using File API (20MB inline limit)
+FILE_API_THRESHOLD = 20 * 1024 * 1024  # 20MB
+
+
+def _upload_to_file_api(client: Any, file_bytes: bytes, mime_type: str, display_name: str = "upload") -> str:
+    """
+    Upload a file to Gemini File API and return the file URI.
+    
+    Args:
+        client: Gemini client
+        file_bytes: File content as bytes
+        mime_type: MIME type of the file
+        display_name: Display name for the file
+    
+    Returns:
+        File URI for use in Interactions API
+    """
+    import io
+    from google.genai import types
+    
+    file_obj = types.File(
+        display_name=display_name,
+        mime_type=mime_type,
+    )
+    
+    # Create file with content
+    uploaded = client.files.upload(
+        file=io.BytesIO(file_bytes),
+        config=types.UploadFileConfig(
+            display_name=display_name,
+            mime_type=mime_type,
+        ),
+    )
+    
+    # Wait for processing
+    import time
+    while uploaded.state and uploaded.state.name == "PROCESSING":
+        time.sleep(1)
+        uploaded = client.files.get(name=uploaded.name)
+    
+    if uploaded.state and uploaded.state.name == "FAILED":
+        raise RuntimeError(f"File upload failed: {uploaded.error}")
+    
+    return uploaded.uri
+
+
+def _should_use_file_api(file_bytes: bytes, mime_type: str) -> bool:
+    """Determine if a file should use File API instead of inline data."""
+    # Use File API for files larger than threshold
+    if len(file_bytes) > FILE_API_THRESHOLD:
+        return True
+    # Use File API for PDFs, audio, video (better handling)
+    if mime_type == "application/pdf" or mime_type.startswith("audio/") or mime_type.startswith("video/"):
+        return True
+    return False
+
+
+def _is_youtube_url(text: str) -> bool:
+    """Check if text is a YouTube URL."""
+    import re
+    youtube_patterns = [
+        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtu\.be/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/shorts/[\w-]+',
+    ]
+    return any(re.match(pattern, text.strip()) for pattern in youtube_patterns)
+
+
+def _get_mime_category(mime_type: str) -> str:
+    """Get the Interactions API part type for a MIME type."""
+    if mime_type.startswith("image/"):
+        return "image"
+    elif mime_type == "application/pdf":
+        return "document"
+    elif mime_type.startswith("audio/"):
+        return "audio"
+    elif mime_type.startswith("video/"):
+        return "video"
+    else:
+        return "file"
+
+
+def build_interactions_input(
+    user_prompt: str,
+    attachments: list[tuple[bytes, str]] | None = None,
+    *,
+    previous_interaction_id: str | None = None,
+    system_prompt: str | None = None,
+    client: Any | None = None,
+) -> dict[str, Any]:
+    """
+    Build the input for Gemini Interactions API.
+    
+    Args:
+        user_prompt: The user's text message
+        attachments: Optional list of (bytes, mime_type) tuples
+        previous_interaction_id: Optional ID of previous interaction for multi-turn
+        system_prompt: Optional system instruction (passed separately in generation config)
+        client: Optional Gemini client for File API uploads
+    
+    Returns:
+        Dict with 'input' (list of parts) and optionally 'previous_interaction_id'
+    """
+    input_parts: list[dict[str, Any]] = []
+    
+    # Add user text
+    if user_prompt.strip():
+        input_parts.append({"type": "text", "text": user_prompt})
+    
+    # Add attachments
+    if attachments:
+        for att_bytes, att_mime in attachments:
+            # Check if it's a YouTube URL (passed as text)
+            if att_mime == "text/youtube":
+                url = att_bytes.decode("utf-8").strip()
+                input_parts.append({
+                    "type": "video",
+                    "uri": url,
+                })
+                continue
+            
+            mime_category = _get_mime_category(att_mime)
+            
+            # Check if we should use File API
+            use_file_api = client is not None and _should_use_file_api(att_bytes, att_mime)
+            
+            if use_file_api:
+                try:
+                    file_uri = _upload_to_file_api(client, att_bytes, att_mime)
+                    input_parts.append({
+                        "type": mime_category,
+                        "uri": file_uri,
+                        "mime_type": att_mime,
+                    })
+                except Exception as e:
+                    logger.warning(f"File API upload failed, falling back to inline: {e}")
+                    use_file_api = False
+            
+            if not use_file_api:
+                # Inline data (base64)
+                import base64
+                b64 = base64.b64encode(att_bytes).decode("utf-8")
+                input_parts.append({
+                    "type": mime_category,
+                    "data": b64,
+                    "mime_type": att_mime,
+                })
+    
+    result: dict[str, Any] = {"input": input_parts}
+    if previous_interaction_id:
+        result["previous_interaction_id"] = previous_interaction_id
+    
+    return result
+
+
 def normalize_provider_name(provider: str | None) -> str:
     provider_name = (provider or get_provider_name()).strip().lower() or DEFAULT_PROVIDER
     aliases = {
@@ -174,6 +329,7 @@ def generate_text(
     instruction_prefix: str = "",
     username: str = "",
     user_id: int | str | None = None,
+    extra_payload: dict[str, Any] | None = None,
 ) -> str:
     provider_name = normalize_provider_name(provider)
     model_name = (model or get_provider_model() or get_model_name()).strip() or get_model_name()
@@ -196,29 +352,48 @@ def generate_text(
             raise RuntimeError("GOOGLE_API_KEY missing.")
         client = genai.Client(api_key=api_key)
 
-        # Build generation config - only include system_instruction if provided
-        generation_config_kwargs: dict[str, Any] = {
-            "max_output_tokens": max_output_tokens,
-            "temperature": temp,
-        }
-        if system_prompt:
-            generation_config_kwargs["system_instruction"] = system_prompt
-        generation_config = types.GenerateContentConfig(**generation_config_kwargs)
-
-        # Build contents as a list of Parts for proper Gemini API format
+        # Build user text
         user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
-        contents = [types.Part.from_text(text=user_text)]
-        if attachments:
-            for att_bytes, att_mime in attachments:
-                # Use inline_data (via from_bytes) for all MIME types when sending bytes directly
-                contents.append(types.Part.from_bytes(data=att_bytes, mime_type=att_mime)) # type: ignore
 
-        response = client.models.generate_content(
-            model=model_name,
-            contents=contents, # type: ignore
-            config=generation_config,
+        # Get previous interaction ID from extra_payload
+        previous_interaction_id = None
+        if extra_payload and "previous_interaction_id" in extra_payload:
+            previous_interaction_id = extra_payload["previous_interaction_id"]
+
+        # Build Interactions API input using the helper function
+        # System instruction goes in generation_config, not in input
+        interactions_input = build_interactions_input(
+            user_prompt=user_text,
+            attachments=attachments,
+            previous_interaction_id=previous_interaction_id,
+            client=client,
         )
-        return getattr(response, "text", "") or ""
+
+        # Create interaction
+        interaction_kwargs = {
+            "model": model_name,
+            "input": interactions_input["input"],
+            "generation_config": {
+                "max_output_tokens": max_output_tokens,
+                "temperature": temp,
+                "system_instruction": system_prompt if system_prompt else None,
+            },
+            "store": False,  # Stateless mode - Freesona manages conversation history
+        }
+        
+        # Remove None system_instruction
+        if not system_prompt:
+            interaction_kwargs["generation_config"].pop("system_instruction", None)
+        
+        if previous_interaction_id:
+            interaction_kwargs["previous_interaction_id"] = previous_interaction_id
+        
+        response = client.interactions.create(**interaction_kwargs)
+        
+        # Return tuple of (output_text, interaction_id) for conversation tracking
+        output_text = getattr(response, "output_text", "") or ""
+        interaction_id = getattr(response, "id", None)
+        return output_text, interaction_id
 
     if provider_name == "openai":
         api_key = os.getenv("OPENAI_API_KEY")
@@ -233,7 +408,7 @@ def generate_text(
             messages=messages,
             max_output_tokens=max_output_tokens,
             temperature=temp,
-        )
+        ), None
 
     if provider_name == "ollama":
         url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/api/chat")
@@ -246,7 +421,7 @@ def generate_text(
         response = requests.post(url, json=payload, timeout=60)
         response.raise_for_status()
         data = response.json()
-        return data.get("message", {}).get("content", "")
+        return data.get("message", {}).get("content", ""), None
 
     if provider_name == "nim":
         api_key = os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY")
@@ -278,7 +453,7 @@ def generate_text(
             max_output_tokens=max_output_tokens,
             temperature=temp,
             extra_payload=extra_payload,
-        )
+        ), None
 
     if provider_name == "azure":
         api_key = os.getenv("AZURE_AI_KEY")
@@ -295,7 +470,7 @@ def generate_text(
             messages=messages,
             max_output_tokens=max_output_tokens,
             temperature=temp,
-        )
+        ), None
 
     if provider_name == "groq":
         api_key = os.getenv("GROQ_API_KEY")
@@ -311,7 +486,7 @@ def generate_text(
             max_output_tokens=max_output_tokens,
             temperature=temp,
             token_field="max_completion_tokens",
-        )
+        ), None
 
     if provider_name == "openrouter":
         api_key = os.getenv("OPENROUTER_API_KEY")
@@ -333,6 +508,6 @@ def generate_text(
             max_output_tokens=max_output_tokens,
             temperature=temp,
             token_field="max_completion_tokens",
-        )
+        ), None
 
     raise RuntimeError(f"Unsupported provider '{provider_name}'.")

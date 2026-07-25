@@ -8,6 +8,7 @@ from utils.config import load_config
 from utils.generation import extract_attachments, safe_generate, send_response
 from utils.guild_world import DiscordGuildWorldAccessor
 from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
+from utils.memory import extract_and_store_fact
 from utils.persona import CURRENT_PERSONA, CURRENT_PERSONA_ID
 from utils.roles import resolve_message_role
 from utils.conversation import start_cleanup_task, stop_cleanup_task
@@ -180,6 +181,24 @@ class GenAIListenerCog(commands.Cog):
                         )
                         reply_target = get_reply_target(message_snapshot, self.bot.user)
                         await send_response(response, channel_snapshot, reply_to=reply_target)
+
+                    # Extract and store long-term user facts after responding
+                    try:
+                        provider_name = current_config.get("provider", "gemini")
+                        model_name = current_config.get("provider_model") or current_config.get("model_name", "gemini-flash-lite-latest")
+                        await extract_and_store_fact(
+                            message_content=message_snapshot.content,
+                            display_name=username_snapshot,
+                            guild_id=guild_id_snapshot,
+                            user_id=user_id,
+                            message_id=message_snapshot.id,
+                            channel_id=channel_snapshot.id,
+                            client=None,
+                            model_name=model_name,
+                            provider_name=provider_name,
+                        )
+                    except Exception as fact_exc:
+                        logger.warning(f"Fact extraction failed for user {user_id}: {fact_exc}")
                 except asyncio.CancelledError:
                     pass
                 except Exception as exc:
@@ -239,3 +258,22 @@ class GenAIListenerCog(commands.Cog):
                         )
                         reply_target = get_reply_target(message, self.bot.user)
                         await send_response(response, message.channel, reply_to=reply_target)
+
+                    # Extract and store long-term user facts after responding
+                    try:
+                        current_config = load_config()
+                        provider_name = current_config.get("provider", "gemini")
+                        model_name = current_config.get("provider_model") or current_config.get("model_name", "gemini-flash-lite-latest")
+                        await extract_and_store_fact(
+                            message_content=message.content,
+                            display_name=message.author.display_name,
+                            guild_id=message.guild.id,
+                            user_id=message.author.id,
+                            message_id=message.id,
+                            channel_id=message.channel.id,
+                            client=None,
+                            model_name=model_name,
+                            provider_name=provider_name,
+                        )
+                    except Exception as fact_exc:
+                        logger.warning(f"Fact extraction failed for user {message.author.id}: {fact_exc}")

@@ -291,18 +291,14 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
         required=False,
         max_length=1024,
     )
-    temperature = ui.TextInput(
-        label="Temperature (0.0-2.0)",
-        style=discord.TextStyle.short,
-        required=False,
-        max_length=4,
-        placeholder="0.7",
-    )
 
     def __init__(self, data: dict):
         super().__init__()
         for field_name in PERSONA_FIELDS:
-            getattr(self, field_name).default = data.get(field_name, "")
+            if field_name == "temperature":
+                continue  # Temperature is edited in the core modal; skip here (Discord limit: 5 components max)
+            value = data.get(field_name, "")
+            getattr(self, field_name).default = str(value) if value is not None else ""
 
     async def on_submit(self, interaction: discord.Interaction):
         global PERSONA_DATA, CURRENT_PERSONA
@@ -310,11 +306,13 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
             await interaction.response.send_message("Persona is locked. Use `/personaunlock` first.", ephemeral=True)
             return
         for field_name in PERSONA_FIELDS:
+            if field_name == "temperature":
+                continue  # Temperature is not in this modal; keep existing value
             PERSONA_DATA[field_name] = getattr(self, field_name).value.strip()
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
         try:
             save_persona_json(PERSONA_DATA)
-            await interaction.response.send_message("Persona saved.", ephemeral=True)
+            await interaction.response.send_message("Persona saved. (Temperature is edited in Core & Background modal)", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"Save failed: {e}", ephemeral=True)
 

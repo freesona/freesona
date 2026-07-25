@@ -26,6 +26,8 @@ from utils.persona import PERSONA_DATA as GLOBAL_PERSONA_DATA
 from utils.conversation import (
     add_user_message,
     add_assistant_message,
+    get_last_interaction_id,
+    set_last_interaction_id,
 )
 
 load_dotenv()
@@ -380,6 +382,13 @@ async def generate(
         # Conversation history is injected via the system prompt (ConversationHistoryProvider),
         # NOT via provider-specific APIs like Gemini's Interactions API.
         # This makes providers completely stateless and interchangeable.
+        
+        # Get previous interaction ID for Gemini multi-turn support
+        previous_interaction_id = None
+        if provider_name == "gemini" and guild_id and channel_id and user_id:
+            from utils.conversation import get_last_interaction_id
+            previous_interaction_id = await get_last_interaction_id(guild_id, channel_id, user_id)
+        
         output = generate_text(
             text,
             system_prompt=persona,
@@ -391,8 +400,20 @@ async def generate(
             instruction_prefix=instruction_prefix,
             username=username,
             user_id=user_id,
+            extra_payload={"previous_interaction_id": previous_interaction_id} if previous_interaction_id else None,
         )
-        output_text = output or "Something went wrong."
+        
+        # Handle new return type (tuple of output_text, interaction_id)
+        if isinstance(output, tuple):
+            output_text, interaction_id = output
+        else:
+            output_text = output or "Something went wrong."
+            interaction_id = None
+        
+        # Store interaction ID for next turn
+        if interaction_id and provider_name == "gemini" and guild_id and channel_id and user_id:
+            from utils.conversation import set_last_interaction_id
+            await set_last_interaction_id(guild_id, channel_id, user_id, interaction_id)
 
         # Add assistant response to conversation history
         if guild_id and channel_id and user_id and output_text:

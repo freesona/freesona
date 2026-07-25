@@ -29,6 +29,7 @@ class ConversationMessage:
     username: Optional[str] = None
     mentions: Optional[list[dict]] = None
     reply: Optional[dict] = None
+    interaction_id: Optional[str] = None  # For Gemini Interactions API multi-turn support
 
 
 @dataclass
@@ -36,6 +37,7 @@ class ConversationState:
     """Conversation state for a single (guild, channel, user) scope."""
     messages: deque[ConversationMessage] = field(default_factory=deque)
     last_accessed: float = field(default_factory=time.time)
+    last_interaction_id: Optional[str] = None  # Store latest Gemini interaction ID for multi-turn
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +133,32 @@ async def add_assistant_message(
 ) -> None:
     """Add an assistant message to the conversation history."""
     await add_message(guild_id, channel_id, user_id, "assistant", content)
+
+
+async def set_last_interaction_id(
+    guild_id: int,
+    channel_id: int,
+    user_id: int,
+    interaction_id: str,
+) -> None:
+    """Store the latest Gemini interaction ID for multi-turn conversations."""
+    state = await get_conversation(guild_id, channel_id, user_id)
+    state.last_interaction_id = interaction_id
+    # Also update the last assistant message if it exists
+    for msg in reversed(state.messages):
+        if msg.role == "assistant":
+            msg.interaction_id = interaction_id
+            break
+
+
+async def get_last_interaction_id(
+    guild_id: int,
+    channel_id: int,
+    user_id: int,
+) -> Optional[str]:
+    """Get the latest Gemini interaction ID for multi-turn conversations."""
+    state = await get_conversation(guild_id, channel_id, user_id)
+    return state.last_interaction_id
 
 
 async def get_recent_messages(
