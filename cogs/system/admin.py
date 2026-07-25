@@ -99,8 +99,8 @@ def get_default_value(key: str):
 class ConfigCategoryButton(Button):
     """Button for a config category in the panel view."""
 
-    def __init__(self, category: str, style: discord.ButtonStyle = discord.ButtonStyle.primary):
-        super().__init__(label=category, style=style)
+    def __init__(self, category: str, style: discord.ButtonStyle = discord.ButtonStyle.primary, row: int | None = None):
+        super().__init__(label=category, style=style, row=row)
         self.category = category
 
     async def callback(self, interaction: discord.Interaction):
@@ -115,6 +115,11 @@ class ConfigPanelView(View):
         super().__init__(timeout=300)
         self.bot = bot
         self.mode = mode  # "list" or "edit"
+
+        # Add category buttons
+        for i, category in enumerate(CONFIG_CATEGORIES.keys()):
+            row = i // 5  # 5 buttons per row (Discord limit)
+            self.add_item(ConfigCategoryButton(category, row=row))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not await self.bot.is_owner(interaction.user):
