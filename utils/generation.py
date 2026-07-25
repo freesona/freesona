@@ -381,6 +381,7 @@ async def generate(
             attachments=attachments,
             instruction_prefix=instruction_prefix,
             username=username,
+            user_id=user_id,
         )
         output_text = output or "Something went wrong."
 

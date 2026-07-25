@@ -162,7 +162,16 @@ async def build_conversation_context(
     
     for msg in state.messages:
         role_label = "User" if msg.role == "user" else "Assistant"
-        name_part = f" ({msg.username})" if msg.username and msg.role == "user" else ""
+        if msg.role == "user":
+            name_info = []
+            if msg.username:
+                name_info.append(msg.username)
+            if msg.user_id:
+                name_info.append(f"ID: {msg.user_id}")
+            name_part = f" ({', '.join(name_info)})" if name_info else ""
+        else:
+            name_part = ""
+        
         parts.append(f"{role_label}{name_part}: {msg.content}")
     
     return "\n".join(parts)
