@@ -215,7 +215,7 @@ def generate_text(
 
         response = client.models.generate_content(
             model=model_name,
-            contents=contents,
+            contents=contents, # type: ignore
             config=generation_config,
         )
         return getattr(response, "text", "") or ""
