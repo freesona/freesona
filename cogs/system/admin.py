@@ -6,44 +6,332 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
+from discord.ui import View, Select, Modal, TextInput
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from utils.config import load_config, save_config, get_model_name, get_provider_name, DEFAULT_CONFIG
+from utils.config import load_config, save_config, get_provider_name, DEFAULT_CONFIG
 from utils.providers import get_provider_config
 from utils.modules import OPTIONAL_MODULES, load_enabled_modules, module_extension, save_module_state
 
-MODEL_CHOICES = [
+MODEL_CHOICES: list[str] = [
     "gemini-flash-lite-latest",
     "gemini-2.5-flash",
     "gemini-2.5-pro",
     "gemini-2.0-flash",
 ]
 
-PROVIDER_CHOICES = ["gemini", "openai", "anthropic", "nvidia-nim"]
+PROVIDER_CHOICES: list[str] = ["gemini", "openai", "ollama", "nim", "azure", "groq", "openrouter"]
+
+# Config key categories for organized display
+CONFIG_CATEGORIES = {
+    "Core": [
+        "prefix",
+        "conversation_response_mode",
+        "provider",
+        "provider_model",
+    ],
+    "Vector DB (Chroma)": [
+        "chroma_collection",
+        "chroma_persist_directory",
+    ],
+    "Conversation": [
+        "debounce_seconds",
+        "autonomy_cooldown_seconds",
+        "autonomy_user_cooldown",
+    ],
+    "MVSEP (Music Separation)": [
+        "mvsep_poll_interval",
+        "mvsep_poll_timeout",
+    ],
+    "YT-DLP (Audio/Video)": [
+        "ytdlp_subprocess_timeout",
+        "ytdlp_compress_target_mb",
+    ],
+    "Generation (Text Splitting & Rate Limiting)": [
+        "generation_split_min_length",
+        "generation_split_delay_base",
+        "generation_split_delay_per_char",
+        "generation_split_delay_max",
+        "generation_rate_limit",
+    ],
+}
+
+CONFIG_DESCRIPTIONS = {
+    "prefix": "Command prefix for text commands (default: ~)",
+    "conversation_response_mode": "How the bot responds in conversations: all, mention, reply (default: all)",
+    "provider": "AI provider to use: gemini, openai, ollama, nim, azure, groq, openrouter (default: gemini)",
+    "provider_model": "Model name for the selected provider (default: from env)",
+    "chroma_collection": "ChromaDB collection name (default: freesona)",
+    "chroma_persist_directory": "ChromaDB persistence directory (default: ./.chroma)",
+    "debounce_seconds": "Debounce time for message processing in seconds (default: 1.2)",
+    "autonomy_cooldown_seconds": "Cooldown between autonomous actions in seconds (default: 120)",
+    "autonomy_user_cooldown": "Per-user cooldown for autonomous actions in seconds (default: 60)",
+    "mvsep_poll_interval": "Seconds between MVSEP API polling checks (default: 10)",
+    "mvsep_poll_timeout": "Max seconds to wait for MVSEP task completion (default: 600)",
+    "ytdlp_subprocess_timeout": "Max seconds for yt-dlp subprocess to complete (default: 300)",
+    "ytdlp_compress_target_mb": "Target size in MB for video compression (default: 9.5)",
+    "generation_split_min_length": "Minimum message length before splitting into segments (default: 280)",
+    "generation_split_delay_base": "Base delay in seconds between message segments (default: 1.2)",
+    "generation_split_delay_per_char": "Additional delay per character in segment (default: 0.012)",
+    "generation_split_delay_max": "Maximum delay between segments in seconds (default: 3.5)",
+    "generation_rate_limit": "Minimum seconds between AI generation calls (default: 5)",
+}
+
+
+def get_config_category(key: str) -> str:
+    """Get the category name for a config key."""
+    for category, keys in CONFIG_CATEGORIES.items():
+        if key in keys:
+            return category
+    return "Other"
+
+
+def get_config_type(key: str) -> type:
+    """Get the expected type for a config key based on its default value."""
+    return type(DEFAULT_CONFIG.get(key, ""))
+
+
+def get_default_value(key: str):
+    """Get the default value for a config key."""
+    return DEFAULT_CONFIG.get(key, None)
+
+
+class ConfigSelectView(View):
+    """View with a dropdown to select a config key for viewing/editing."""
+
+    def __init__(self, bot: commands.Bot, mode: str = "edit"):
+        super().__init__(timeout=120)
+        self.bot = bot
+        self.mode = mode  # "edit", "view", or "reset"
+
+        # Build options grouped by category
+        options = []
+        for category in CONFIG_CATEGORIES:
+            keys = CONFIG_CATEGORIES[category]
+            for key in keys:
+                if key in DEFAULT_CONFIG:
+                    default_val = DEFAULT_CONFIG[key]
+                    config = load_config()
+                    current_val = config.get(key, default_val)
+                    desc = CONFIG_DESCRIPTIONS.get(key, "No description")
+                    options.append(
+                        discord.SelectOption(
+                            label=key,
+                            value=key,
+                            description=f"{category}: {desc[:90]}" if len(desc) > 90 else f"{category}: {desc}",
+                            default=(current_val != default_val),  # Highlight non-default values
+                        )
+                    )
+        # Add any keys not in categories
+        categorized_keys: set[str] = set()
+        for keys in CONFIG_CATEGORIES.values():
+            categorized_keys.update(keys)
+        for key in sorted(str(config_key) for config_key in DEFAULT_CONFIG.keys()):
+            if key not in categorized_keys:
+                default_val = DEFAULT_CONFIG[key]
+                config = load_config()
+                current_val = config.get(key, default_val)
+                desc = CONFIG_DESCRIPTIONS.get(key, "No description")
+                options.append(
+                    discord.SelectOption(
+                        label=key,
+                        value=key,
+                        description=f"Other: {desc[:90]}",
+                        default=(current_val != default_val),
+                    )
+                )
+
+        # Discord limits to 25 options per select
+        if len(options) > 25:
+            options = options[:25]
+
+        self.select = Select(
+            placeholder="Select a config key to " + ("edit" if mode == "edit" else "view" if mode == "view" else "reset"),
+            options=options,
+            min_values=1,
+            max_values=1,
+        )
+        self.select.callback = self.on_select
+        self.add_item(self.select)
+
+    async def on_select(self, interaction: discord.Interaction):
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("Owner only.", ephemeral=True)
+            return
+
+        key = self.select.values[0]
+        if self.mode == "edit":
+            await interaction.response.send_modal(ConfigModal(key, self.bot))
+        elif self.mode == "view":
+            config = load_config()
+            default_val = DEFAULT_CONFIG[key]
+            current_val = config.get(key, default_val)
+            desc = CONFIG_DESCRIPTIONS.get(key, "No description available.")
+            cat = get_config_category(key)
+
+            embed = discord.Embed(
+                title=f"Config: {key}",
+                color=discord.Color.blurple(),
+            )
+            embed.add_field(name="Category", value=cat, inline=True)
+            embed.add_field(name="Type", value=type(default_val).__name__, inline=True)
+            embed.add_field(name="Current Value", value=f"`{current_val}`", inline=False)
+            embed.add_field(name="Default Value", value=f"`{default_val}`", inline=False)
+            embed.add_field(name="Description", value=desc, inline=False)
+            if current_val != default_val:
+                embed.set_footer(text="⚠ This value differs from the default")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        elif self.mode == "reset":
+            config = load_config()
+            default_val = DEFAULT_CONFIG[key]
+            if key in config:
+                config.pop(key)
+                save_config(config)
+                await interaction.response.send_message(
+                    f"Reset `{key}` to default (`{default_val}`).", ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    f"`{key}` is already at default value (`{default_val}`).", ephemeral=True
+                )
+
+
+class ConfigModal(Modal):
+    """Modal for editing a config value with appropriate input type."""
+
+    def __init__(self, key: str, bot: commands.Bot):
+        super().__init__(title=f"Edit Config: {key}")
+        self.key = key
+        self.bot = bot
+
+        default_val = DEFAULT_CONFIG[key]
+        config = load_config()
+        current_val = config.get(key, default_val)
+        desc = CONFIG_DESCRIPTIONS.get(key, "No description available.")
+
+        # Create appropriate TextInput based on type
+        if isinstance(default_val, bool):
+            self.value_input = TextInput(
+                label="Value (true/false)",
+                style=discord.TextStyle.short,
+                placeholder="true or false",
+                default=str(current_val).lower(),
+                required=True,
+                max_length=5,
+            )
+        elif isinstance(default_val, int):
+            self.value_input = TextInput(
+                label="Value (integer)",
+                style=discord.TextStyle.short,
+                placeholder=str(default_val),
+                default=str(current_val),
+                required=True,
+                max_length=20,
+            )
+        elif isinstance(default_val, float):
+            self.value_input = TextInput(
+                label="Value (decimal)",
+                style=discord.TextStyle.short,
+                placeholder=str(default_val),
+                default=str(current_val),
+                required=True,
+                max_length=20,
+            )
+        else:
+            self.value_input = TextInput(
+                label="Value (string)",
+                style=discord.TextStyle.short if len(str(current_val)) < 100 else discord.TextStyle.paragraph,
+                placeholder=str(default_val),
+                default=str(current_val),
+                required=True,
+                max_length=4000,
+            )
+
+        # Add description as a label on the modal (read-only field for visibility)
+        self.description_field = TextInput(
+            label="Description",
+            style=discord.TextStyle.paragraph,
+            default=desc,
+            required=False,
+        )
+        # Note: TextInput doesn't support disabled=True, but required=False makes it non-editable in practice
+
+        self.add_item(self.value_input)
+        self.add_item(self.description_field)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("Owner only.", ephemeral=True)
+            return
+
+        default_val = DEFAULT_CONFIG[self.key]
+        value_str = self.value_input.value.strip()
+
+        # Type conversion
+        try:
+            if isinstance(default_val, bool):
+                converted = value_str.lower() in ("true", "1", "yes", "on")
+            elif isinstance(default_val, int):
+                converted = int(value_str)
+            elif isinstance(default_val, float):
+                converted = float(value_str)
+            else:
+                converted = value_str
+        except ValueError:
+            await interaction.response.send_message(
+                f"Invalid value for `{self.key}`: expected {type(default_val).__name__}, got `{value_str}`.",
+                ephemeral=True,
+            )
+            return
+
+        config = load_config()
+        old_val = config.get(self.key, default_val)
+        config[self.key] = converted
+        save_config(config)
+
+        embed = discord.Embed(
+            title="✅ Config Updated",
+            color=discord.Color.green(),
+        )
+        embed.add_field(name="Key", value=f"`{self.key}`", inline=True)
+        embed.add_field(name="Type", value=type(default_val).__name__, inline=True)
+        embed.add_field(name="Previous Value", value=f"`{old_val}`", inline=False)
+        embed.add_field(name="New Value", value=f"`{converted}`", inline=False)
+        if converted != default_val:
+            embed.add_field(name="Default Value", value=f"`{default_val}` (differs)", inline=False)
+        else:
+            embed.add_field(name="Default Value", value=f"`{default_val}` (now matches)", inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 
 
 async def module_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    _ = interaction
     current = current.lower()
     choices = []
-    for name in sorted(OPTIONAL_MODULES):
+    module_names = [str(name) for name in OPTIONAL_MODULES]
+    for name in sorted(module_names):
         if current in name:
             choices.append(app_commands.Choice(name=name, value=name))
     return choices[:25]
 
 
 async def model_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    _ = interaction
     current = current.lower()
     return [
-        app_commands.Choice(name=model, value=model)
+        app_commands.Choice[str](name=model, value=model)
         for model in MODEL_CHOICES
         if current in model.lower()
     ][:25]
 
 
 async def provider_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    _ = interaction
     current = current.lower()
     return [
-        app_commands.Choice(name=provider, value=provider)
+        app_commands.Choice[str](name=provider, value=provider)
         for provider in PROVIDER_CHOICES
         if current in provider.lower()
     ][:25]
@@ -203,6 +491,26 @@ class AdminCog(commands.Cog):
         config = get_provider_config()
         await ctx.send(f"Model reset to `{config['model']}`.", ephemeral=True if ctx.interaction else False)
 
+    @model_group.command(name="temperature", help="Set the model temperature (0.0-2.0).")  # type: ignore[attr-defined]
+    @commands.is_owner()
+    @app_commands.describe(value="Temperature value between 0.0 (deterministic) and 2.0 (very creative)")
+    async def model_temperature(self, ctx, value: float):
+        if value < 0.0 or value > 2.0:
+            await ctx.send("Temperature must be between 0.0 and 2.0.", ephemeral=True if ctx.interaction else False)
+            return
+        config = load_config()
+        config["model_temperature"] = value
+        save_config(config)
+        await ctx.send(f"Model temperature set to `{value}`.", ephemeral=True if ctx.interaction else False)
+
+    @model_group.command(name="temperature_reset", help="Reset temperature to default (0.7).")  # type: ignore[attr-defined]
+    @commands.is_owner()
+    async def model_temperature_reset(self, ctx):
+        config = load_config()
+        config.pop("model_temperature", None)
+        save_config(config)
+        await ctx.send(f"Model temperature reset to default (0.7).", ephemeral=True if ctx.interaction else False)
+
     # ------------------------------------------------------------------
     # /provider
     # ------------------------------------------------------------------
@@ -327,42 +635,114 @@ class AdminCog(commands.Cog):
             await ctx.send(f"`{key}` = `{value}` (default: `{defaults[key]}`)", ephemeral=True if ctx.interaction else False)
             return
 
-        # Show all config values
-        lines = []
-        for k in sorted(defaults.keys()):
-            v = config.get(k, defaults[k])
-            lines.append(f"`{k}` = `{v}` (default: `{defaults[k]}`)")
-        output = "\n".join(lines)
-        if len(output) > 1990:
-            await ctx.send(
-                file=discord.File(fp=io.BytesIO(output.encode("utf-8")), filename="config.txt"),
-                ephemeral=True if ctx.interaction else False
-            )
-        else:
-            await ctx.send(f"```\n{output}\n```", ephemeral=True if ctx.interaction else False)
+        # Show all config values grouped by category using embeds
+        embeds = []
+        for category in CONFIG_CATEGORIES:
+            keys = CONFIG_CATEGORIES[category]
+            lines = []
+            for k in keys:
+                if k in defaults:
+                    v = config.get(k, defaults[k])
+                    diff_marker = " ⚠" if v != defaults[k] else ""
+                    lines.append(f"`{k}` = `{v}`{diff_marker}")
+            if lines:
+                embed = discord.Embed(
+                    title=f"Config: {category}",
+                    description="\n".join(lines),
+                    color=discord.Color.blurple(),
+                )
+                embed.set_footer(text="⚠ = differs from default")
+                embeds.append(embed)
 
-    @config_group.command(name="list", help="List all configurable keys with descriptions.")  # type: ignore[attr-defined]
+        # Add any uncategorized keys
+        categorized_keys = set()
+        for keys in CONFIG_CATEGORIES.values():
+            categorized_keys.update(keys)
+        other_keys = [k for k in sorted(defaults.keys()) if k not in categorized_keys]
+        if other_keys:
+            lines = []
+            for k in other_keys:
+                v = config.get(k, defaults[k])
+                diff_marker = " ⚠" if v != defaults[k] else ""
+                lines.append(f"`{k}` = `{v}`{diff_marker}")
+            embed = discord.Embed(
+                title="Config: Other",
+                description="\n".join(lines),
+                color=discord.Color.blurple(),
+            )
+            embed.set_footer(text="⚠ = differs from default")
+            embeds.append(embed)
+
+        if embeds:
+            for embed in embeds:
+                await ctx.send(embed=embed, ephemeral=True if ctx.interaction else False)
+        else:
+            await ctx.send("No configuration values found.", ephemeral=True if ctx.interaction else False)
+
+    @config_group.command(name="list", help="List all configurable keys with descriptions grouped by category.")  # type: ignore[attr-defined]
     @commands.is_owner()
     async def config_list(self, ctx):
-        descriptions = {
-            "mvsep_poll_interval": "Seconds between MVSEP API polling checks (default: 5)",
-            "mvsep_poll_timeout": "Max seconds to wait for MVSEP task completion (default: 300)",
-            "ytdlp_subprocess_timeout": "Max seconds for yt-dlp subprocess to complete (default: 300)",
-            "ytdlp_compress_target_mb": "Target size in MB for video compression (default: 9.5)",
-            "generation_split_min_length": "Minimum message length before splitting into segments (default: 1900)",
-            "generation_split_delay_base": "Base delay in seconds between message segments (default: 0.5)",
-            "generation_split_delay_per_char": "Additional delay per character in segment (default: 0.001)",
-            "generation_split_delay_max": "Maximum delay between segments in seconds (default: 3.0)",
-            "generation_rate_limit": "Minimum seconds between AI generation calls (default: 1.0)",
-        }
-        lines = []
-        for k in sorted(DEFAULT_CONFIG.keys()):
-            desc = descriptions.get(k, "No description available")
-            lines.append(f"`{k}` — {desc}")
-        output = "\n".join(lines)
-        await ctx.send(f"```\n{output}\n```", ephemeral=True if ctx.interaction else False)
+        embeds = []
+        for category in CONFIG_CATEGORIES:
+            keys = CONFIG_CATEGORIES[category]
+            lines = []
+            for k in keys:
+                if k in DEFAULT_CONFIG:
+                    desc = CONFIG_DESCRIPTIONS.get(k, "No description available")
+                    lines.append(f"`{k}` — {desc}")
+            if lines:
+                embed = discord.Embed(
+                    title=f"Config Keys: {category}",
+                    description="\n".join(lines),
+                    color=discord.Color.green(),
+                )
+                embeds.append(embed)
 
-    @config_group.command(name="set", help="Set a configuration value.")  # type: ignore[attr-defined]
+        # Add any uncategorized keys
+        categorized_keys = set()
+        for keys in CONFIG_CATEGORIES.values():
+            categorized_keys.update(keys)
+        other_keys = [k for k in sorted(DEFAULT_CONFIG.keys()) if k not in categorized_keys]
+        if other_keys:
+            lines = []
+            for k in other_keys:
+                desc = CONFIG_DESCRIPTIONS.get(k, "No description available")
+                lines.append(f"`{k}` — {desc}")
+            embed = discord.Embed(
+                title="Config Keys: Other",
+                description="\n".join(lines),
+                color=discord.Color.green(),
+            )
+            embeds.append(embed)
+
+        if embeds:
+            for embed in embeds:
+                await ctx.send(embed=embed, ephemeral=True if ctx.interaction else False)
+        else:
+            await ctx.send("No configuration keys found.", ephemeral=True if ctx.interaction else False)
+
+    @config_group.command(name="edit", help="Open an interactive dropdown to edit a config value via modal.")  # type: ignore[attr-defined]
+    @commands.is_owner()
+    async def config_edit(self, ctx):
+        """Open a dropdown to select a config key, then a modal to edit it."""
+        view = ConfigSelectView(self.bot, mode="edit")
+        await ctx.send("Select a config key to edit:", view=view, ephemeral=True if ctx.interaction else False)
+
+    @config_group.command(name="view", help="Open an interactive dropdown to view a config value in detail.")  # type: ignore[attr-defined]
+    @commands.is_owner()
+    async def config_view(self, ctx):
+        """Open a dropdown to select a config key, then view it in an embed."""
+        view = ConfigSelectView(self.bot, mode="view")
+        await ctx.send("Select a config key to view:", view=view, ephemeral=True if ctx.interaction else False)
+
+    @config_group.command(name="reset-interactive", help="Open an interactive dropdown to reset a config key to default.")  # type: ignore[attr-defined]
+    @commands.is_owner()
+    async def config_reset_interactive(self, ctx):
+        """Open a dropdown to select a config key, then reset it to default."""
+        view = ConfigSelectView(self.bot, mode="reset")
+        await ctx.send("Select a config key to reset:", view=view, ephemeral=True if ctx.interaction else False)
+
+    @config_group.command(name="set", help="Set a configuration value directly.")  # type: ignore[attr-defined]
     @app_commands.describe(key="Config key to set", value="New value (will be type-converted)")
     @commands.is_owner()
     async def config_set(self, ctx, key: str, value: str):

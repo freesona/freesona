@@ -13,7 +13,7 @@ OPTIONAL_MODULES = {
     "hello":      "cogs.fun.hello",
     "random":     "cogs.fun.random",
     "moderation": "cogs.moderation.core",
-    "genai":      "cogs.ai.genai",
+    "genai":      "cogs.ai.genai",  # Aggregate extension that loads split AI command cogs.
     "math":       "cogs.tools.math",
     "news":       "cogs.system.news",
     "ytdlp":      "cogs.media.ytdlp",

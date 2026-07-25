@@ -40,9 +40,9 @@ class SearchResult:
     def has_sources(self) -> bool:
         return bool(self.sources)
 
-    def sources_block(self, max: int = 5) -> str:
+    def sources_block(self, max_items: int = 5) -> str:
         lines = []
-        for i, s in enumerate(self.sources[:max], 1):
+        for i, s in enumerate(self.sources[:max_items], 1):
             title = s.get("title", "Source")
             uri   = s.get("uri", "")
             lines.append(f"{i}. [{title}]({uri})" if uri else f"{i}. {title}")

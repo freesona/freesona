@@ -82,7 +82,7 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         }
 
         with patch.object(chroma, "get_collection", return_value=fake_collection):
-            doc_id = chroma.add_knowledge("Alpha doc", source="manual", title="Alpha", metadata=valid_metadata)
+            chroma.add_knowledge("Alpha doc", source="manual", title="Alpha", metadata=valid_metadata)
             entries = chroma.list_knowledge()
 
         self.assertEqual(len(entries), 1)
@@ -340,7 +340,7 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         
         # Test empty input
         self.assertEqual(chroma.clean_source_text(""), "")
-        self.assertEqual(chroma.clean_source_text(None), "")
+        self.assertEqual(chroma.clean_source_text(None), "")  # type: ignore[arg-type]
 
     def test_identify_speakers(self):
         """Test the identify_speakers utility function."""

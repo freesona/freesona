@@ -4,15 +4,14 @@ import os
 import tempfile
 import unittest
 import sys
-from unittest.mock import patch
+from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.canon import (
     CanonComponentType,
     CanonComponent,
-    CanonSnapshot,
     CanonValidationError,
     init_db,
     store_component,
@@ -122,6 +121,7 @@ class TestCanonComponentCRUD(unittest.TestCase):
             retrieved = await get_component("test-comp-1")
             
             assert retrieved is not None
+            retrieved = retrieved  # type: ignore[reportAssignmentType]
             self.assertEqual(retrieved.component_id, "test-comp-1")
             self.assertEqual(retrieved.persona_id, TEST_PERSONA_ID)
             self.assertEqual(retrieved.component_type, CanonComponentType.CORE_IDENTITY)
@@ -205,6 +205,7 @@ class TestCanonComponentCRUD(unittest.TestCase):
             
             retrieved = await get_component("test-update")
             assert retrieved is not None
+            retrieved = retrieved  # type: ignore[reportAssignmentType]
             self.assertEqual(retrieved.content, "Updated content")
             self.assertEqual(retrieved.explanation, "Updated explanation")
             self.assertEqual(retrieved.version, "1.1.0")
@@ -356,6 +357,7 @@ class TestCanonSnapshots(unittest.TestCase):
             # Modify component
             component = await get_component(f"restore-test-{CanonComponentType.CORE_IDENTITY.value}")
             assert component is not None
+            component = component  # type: ignore[reportAssignmentType]
             component.content = "Modified content"
             component.version = "2.0.0"
             await update_component(component)
@@ -363,6 +365,7 @@ class TestCanonSnapshots(unittest.TestCase):
             # Verify modification
             modified = await get_component(f"restore-test-{CanonComponentType.CORE_IDENTITY.value}")
             assert modified is not None
+            modified = modified  # type: ignore[reportAssignmentType]
             self.assertEqual(modified.content, "Modified content")
             
             # Restore snapshot
@@ -372,6 +375,7 @@ class TestCanonSnapshots(unittest.TestCase):
             # Verify restored
             restored = await get_component(f"restore-test-{CanonComponentType.CORE_IDENTITY.value}")
             assert restored is not None
+            restored = restored  # type: ignore[reportAssignmentType]
             self.assertEqual(restored.content, f"Original {CanonComponentType.CORE_IDENTITY.value}")
         
         asyncio.run(test())

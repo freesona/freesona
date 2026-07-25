@@ -13,6 +13,9 @@ requests
 # google-genai: Connects to the Gemini API for AI responses.
 google-genai
 
+# google: Namespace package metadata used by static inspections for 'google.*' imports.
+google
+
 # fastapi: Async web framework for building APIs.
 fastapi
 

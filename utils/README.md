@@ -1,19 +1,20 @@
-# utils/
+# `utils/`
 
-Logic modules for Freesona. All cogs import from here; cogs do not import from each other directly.
+The `utils/` directory contains shared Freesona logic. Cogs import modules
+from this directory. Cogs do not import other cogs directly.
 
 | Module | Responsibility |
-| :--- | :--- |
-| `generation.py` | Provider-agnostic generation pipeline, `ConversationResponse`, `safe_generate`, `send_response`, multimodal attachment handling, and provider-safe prompt injection |
-| `memory.py` | Long-term per-user fact storage (SQLite) plus scoped interaction continuity for Gemini, keyed by `guild_id + channel_id + user_id` |
-| `persona.py` | Persona data layer, structured field assembly, `/setpersona` modal panel, profile save/load |
-| `intent.py` | Confidence-scored intent evaluator for autonomy — signal scoring, threshold mapping, `IntentResult` type |
-| `security.py` | SSRF URL guard, prompt injection detection and redaction, output safety check, math AST allowlist helpers |
-| `search.py` | Web search via Gemini grounding with optional legacy Google Custom Search fallback |
-| `config.py` | Config I/O (`config.json`), `embed_footer` helper, provider/model name accessors |
-| `rss.py` | RSS/Atom XML parser, feed CRUD, seen-link deduplication tracking |
-| `modules.py` | Cog registry — `OPTIONAL_MODULES`, `CORE_EXTENSIONS`, `load_enabled_modules`, `module_extension` |
-| `roles.py` | Message author role resolution (user vs. bot vs. webhook) for generation payloads |
-| `anniversaries_db.py` | Anniversary event storage and scheduling helpers |
+|---|---|
+| `generation.py` | Generates responses, handles attachments, and injects prompts without provider-specific behavior. |
+| `memory.py` | Stores long-term user facts in SQLite. It also stores scoped Gemini interaction continuity. |
+| `persona.py` | Manages persona data, structured fields, the `/setpersona` panel, and saved profiles. |
+| `intent.py` | Scores autonomy signals, maps scores to thresholds, and defines `IntentResult`. |
+| `security.py` | Checks URLs for SSRF, detects and redacts prompt injection, checks output safety, and validates math ASTs. |
+| `search.py` | Searches the web with Gemini grounding. It can use Google Custom Search as a legacy fallback. |
+| `config.py` | Reads and writes `config.json`. It also provides `embed_footer` and provider/model name accessors. |
+| `rss.py` | Parses RSS and Atom XML, manages feeds, and tracks seen links. |
+| `modules.py` | Defines the cog registry and manages optional modules. |
+| `roles.py` | Resolves a message author as a user, bot, or webhook. |
+| `anniversaries_db.py` | Stores anniversary events and provides scheduling helpers. |
 
-See [docs/architecture.md](../docs/architecture.md) for a full system walkthrough.
+See [the architecture guide](../docs/architecture.md) for the system design.

@@ -7,6 +7,7 @@ import aiosqlite
 import os
 import secrets
 import logging
+from typing import Any
 from datetime import datetime, timezone
 from utils.config import load_config, save_config
 from cogs.moderation.core import parse_time_string
@@ -76,11 +77,14 @@ async def resolve_user(ctx, user_input: str) -> discord.User | discord.Member | 
 async def apply_threshold(ctx, member: discord.Member, warn_count: int):
     config = load_config()
     thresholds = config.get("warn_thresholds", {})
+    if not isinstance(thresholds, dict):
+        logger.warning("Invalid warn_thresholds configuration.")
+        return
     if not thresholds.get("enabled"):
         return
 
     rule = thresholds.get(str(warn_count))
-    if not rule:
+    if not isinstance(rule, dict):
         return
 
     action = rule.get("action")
@@ -300,7 +304,7 @@ class WarnsCog(commands.Cog):
             title=f"Warnings for {user}",
             color=discord.Color.orange()
         )
-        avatar = user.display_avatar.url if hasattr(user, 'display_avatar') else user.avatar.url if user.avatar else None
+        avatar = getattr(getattr(user, "display_avatar", None), "url", None)
         if avatar:
             embed.set_thumbnail(url=avatar)
 
@@ -377,12 +381,18 @@ class WarnsCog(commands.Cog):
     async def warnthresholds_cmd(self, ctx):
         config = load_config()
         current = config.get("warn_thresholds", {"enabled": False})
+        if not isinstance(current, dict):
+            current = {"enabled": False}
 
         if ctx.interaction:
             await ctx.interaction.response.send_modal(ThresholdModal(current))
         else:
             enabled = current.get("enabled", False)
-            rules = {k: v for k, v in current.items() if k != "enabled"}
+            rules: dict[str, dict[str, Any]] = {}
+            for key, value in current.items():
+                if key == "enabled" or not isinstance(key, str) or not isinstance(value, dict):
+                    continue
+                rules[key] = value
             if not rules:
                 await ctx.send(
                     f"Warn thresholds are currently **{'enabled' if enabled else 'disabled'}** with no rules set.\n"

@@ -35,15 +35,38 @@ WOLFRAM_SHORT_APPID = os.getenv("WOLFRAM_APPID_SHORT")
 WOLFRAM_LLM_APPID = os.getenv("WOLFRAM_APPID_LLM")
 
 SAFE_FUNCTIONS = {
+    # Trigonometric
     'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
     'asin', 'acos', 'atan', 'acot', 'asec', 'acsc',
     'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
     'asinh', 'acosh', 'atanh', 'acoth', 'asech', 'acsch',
-    'sqrt', 'cbrt', 'exp', 'log', 'ln', 'log10', 'abs',
-    'factorial', 'gamma', 'floor', 'ceiling',
+    # Algebraic & Arithmetic
+    'sqrt', 'cbrt', 'exp', 'log', 'ln', 'log10', 'log2', 'abs',
+    'factorial', 'gamma', 'floor', 'ceiling', 'ceiling',
+    'mod', 'sign', 'max', 'min', 'sum', 'prod',
+    'pow', 'power', 'root',
+    # Calculus
     'limit', 'diff', 'integrate', 'solve', 'expand', 'simplify',
+    'series', 'dsolve', 'nsolve',
+    # Constants
     'pi', 'E', 'e', 'I', 'oo', 'Infinity', 'nan',
-    'summation', 'product', 'root', 'N', 'evalf'
+    'S', 'EulerGamma', 'Catalan', 'GoldenRatio',
+    # Special functions
+    'summation', 'product', 'N', 'evalf', 'n',
+    'zeta', 'polygamma', 'digamma', 'trigamma',
+    'besselj', 'bessely', 'besseli', 'besselk',
+    'airyai', 'airybi', 'legendre', 'chebyshevt', 'chebyshevu',
+    'hermite', 'laguerre', 'jacobi',
+    'erf', 'erfc', 'erfi', 'erfinv', 'erfcinv',
+    'fresnels', 'fresnelc',
+    'elliptic_e', 'elliptic_f', 'elliptic_k', 'elliptic_pi',
+    # Hyperbolic
+    'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
+    'asinh', 'acosh', 'atanh', 'acoth', 'asech', 'acsch',
+    # Matrix/Vector (basic)
+    'Matrix', 'det', 'trace', 'rank', 'eigenvals', 'eigenvects',
+    # Rounding
+    'round', 'trunc', 'frac',
 }
 
 def check_ast_safe(node) -> bool:
@@ -56,9 +79,14 @@ def check_ast_safe(node) -> bool:
         ast.Tuple,
         ast.List,
         ast.keyword,
+        ast.Subscript,
+        ast.Slice,
         ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.FloorDiv,
         ast.UAdd, ast.USub,
         ast.Load, ast.Store, ast.Del,
+        ast.Compare, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+        ast.BoolOp, ast.And, ast.Or,
+        ast.Not,
     )
     
     if not isinstance(node, allowed_nodes):
@@ -68,7 +96,7 @@ def check_ast_safe(node) -> bool:
         return False
 
     if isinstance(node, ast.Name):
-        if node.id.startswith('__') or node.id in {'eval', 'exec', 'open', 'import', 'print', 'getattr', 'setattr', 'delattr', 'compile', 'globals', 'locals'}:
+        if node.id.startswith('__') or node.id in {'eval', 'exec', 'open', '__import__', 'print', 'getattr', 'setattr', 'delattr', 'compile', 'globals', 'locals', 'input', 'exit', 'quit', 'help', 'copyright', 'credits', 'license'}:
             return False
         return True
 
@@ -110,7 +138,7 @@ def generate_plot(func_str: str) -> io.BytesIO:
 
     clean_func = func_str.replace('^', '**')
     x_symbol = sympy.Symbol('x')
-    expr = sympy.sympify(clean_func, evaluate=True)
+    expr = sympy.sympify(clean_func, evaluate=True)  # type: ignore[call-arg]
     y_func = sympy.lambdify(x_symbol, expr, "numpy")
     
     x = np.linspace(-10, 10, 400)
@@ -150,8 +178,8 @@ class MathCog(commands.Cog):
                 logging.warning(f"Unsafe expression blocked: {query}")
                 return None
                 
-            parsed_expr = sympy.sympify(clean_query, evaluate=False)
-            result = sympy.sympify(clean_query, evaluate=True)
+            parsed_expr = sympy.sympify(clean_query, evaluate=False)  # type: ignore[call-arg]
+            result = sympy.sympify(clean_query, evaluate=True)  # type: ignore[call-arg]
             
             # If the result is a SymPy Symbol, it's just a variable name (unsimplified/unsolved)
             if getattr(result, 'is_Symbol', False):

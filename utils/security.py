@@ -121,7 +121,10 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return False
 
-    host = parsed.hostname.strip().lower().rstrip(".")
+    hostname = parsed.hostname
+    if hostname is None:
+        return False
+    host = hostname.strip().lower().rstrip(".")
     if not host:
         return False
 

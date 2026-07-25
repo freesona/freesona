@@ -3,10 +3,9 @@ import re
 import asyncio
 import logging
 import time
-import base64
 
 from dataclasses import dataclass, field
-from typing import Optional, Union, Dict, Any, cast
+from typing import Optional, Union, Dict, Any
 
 import discord
 from dotenv import load_dotenv
@@ -14,16 +13,13 @@ from dotenv import load_dotenv
 try:
     from google import genai
     from google.genai import types
-except Exception:
+except ImportError:
     genai = None
     types = None
 
-from utils.memory import (
-    inject_user_memory,
-)
 from utils.chroma import query_knowledge
 from utils.security import sanitize_prompt
-from utils.config import get_model_name, get_provider_name, get_provider_model, load_config
+from utils.config import get_model_name, get_provider_name, get_provider_model, load_config, get_model_temperature, get_kb_top_k
 from utils.providers import generate_text
 from utils.prompt_builder import build_system_prompt
 from utils.persona import PERSONA_DATA as GLOBAL_PERSONA_DATA
@@ -31,7 +27,6 @@ from utils.conversation import (
     add_user_message,
     add_assistant_message,
 )
-from utils.guild_world import DiscordGuildWorldAccessor
 
 load_dotenv()
 
@@ -43,7 +38,7 @@ BOT_NAME       = os.getenv("BOT_NAME", "Bot")
 PROVIDER = get_provider_name()
 
 # Knowledge base config
-KB_TOP_K = int(os.getenv("KB_TOP_K", "3"))
+KB_TOP_K = get_kb_top_k()
 KB_ENABLED = os.getenv("KB_ENABLED", "true").lower() == "true"
 
 # Global state tracking for rate limiting
@@ -370,7 +365,7 @@ async def generate(
     try:
         provider_name = get_provider_name()
         current_model = get_provider_model() or get_model_name()
-        output_text: Optional[str] = None
+        current_temperature = get_model_temperature()
 
         # All providers now use the same stateless generate_text interface.
         # Conversation history is injected via the system prompt (ConversationHistoryProvider),
@@ -382,6 +377,7 @@ async def generate(
             provider=provider_name,
             model=current_model,
             max_output_tokens=2048,
+            temperature=current_temperature,
             attachments=attachments,
             instruction_prefix=instruction_prefix,
             username=username,
@@ -392,7 +388,7 @@ async def generate(
         if guild_id and channel_id and user_id and output_text:
             await add_assistant_message(guild_id, channel_id, user_id, output_text)
 
-        return build_response(clean_text(output_text))
+        return build_response(clean_text(output_text or "Something went wrong."))
 
     except Exception as e:
         logger.error(f"Generation error: {e}")

@@ -30,6 +30,8 @@ DEFAULT_CONFIG = {
 }
 
 DEFAULT_MODEL_NAME = os.getenv("MODEL_NAME", "gemini-flash-lite-latest")
+DEFAULT_MODEL_TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", "0.7"))
+DEFAULT_KB_TOP_K = int(os.getenv("KB_TOP_K", "5"))
 
 LAST_DEBUG: dict[int, str] = {}
 
@@ -69,6 +71,38 @@ def get_provider_name() -> str:
 def get_provider_model() -> str:
     model = load_config().get("provider_model") or os.getenv("AI_PROVIDER_MODEL") or get_model_name()
     return str(model).strip() or get_model_name()
+
+
+def get_model_temperature() -> float:
+    temp = load_config().get("model_temperature")
+    if isinstance(temp, (int, float, str)):
+        try:
+            return float(temp)
+        except (ValueError, TypeError):
+            pass
+    return DEFAULT_MODEL_TEMPERATURE
+
+
+def get_kb_top_k() -> int:
+    """Get the KB top-k value from config (default: 5)."""
+    val = load_config().get("kb_top_k")
+    if isinstance(val, (int, float, str)):
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            pass
+    return DEFAULT_KB_TOP_K
+
+
+def get_prompt_token_budget() -> int:
+    """Get the prompt token budget from config (default: 8000)."""
+    val = load_config().get("prompt_token_budget")
+    if isinstance(val, (int, float, str)):
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            pass
+    return 8000
 
 
 def embed_footer(author_display: str, query: str, max_query_len: int = 80) -> str:

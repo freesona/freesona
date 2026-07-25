@@ -1,9 +1,9 @@
 import unittest
-import os
 import sys
+from pathlib import Path
 
 # Add workspace directory to path to allow importing utils
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.security import (
     is_public_http_url,

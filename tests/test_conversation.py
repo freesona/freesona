@@ -1,16 +1,15 @@
 # tests/test_conversation.py: Unit tests for ConversationManager
 
-import os
 import sys
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
 import time
 from collections import deque
+from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import utils.conversation as conversation_module
 from utils.conversation import (
     ConversationMessage,
     ConversationState,
@@ -21,11 +20,12 @@ from utils.conversation import (
     clear_conversation,
     get_conversation_stats,
     cleanup_expired_conversations,
-    _conversation_store,
-    _store_lock,
-    _enforce_limits,
-    _estimate_tokens,
 )
+
+_conversation_store = getattr(conversation_module, "_conversation_store")
+_store_lock = getattr(conversation_module, "_store_lock")
+_conversation_key = getattr(conversation_module, "_conversation_key")
+_estimate_tokens = getattr(conversation_module, "_estimate_tokens")
 
 
 class TestConversationMessage(unittest.TestCase):
@@ -78,7 +78,6 @@ class TestConversationKey(unittest.TestCase):
     """Tests for conversation key generation."""
 
     def test_key_format(self):
-        from utils.conversation import _conversation_key
         key = _conversation_key(1, 2, 3)
         self.assertEqual(key, (1, 2, 3))
 

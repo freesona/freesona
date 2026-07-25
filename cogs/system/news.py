@@ -13,7 +13,6 @@ from utils.config import load_config, save_config
 from utils.rss import (
     load_rss_feeds, save_rss_feed, delete_rss_feed,
     parse_feed, load_seen_links, mark_links_seen,
-    DEFAULT_RSS_FEEDS, RSS_DISABLED_KEY,
 )
 from utils.security import is_public_http_url
 
@@ -75,19 +74,34 @@ class NewsCog(commands.Cog):
     async def cog_unload(self):
         self.poll_feeds.cancel()
 
-    def _build_news_embed(self, item, name: str):
+    @staticmethod
+    def _build_news_embed(item, name: str):
         """Standardized embed builder with LogoKit footer icon."""
         logo_url = get_logo_url(item.link)
         
+        # Deduplicate title and summary (Nitter feeds often put tweet text in both)
+        title = item.title[:256]
+        summary = item.summary[:400] if item.summary else ""
+        
+        # If summary starts with title (or title + whitespace/punctuation), strip the duplicate
+        if summary and title:
+            # Normalize for comparison: strip trailing punctuation/whitespace from title
+            title_stripped = title.rstrip(" .,;:!?")
+            if summary.startswith(title_stripped):
+                # Remove the duplicate portion from summary
+                summary = summary[len(title_stripped):].lstrip(" .,;:!? \n\t")
+            elif summary.startswith(title):
+                summary = summary[len(title):].lstrip(" .,;:!? \n\t")
+        
         embed = discord.Embed(
-            title=item.title[:256],
+            title=title,
             url=item.link,
             color=discord.Color.blurple(),
         )
         if item.author:
             embed.set_author(name=item.author[:256])
-        if item.summary:
-            embed.description = item.summary[:400]
+        if summary:
+            embed.description = summary
         if item.image_url:
             embed.set_image(url=item.image_url)
 

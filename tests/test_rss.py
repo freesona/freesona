@@ -3,9 +3,10 @@ import os
 import sys
 import tempfile
 import importlib
+from pathlib import Path
 
 # Add workspace directory to path to allow importing utils
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 class RssTests(unittest.TestCase):
     def setUp(self):

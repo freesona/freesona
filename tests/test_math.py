@@ -1,9 +1,9 @@
 import unittest
 import sys
-import os
+from pathlib import Path
 
 # Add workspace directory to path to allow importing cogs
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cogs.tools.math import is_safe_expression, MathCog
 
@@ -105,4 +105,3 @@ class MathCogTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

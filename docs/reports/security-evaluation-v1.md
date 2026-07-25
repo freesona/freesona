@@ -44,13 +44,13 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Threat Model
 
 ### Actors
-| Actor | Description | Capabilities |
-|-------|-------------|--------------|
-| **Malicious Discord User** | A user in a guild where Freesona is deployed | Can send messages, upload attachments, trigger commands |
-| **Malicious Guild Admin** | A server admin with elevated permissions | Can configure bot settings, manage modules, access sensitive commands |
-| **Malicious Bot Owner** | The owner of the Freesona instance | Full control over bot configuration and behavior |
-| **External Attacker** | An attacker with no direct access to Discord | Can send HTTP requests to exposed endpoints, exploit webhooks |
-| **Compromised Dependency** | A malicious or vulnerable third-party library | Can execute arbitrary code within the bot's process |
+| Actor                      | Description                                   | Capabilities                                                          |
+|----------------------------|-----------------------------------------------|-----------------------------------------------------------------------|
+| **Malicious Discord User** | A user in a guild where Freesona is deployed  | Can send messages, upload attachments, trigger commands               |
+| **Malicious Guild Admin**  | A server admin with elevated permissions      | Can configure bot settings, manage modules, access sensitive commands |
+| **Malicious Bot Owner**    | The owner of the Freesona instance            | Full control over bot configuration and behavior                      |
+| **External Attacker**      | An attacker with no direct access to Discord  | Can send HTTP requests to exposed endpoints, exploit webhooks         |
+| **Compromised Dependency** | A malicious or vulnerable third-party library | Can execute arbitrary code within the bot's process                   |
 
 ### Assets
 - Discord bot token and API keys
@@ -147,20 +147,20 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Secrets Audit
 
 ### Environment Variables
-| Variable | Purpose | Sensitivity | Exposure Risk |
-|----------|---------|-------------|---------------|
-| `BOT_TOKEN` | Discord bot authentication | **Critical** | Low (only used in `main.py:bot_token`) |
-| `GOOGLE_API_KEY` | Gemini API authentication | **Critical** | Low (used in `utils/providers.py` and `utils/search.py`) |
-| `OPENAI_API_KEY` | OpenAI API authentication | **Critical** | Low (used in `utils/providers.py`) |
-| `NVIDIA_API_KEY` / `NIM_API_KEY` | NVIDIA NIM authentication | **Critical** | Low (used in `utils/providers.py`) |
-| `AZURE_AI_KEY` | Azure AI authentication | **Critical** | Low (used in `utils/providers.py`) |
-| `GROQ_API_KEY` | Groq API authentication | **Critical** | Low (used in `utils/providers.py`) |
-| `OPENROUTER_API_KEY` | OpenRouter authentication | **Critical** | Low (used in `utils/providers.py`) |
-| `LOGOKIT_TOKEN` | LogoKit API for RSS embeds | **Medium** | Low (used in `cogs/system/news.py`) |
-| `MVSEP_API_KEY` | MVSEP service authentication | **Medium** | Low (used in MVSEP cog) |
-| `WOLFRAM_APPID_SHORT` / `WOLFRAM_APPID_LLM` | Wolfram Alpha API | **Medium** | Low (used in math cog) |
-| `CHROMA_PERSIST_DIRECTORY` | ChromaDB storage path | **Low** | None |
-| `MEMORY_FILE_PATH` | SQLite database path | **Low** | None |
+| Variable                                    | Purpose                      | Sensitivity  | Exposure Risk                                            |
+|---------------------------------------------|------------------------------|--------------|----------------------------------------------------------|
+| `BOT_TOKEN`                                 | Discord bot authentication   | **Critical** | Low (only used in `main.py:bot_token`)                   |
+| `GOOGLE_API_KEY`                            | Gemini API authentication    | **Critical** | Low (used in `utils/providers.py` and `utils/search.py`) |
+| `OPENAI_API_KEY`                            | OpenAI API authentication    | **Critical** | Low (used in `utils/providers.py`)                       |
+| `NVIDIA_API_KEY` / `NIM_API_KEY`            | NVIDIA NIM authentication    | **Critical** | Low (used in `utils/providers.py`)                       |
+| `AZURE_AI_KEY`                              | Azure AI authentication      | **Critical** | Low (used in `utils/providers.py`)                       |
+| `GROQ_API_KEY`                              | Groq API authentication      | **Critical** | Low (used in `utils/providers.py`)                       |
+| `OPENROUTER_API_KEY`                        | OpenRouter authentication    | **Critical** | Low (used in `utils/providers.py`)                       |
+| `LOGOKIT_TOKEN`                             | LogoKit API for RSS embeds   | **Medium**   | Low (used in `cogs/system/news.py`)                      |
+| `MVSEP_API_KEY`                             | MVSEP service authentication | **Medium**   | Low (used in MVSEP cog)                                  |
+| `WOLFRAM_APPID_SHORT` / `WOLFRAM_APPID_LLM` | Wolfram Alpha API            | **Medium**   | Low (used in math cog)                                   |
+| `CHROMA_PERSIST_DIRECTORY`                  | ChromaDB storage path        | **Low**      | None                                                     |
+| `MEMORY_FILE_PATH`                          | SQLite database path         | **Low**      | None                                                     |
 
 ### Findings
 1. **No hardcoded secrets** were found in the codebase. All sensitive values are loaded from environment variables.
@@ -177,27 +177,27 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Dependency Observations
 
 ### Direct Dependencies
-| Dependency | Purpose | Version Constraint | Risk Assessment |
-|------------|---------|---------------------|-----------------|
-| `discord.py` | Discord API client | Latest | **Low**: Actively maintained, no known critical vulnerabilities |
-| `python-dotenv` | Environment variable loading | Latest | **Low**: Minimal attack surface |
-| `PyYAML` | YAML parsing | Latest | **Medium**: Historically vulnerable to arbitrary code execution (CVE-2020-14343). **Mitigation**: Only used for parsing command dumps, not untrusted input. |
-| `requests` | HTTP requests | Latest | **Low**: No known critical vulnerabilities |
-| `google-genai` | Gemini API client | Latest | **Low**: Official Google library |
-| `fastapi` | Web framework | Latest | **Low**: Actively maintained |
-| `uvicorn` | ASGI server | Latest | **Low**: Actively maintained |
-| `aiohttp` | Async HTTP | Latest | **Low**: Actively maintained |
-| `yt-dlp` | Video downloading | Latest | **Medium**: Executes subprocesses. **Mitigation**: Used in controlled contexts with timeouts. |
-| `aiosqlite` | Async SQLite | Latest | **Low**: No known vulnerabilities |
-| `tzdata` | Timezone data | Latest | **Low**: No attack surface |
-| `sympy` | Symbolic math | Latest | **Low**: No known vulnerabilities |
-| `numpy` | Numerical computing | Latest | **Low**: No known vulnerabilities |
-| `scipy` | Scientific computing | Latest | **Low**: No known vulnerabilities |
-| `matplotlib` | Plotting | Latest | **Low**: No known vulnerabilities |
-| `symengine` | Math backend | Latest | **Low**: No known vulnerabilities |
-| `pypdf` | PDF processing | Latest | **Medium**: Historically vulnerable to arbitrary code execution. **Mitigation**: Used only for text extraction, not rendering. |
-| `chromadb` | Vector database | Latest | **Low**: No known critical vulnerabilities |
-| `onnxruntime` | ML inference | Latest | **Low**: No known critical vulnerabilities |
+| Dependency      | Purpose                      | Version Constraint | Risk Assessment                                                                                                                                             |
+|-----------------|------------------------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `discord.py`    | Discord API client           | Latest             | **Low**: Actively maintained, no known critical vulnerabilities                                                                                             |
+| `python-dotenv` | Environment variable loading | Latest             | **Low**: Minimal attack surface                                                                                                                             |
+| `PyYAML`        | YAML parsing                 | Latest             | **Medium**: Historically vulnerable to arbitrary code execution (CVE-2020-14343). **Mitigation**: Only used for parsing command dumps, not untrusted input. |
+| `requests`      | HTTP requests                | Latest             | **Low**: No known critical vulnerabilities                                                                                                                  |
+| `google-genai`  | Gemini API client            | Latest             | **Low**: Official Google library                                                                                                                            |
+| `fastapi`       | Web framework                | Latest             | **Low**: Actively maintained                                                                                                                                |
+| `uvicorn`       | ASGI server                  | Latest             | **Low**: Actively maintained                                                                                                                                |
+| `aiohttp`       | Async HTTP                   | Latest             | **Low**: Actively maintained                                                                                                                                |
+| `yt-dlp`        | Video downloading            | Latest             | **Medium**: Executes subprocesses. **Mitigation**: Used in controlled contexts with timeouts.                                                               |
+| `aiosqlite`     | Async SQLite                 | Latest             | **Low**: No known vulnerabilities                                                                                                                           |
+| `tzdata`        | Timezone data                | Latest             | **Low**: No attack surface                                                                                                                                  |
+| `sympy`         | Symbolic math                | Latest             | **Low**: No known vulnerabilities                                                                                                                           |
+| `numpy`         | Numerical computing          | Latest             | **Low**: No known vulnerabilities                                                                                                                           |
+| `scipy`         | Scientific computing         | Latest             | **Low**: No known vulnerabilities                                                                                                                           |
+| `matplotlib`    | Plotting                     | Latest             | **Low**: No known vulnerabilities                                                                                                                           |
+| `symengine`     | Math backend                 | Latest             | **Low**: No known vulnerabilities                                                                                                                           |
+| `pypdf`         | PDF processing               | Latest             | **Medium**: Historically vulnerable to arbitrary code execution. **Mitigation**: Used only for text extraction, not rendering.                              |
+| `chromadb`      | Vector database              | Latest             | **Low**: No known critical vulnerabilities                                                                                                                  |
+| `onnxruntime`   | ML inference                 | Latest             | **Low**: No known critical vulnerabilities                                                                                                                  |
 
 ### Indirect Dependencies
 - No direct audit of transitive dependencies was performed, but the project uses standard, well-maintained libraries.
@@ -212,19 +212,19 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Findings
 
 ### Critical
-*No critical findings identified.*
+No critical findings were identified.
 
 ### High
-*No high findings identified.*
+No high findings were identified.
 
 ### Medium
-*No medium findings identified.*
+No medium findings were identified.
 
 ### Low
-*No low findings identified.*
+No low findings were identified.
 
 ### Informational
-*No informational findings identified.*
+No informational findings were identified.
 
 ---
 
@@ -309,13 +309,13 @@ After a thorough review of the Freesona codebase, **no release-blocking security
 6. **Rate limiting** to prevent abuse.
 
 ### Recommendations for v1.0
-| Area | Recommendation | Priority |
-|------|----------------|----------|
-| **Dependency Pinning** | Pin versions in `requirements.txt` to avoid supply chain attacks. | **High** |
-| **Output Validation** | Integrate `unsafe_output` checks into the main generation pipeline. | **Medium** |
-| **Webhook Authentication** | Add optional authentication (e.g., HMAC) to MVSEP webhook. | **Medium** |
-| **Secret Management** | For production, use a secret manager instead of environment variables. | **Low** |
-| **Dependency Scanning** | Regularly scan dependencies for vulnerabilities using `pip-audit`. | **Low** |
+| Area                       | Recommendation                                                         | Priority   |
+|----------------------------|------------------------------------------------------------------------|------------|
+| **Dependency Pinning**     | Pin versions in `requirements.txt` to avoid supply chain attacks.      | **High**   |
+| **Output Validation**      | Integrate `unsafe_output` checks into the main generation pipeline.    | **Medium** |
+| **Webhook Authentication** | Add optional authentication (e.g., HMAC) to MVSEP webhook.             | **Medium** |
+| **Secret Management**      | For production, use a secret manager instead of environment variables. | **Low**    |
+| **Dependency Scanning**    | Regularly scan dependencies for vulnerabilities using `pip-audit`.     | **Low**    |
 
 ### Final Verdict
 **Status**: ✅ **Ready for v1.0 Release**  

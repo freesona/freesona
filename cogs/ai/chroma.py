@@ -11,7 +11,6 @@ from utils.chroma import (
     get_knowledge_by_persona,
     list_knowledge,
     query_knowledge,
-    REQUIRED_METADATA_FIELDS,
     VALID_CANON_LEVELS,
 )
 

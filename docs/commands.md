@@ -4,6 +4,8 @@ Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as 
 
 ## AI Commands
 
+AI commands are organized by command type in dedicated AI cog modules (`genai_generation`, `genai_persona`, `genai_memory`, `genai_channel`, `genai_autonomy`) and loaded through the aggregate `cogs.ai.genai` extension.
+
 | Command                                                   | Action                                                                                        | Permissions   |
 |:----------------------------------------------------------|:----------------------------------------------------------------------------------------------|:--------------|
 | `~write <prompt>` (`/write`, alias `~w`)                  | Structured output using active persona                                                        | Anyone        |
@@ -14,6 +16,7 @@ Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as 
 | `/kbadd <title> [content] [attachment]`                   | Add text or a PDF/EPUB/TXT/JSON attachment to the local knowledge base (opens metadata modal) | Administrator |
 | `/kblist`                                                 | List the newest knowledge base entries                                                        | Administrator |
 | `/kbdelete <id>`                                          | Delete a knowledge base entry by ID                                                           | Administrator |
+| `/kbpersona <persona> [limit]`                            | List all knowledge entries for a specific persona                                             | Administrator |
 
 ---
 
@@ -23,6 +26,7 @@ The `/kbadd` command opens a modal with the following fields:
 
 **Required:**
 | Field | Description | Example |
+
 |-------|-------------|---------|
 | Persona ID | Persona identifier | `chisato_nishikigi` |
 | Source | Original source reference | `Episode 06` |
@@ -32,6 +36,7 @@ The `/kbadd` command opens a modal with the following fields:
 
 **Optional:**
 | Field | Description | Example |
+
 |-------|-------------|---------|
 | Scene | Scene/location description | `Aquarium visit` |
 | Speaker | Speaking character (auto-sets entry_type to dialogue) | `Chisato` |
@@ -90,8 +95,8 @@ The bot responds to messages in the configured conversation channel. `all` repli
 | `/module enable <name>`                        | Enable and load a module                                                                     | Administrator |
 | `/module disable <name>`                       | Disable and unload a module                                                                  | Administrator |
 | `/module reload <name>`                        | Reload an enabled module                                                                     | Administrator |
-| `/model show`                                  | Show the active Gemini model                                                                 | Bot Owner     |
-| `/model set <name>`                            | Set the active Gemini model                                                                  | Bot Owner     |
+| `/model show`                                  | Show the active model                                                                        | Bot Owner     |
+| `/model set <name>`                            | Set the active model                                                                         | Bot Owner     |
 | `/model reset`                                 | Reset to the environment/default model                                                       | Bot Owner     |
 | `/provider show`                               | Show the active AI provider                                                                  | Bot Owner     |
 | `/provider set <name>`                         | Set the active provider (`gemini`, `openai`, `ollama`, `nim`, `azure`, `groq`, `openrouter`) | Bot Owner     |
@@ -149,6 +154,7 @@ Warn thresholds support `timeout <duration>`, `kick`, and `ban` actions triggere
 | `~help [command]`               | Show help for commands                              | Anyone           |
 | `~prefix <symbol>`              | Change command prefix                               | Administrator    |
 | `~math <equation>`              | Solve an equation via Wolfram\|Alpha                | Anyone           |
+| `~plot <function>`              | Generate a 2D plot of a mathematical function       | Anyone           |
 | `~download <url>` (`~dl`)       | Download a video (1080p → 720p → 480p → compressed) | Anyone           |
 | `~audio <url>` (`~mp3`)         | Download audio as MP3                               | Anyone           |
 | `~ping`                         | Show bot and Discord API latency                    | Anyone           |

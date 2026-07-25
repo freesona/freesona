@@ -17,10 +17,6 @@ ENV/
 *.db
 *.db-shm
 *.db-wal
-# Runtime databases
-*.db
-*.db-shm
-*.db-wal
 
 # User/private notes
 persona.txt
@@ -39,17 +35,9 @@ logs/
 # Local/internal notes (optional)
 docs/internal/
 
-# Local/internal notes (optional)
-docs/internal/
-
 # OS junk
 .DS_Store
 Thumbs.db
-
-# Local configs
-config.json
-persona.json
-.chroma/
 
 # Local configs
 config.json
@@ -74,9 +62,9 @@ debug.log
 commands_dump.yaml
 .continue/mcpServers/new-mcp-server.yaml
 pyright_output.json
-pyright_output.json
 
 # Junie
 .junie/plans/
 .elogs/
 docs/reports
+diags.txt

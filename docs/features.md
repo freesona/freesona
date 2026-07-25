@@ -5,22 +5,25 @@
 Freesona assembles prompts using a modular **PromptBuilder** system with independent **ContextProvider** components. Each provider contributes a single, well-defined context block without knowledge of the others. Provider ordering is declared in a single registry (`utils/prompt_builder.py`) and can be inspected at runtime via `inspect()`.
 
 **Provider Priority Order:**
-| Priority | Provider | Mutability | Description |
-|:--------:|:---------|:-----------|:------------|
-| 10 | System | IMMUTABLE | Model behavior constraints, safety, format |
-| 20 | Persona | IMMUTABLE | Structured persona fields (core, background, beliefs, style, instructions) |
-| 25 | Canon | IMMUTABLE | Modular canon blocks: identity, beliefs, motivations, rules, world assumptions, explanations |
-| 30 | Conversation History | MUTABLE | Recent conversation context (summary + messages) from ConversationManager |
-| 40 | User Memory | MUTABLE | Long-term facts about the user (extracted from conversation) |
-| 50 | Character Memory | MUTABLE | Shared experiences: promises, recurring jokes, relationship progression |
-| 55 | Guild World | MUTABLE | Environmental context: server name, channel name, topic |
-| 60 | Persona Knowledge Base | IMMUTABLE | Retrieved canonical knowledge from source material (RAG) |
+
+| Priority | Provider               | Mutability | Description                                                                                  |
+|:---------|:-----------------------|:-----------|:---------------------------------------------------------------------------------------------|
+| 10       | System                 | IMMUTABLE  | Model behavior constraints, safety, format                                                   |
+| 20       | Persona                | IMMUTABLE  | Structured persona fields (core, background, beliefs, style, instructions)                   |
+| 25       | Canon                  | IMMUTABLE  | Modular canon blocks: identity, beliefs, motivations, rules, world assumptions, explanations |
+| 30       | Conversation History   | MUTABLE    | Recent conversation context (summary + messages) from ConversationManager                    |
+| 40       | User Memory            | MUTABLE    | Long-term facts about the user (extracted from conversation)                                 |
+| 50       | Character Memory       | MUTABLE    | Shared experiences: promises, recurring jokes, relationship progression                      |
+| 55       | Guild World            | MUTABLE    | Environmental context: server name, channel name, topic                                      |
+| 60       | Persona Knowledge Base | IMMUTABLE  | Retrieved canonical knowledge from source material (RAG)                                     |
 
 ---
 
 ## Persona System
 
 Freesona's persona is split into five structured fields edited through a button-based `/setpersona` panel — no restart required.
+
+
 
 | Field                          | Edited via    |
 |:-------------------------------|:--------------|
@@ -51,6 +54,7 @@ Freesona treats memory as three distinct, non-overlapping systems:
 Freesona owns conversation history through the **ConversationManager** — a provider-agnostic short-term memory subsystem. All providers (Gemini, OpenAI, Ollama, NIM, Azure, Groq, OpenRouter) are **stateless** and receive identical conversation context via the system prompt.
 
 **ConversationManager responsibilities:**
+
 - Stores recent messages per `(guild_id, channel_id, user_id)` scope
 - Enforces configurable limits:
   - `conversation_max_messages` (default: 20)
@@ -145,7 +149,9 @@ The knowledge base stores **canonical, factual information** about a persona —
 
 ### Architecture
 
-```
+
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Ingestion Pipeline                           │
 ├─────────────────────────────────────────────────────────────────┤
@@ -169,13 +175,15 @@ The knowledge base stores **canonical, factual information** about a persona —
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+
+
 Where supported by the vector database, metadata filtering occurs before or alongside vector search to reduce the candidate set. An optional re-ranking stage can be added later without changing the overall architecture.
 
 ### Knowledge Lifecycle
 
 Embeddings, metadata schemas, and source material will inevitably change over the life of the project. The knowledge lifecycle acknowledges this:
 
-```
+```text
 Source Material
       ↓
 Cleaning
@@ -198,6 +206,8 @@ When embedding models change or metadata schemas evolve, entries can be re-inges
 ### Data Model
 
 Each knowledge entry represents **one semantic unit** (atomic chunk):
+
+
 
 ```json
 {
@@ -222,14 +232,20 @@ Each knowledge entry represents **one semantic unit** (atomic chunk):
 }
 ```
 
+
+
 #### Schema Versioning
 
 Knowledge entries include version metadata so future migrations remain manageable:
 
+
+
 | Field             | Description                                 |
-|-------------------|---------------------------------------------|
+|:------------------|:--------------------------------------------|
 | `schema_version`  | Schema version of the entry (default: `1`)  |
 | `embedding_model` | Embedding model used to generate the vector |
+
+
 
 These fields are automatically populated during ingestion and should be treated as immutable for the lifetime of the entry.
 
@@ -238,6 +254,7 @@ These fields are automatically populated during ingestion and should be treated 
 Metadata should describe **objective facts** about the source material rather than inferred personality traits.
 
 **Prefer:**
+
 - `speaker` — Who is speaking
 - `episode` / `chapter` — Structural location in the source
 - `source_type` — Media format (anime, novel, manga, game, etc.)
@@ -246,6 +263,7 @@ Metadata should describe **objective facts** about the source material rather th
 - `canon_level` — Canonical priority
 
 **Avoid storing subjective interpretations such as:**
+
 - `tone` — (e.g., "cheerful", "melancholic")
 - `intent` — (e.g., "comforting", "manipulative")
 - `emotional_state` — (e.g., "happy", "angry")
@@ -254,18 +272,24 @@ These inferences belong to the language model during generation. Storing them in
 
 #### Required Metadata Fields
 
+
+
 | Field         | Description                                                                                 |
-|---------------|---------------------------------------------------------------------------------------------|
+|:--------------|:--------------------------------------------------------------------------------------------|
 | `persona`     | Persona identifier (e.g., `chisato_nishikigi`)                                              |
 | `source`      | Original source reference (e.g., `Episode 06`, `Chapter 12`)                                |
 | `source_type` | Media type: `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` |
 | `entry_type`  | Content type: `dialogue`, `narration`, `event`, `relationship`, `description`               |
 | `topics`      | Semantic topics for retrieval (non-empty list)                                              |
 
+
+
 #### Optional Metadata Fields
 
+
+
 | Field         | Description                                                                  |
-|---------------|------------------------------------------------------------------------------|
+|:--------------|:-----------------------------------------------------------------------------|
 | `episode`     | Episode number                                                               |
 | `chapter`     | Chapter number                                                               |
 | `scene`       | Scene description                                                            |
@@ -273,6 +297,8 @@ These inferences belong to the language model during generation. Storing them in
 | `timestamp`   | Source timestamp (e.g., `2023-01-15`, `S01E06 12:34`)                        |
 | `canon_level` | Canon priority: `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` |
 | `tags`        | Additional indexing tags (comma-separated)                                   |
+
+
 
 ### Ingestion Pipeline
 
@@ -292,10 +318,12 @@ Each stage is deterministic and can be tested independently.
 
 Only two sources are authorized to define objective facts about the persona:
 
-1. **Canon Framework** (`CanonContextProvider`, priority 25) — Authored, immutable canon blocks explaining the *why* behind behavior: core identity, core beliefs, core motivations, behavioral rules, world assumptions, canon explanations.
+1. **Canon Framework** (`CanonContextProvider`, priority 25) — Authored, immutable canon blocks that give the reason for behavior: core identity, core beliefs, core motivations, behavioral rules, world assumptions, and canon explanations.
 2. **Persona Knowledge Base** (`PersonaKnowledgeBaseProvider`, priority 60) — Retrieved canonical knowledge from source material (RAG), filtered by `persona_id`.
 
 All other context providers are **strictly descriptive** and must never define what the character "is" or "believes" in a canonical sense:
+
+
 
 | Provider                      | Authority               | What It May Describe                                                                                    |
 |:------------------------------|:------------------------|:--------------------------------------------------------------------------------------------------------|
@@ -306,7 +334,10 @@ All other context providers are **strictly descriptive** and must never define w
 | `CharacterMemoryProvider`     | Relationship history    | *What they've experienced together*: promises, shared events, recurring jokes, relationship progression |
 | `GuildWorldContextProvider`   | Environmental grounding | *Where they are*: server name, channel context, local norms                                             |
 
-**Enforcement:**
+
+
+**Enforcement**:
+
 - Canon and PKB are `IMMUTABLE` — they change only via explicit admin action (`/setpersona`, `/kbadd`, `/kbdelete`)
 - All other providers are `MUTABLE` — they evolve through interaction
 - Code review and tests must verify no `MUTABLE` provider writes canonical facts (e.g., "Chisato grew up in Osaka" must never appear in Character Memory)
@@ -323,7 +354,7 @@ The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `u
 4. An optional re-ranking stage can be added later without changing the overall architecture
 5. Assembles context in the **Relevant Canonical Context** format:
 
-```
+```text
 Relevant Canonical Context
 1. Document text...
    (Source: Episode 06, Type: dialogue, Scene: Aquarium, Speaker: Chisato, Chapter: , Timestamp: S01E06 12:34, Canon: canon)
@@ -333,7 +364,7 @@ Relevant Canonical Context
 
 This context is appended to the persona prompt **after** long-term memory, following the PromptBuilder priority order:
 
-```
+```text
 System (10) → Persona (20) → Canon (25) → Conversation History (30) → User Memory (40) → Character Memory (50) → Guild World (55) → PKB (60) → Generation
 ```
 
@@ -347,6 +378,7 @@ System (10) → Persona (20) → Canon (25) → Conversation History (30) → Us
 ### Provider Independence
 
 The knowledge base:
+
 - Does **not** depend on any specific AI provider (Gemini, OpenAI, Ollama, etc.)
 - Does **not** use provider-native memory systems
 - Stores embeddings in ChromaDB (local or remote)
@@ -356,12 +388,14 @@ The knowledge base:
 ### Configuration
 
 Environment variables (see `.env.sample`):
+
 - `CHROMA_COLLECTION` — Collection name (default: `freesona`)
 - `CHROMA_PERSIST_DIRECTORY` — Storage path (default: `./.chroma`)
 
 Config keys (see `config.sample.json`):
+
 - `kb_enabled` — Enable/disable knowledge base retrieval (default: `true`)
-- `kb_top_k` — Number of entries to retrieve (default: `5`)
+- `kb_top_k` — Number of knowledge base entries to retrieve per query (default: `5`). Higher values provide more context to the model (better accuracy for complex questions) but increase token usage and latency. Lower values are faster but may miss relevant details. Typical range: 3–10.
 - `kb_collection` — Override collection name
 - `kb_persist_directory` — Override storage path
 
@@ -388,6 +422,8 @@ This is like a real Discord user: they participate in many servers, naturally co
 
 Freesona routes generation through a provider abstraction so the same commands can target different backends without changing command code. Supported providers:
 
+
+
 | Provider         | Key env var                         |
 |:-----------------|:------------------------------------|
 | Gemini (default) | `GOOGLE_API_KEY`                    |
@@ -398,6 +434,8 @@ Freesona routes generation through a provider abstraction so the same commands c
 | Groq             | `GROQ_API_KEY`                      |
 | OpenRouter       | `OPENROUTER_API_KEY`                |
 
+
+
 Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching credentials. `/model set` and `/model reset` change the active model at runtime without a restart. The provider abstraction is shared across Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, and OpenRouter; all providers are now stateless and receive conversation context via the system prompt.
 
 ---
@@ -405,6 +443,8 @@ Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching crede
 ## Autonomous Mode
 
 When enabled, the bot can join an active conversation unprompted. It uses a confidence-scored intent evaluator (`utils/intent.py`) rather than a random dice roll:
+
+
 
 | Signal                                           | Score |
 |:-------------------------------------------------|:------|
@@ -416,6 +456,8 @@ When enabled, the bot can join an active conversation unprompted. It uses a conf
 | Channel has existing conversation memory         | +0.10 |
 | Short filler message (lol, ok, emoji-only)       | −0.30 |
 | Long monologue with no question and no mention   | −0.20 |
+
+
 
 Frequency thresholds: `low` = 0.70, `default` = 0.50, `high` = 0.35. A 120-second per-channel cooldown prevents it from dominating a conversation. A separate 60-second per-user cooldown prevents repeated autonomous responses to the same user.
 
@@ -487,6 +529,8 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 
 ### Configurable Values
 
+
+
 | Key                                      | Type   | Default      | Description                                           |
 |:-----------------------------------------|:-------|:-------------|:------------------------------------------------------|
 | `mvsep_poll_interval`                    | int    | 5            | Seconds between MVSEP API polling checks              |
@@ -509,7 +553,11 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 | `canon_version`                          | string | "1.0.0"      | Current canon version                                 |
 | `canon_file_path`                        | string | "./canon.db" | Path to canon database                                |
 
+
+
 ### Commands
+
+
 
 | Command                     | Action                                            | Permissions |
 |:----------------------------|:--------------------------------------------------|:------------|
@@ -517,6 +565,8 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 | `/config list`              | List all configurable keys with descriptions      | Bot Owner   |
 | `/config set <key> <value>` | Set a config value (auto type-converted)          | Bot Owner   |
 | `/config reset <key>`       | Reset a config key to its default value           | Bot Owner   |
+
+
 
 ### Example Usage
 

@@ -4,11 +4,10 @@ import io
 import json
 import logging
 import os
-import re
 import uuid
 import zipfile
-from typing import Any
-from xml.etree import ElementTree as ET
+from typing import Any, Protocol, cast
+import xml.etree.ElementTree as element_tree
 
 logger = logging.getLogger("FreesonaBot")
 
@@ -22,6 +21,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _chroma_client: Any = None
+
+
+class ChromaCollection(Protocol):
+    """Minimum ChromaDB collection interface used by this module."""
+
+    def add(self, **kwargs: Any) -> None: ...
+
+    def delete(self, **kwargs: Any) -> None: ...
+
+    def get(self, **kwargs: Any) -> dict[str, Any]: ...
+
+    def query(self, **kwargs: Any) -> dict[str, Any]: ...
 
 # Required metadata fields per the Persona Knowledge Base schema
 REQUIRED_METADATA_FIELDS = frozenset(("persona", "source", "source_type", "entry_type", "topics"))
@@ -44,12 +55,13 @@ def get_chroma_client() -> Any | None:
     return _chroma_client
 
 
-def get_collection(collection_name: str | None = None) -> Any | None:
+def get_collection(collection_name: str | None = None) -> ChromaCollection | None:
     client = get_chroma_client()
     if client is None:
         return None
+    resolved_client = cast(Any, client)
     name = collection_name or os.getenv("CHROMA_COLLECTION", "freesona")
-    return client.get_or_create_collection(name=name)
+    return cast(ChromaCollection, resolved_client.get_or_create_collection(name=name))
 
 
 def parse_discord_chat_json(raw_bytes: bytes) -> str:
@@ -110,7 +122,7 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 container_data = archive.read("META-INF/container.xml")
-                container = ET.fromstring(container_data)
+                container = element_tree.fromstring(container_data)
                 
                 rootfile = None
                 for elem in container.iter():
@@ -127,7 +139,7 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                     return ""
 
                 opf_data = archive.read(opf_path)
-                opf_root = ET.fromstring(opf_data)
+                opf_root = element_tree.fromstring(opf_data)
 
                 item_map = {}
                 for item in opf_root.iter():
@@ -148,9 +160,10 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                 opf_dir = os.path.dirname(opf_path) if '/' in opf_path else ''
 
                 for item_id in spine_ids:
-                    href = item_map.get(item_id)
-                    if not href:
+                    href_value = item_map.get(item_id)
+                    if not isinstance(href_value, str) or not href_value:
                         continue
+                    href = href_value
 
                     if opf_dir and not href.startswith(opf_dir):
                         full_href = f"{opf_dir}/{href}" if opf_dir else href
@@ -165,7 +178,7 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                         except KeyError:
                             continue
 
-                    chapter_root = ET.fromstring(chapter_xml)
+                    chapter_root = element_tree.fromstring(chapter_xml)
                     body = None
                     for elem in chapter_root.iter():
                         if elem.tag.endswith('body'):

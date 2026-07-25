@@ -5,12 +5,13 @@ import sys
 import tempfile
 import shutil
 import json
+from pathlib import Path
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 from datetime import datetime, timezone
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 class TestMemoryType(unittest.TestCase):
@@ -205,6 +206,7 @@ class TestCharacterMemoryDatabase(unittest.IsolatedAsyncioTestCase):
         
         retrieved = await get_memory_by_id("mem-1")
         assert retrieved is not None
+        retrieved = retrieved  # type: ignore[reportAssignmentType]
         self.assertEqual(retrieved.content, "Updated content")
         self.assertEqual(retrieved.importance, 0.8)
 
@@ -503,7 +505,7 @@ class TestExtractionPipeline(unittest.IsolatedAsyncioTestCase):
             {"type": "SHARED_EXPERIENCE", "content": "Low importance", "importance": 0.1, "source_message_ids": []},
         ])
         
-        from utils.character_memory import extract_memories_from_conversation, MIN_IMPORTANCE
+        from utils.character_memory import extract_memories_from_conversation
         
         memories = await extract_memories_from_conversation(
             guild_id=1,
