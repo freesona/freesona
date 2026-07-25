@@ -85,7 +85,6 @@ def save_persona_json(data: dict):
     with open(AI_PERSONA_JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-
 def assemble_persona(data: dict) -> str:
     xml_tags = {
         "system_instructions": "system_instructions",
@@ -93,6 +92,7 @@ def assemble_persona(data: dict) -> str:
         "background":          "background",
         "beliefs":             "beliefs",
         "language":            "language",
+        "temperature":         "temperature",
     }
     parts = []
     for f in ASSEMBLY_ORDER:
@@ -101,7 +101,6 @@ def assemble_persona(data: dict) -> str:
         if value:
             parts.append(f"<{tag}>\n{value}\n</{tag}>")
     return "\n\n".join(parts)
-
 
 def load_legacy_persona() -> Optional[str]:
     if os.path.exists(AI_PERSONA_PATH):
