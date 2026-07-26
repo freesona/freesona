@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 from typing import Optional
 import discord
 from discord import app_commands
@@ -33,8 +34,14 @@ PROVIDER_CHOICES: list[str] = ["gemini", "openai", "ollama", "nim", "azure", "gr
 def is_owner_check():
     """Check if the interaction user is the bot owner (for app_commands)."""
     async def predicate(interaction: discord.Interaction) -> bool:
-        info = await interaction.client.application_info()
-        return info.owner == interaction.user
+        try:
+            return await interaction.client.is_owner(interaction.user)
+        except Exception as e:
+            # Log the error but don't fail silently - let the check fail
+            logging.getLogger(__name__).warning(
+                "is_owner_check failed for user %s: %s", interaction.user, e
+            )
+            return False
     return app_commands.check(predicate)
 
 
