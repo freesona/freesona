@@ -29,6 +29,14 @@ MODEL_CHOICES: list[str] = [
 
 PROVIDER_CHOICES: list[str] = ["gemini", "openai", "ollama", "nim", "azure", "groq", "openrouter"]
 
+
+def is_owner_check():
+    """Check if the interaction user is the bot owner (for app_commands)."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        return await interaction.client.is_owner(interaction.user)
+    return app_commands.check(predicate)
+
+
 # Config key categories for organized display
 CONFIG_CATEGORIES = {
     "Core": [
@@ -1035,7 +1043,7 @@ async def logging_enable(interaction: discord.Interaction, section: app_commands
     app_commands.Choice(name="Webhook", value="webhook"),
 ])
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.check(app_commands.checks.is_owner())  # type: ignore[attr-defined]
+@is_owner_check()
 async def logging_disable(interaction: discord.Interaction, section: app_commands.Choice[str]):
 
     key = LOG_SECTIONS.get(section.value)
@@ -1064,7 +1072,7 @@ async def logging_disable(interaction: discord.Interaction, section: app_command
     app_commands.Choice(name="Webhook", value="webhook"),
 ])
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.check(app_commands.checks.is_owner())  # type: ignore[attr-defined]
+@is_owner_check()
 async def logging_toggle(interaction: discord.Interaction, section: app_commands.Choice[str]):
 
     key = LOG_SECTIONS.get(section.value)
@@ -1085,7 +1093,7 @@ async def logging_toggle(interaction: discord.Interaction, section: app_commands
 @logging_group.command(name="setchannel", description="Set the Discord channel for log output")
 @app_commands.describe(channel="Discord channel to send logs to")
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.check(app_commands.checks.is_owner())  # type: ignore[attr-defined]
+@is_owner_check()
 async def logging_setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
 
     config = load_config()
@@ -1097,7 +1105,7 @@ async def logging_setchannel(interaction: discord.Interaction, channel: discord.
 
 @logging_group.command(name="clearchannel", description="Clear the Discord log channel setting")
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.check(app_commands.checks.is_owner())  # type: ignore[attr-defined]
+@is_owner_check()
 async def logging_clearchannel(interaction: discord.Interaction):
 
     config = load_config()
@@ -1116,7 +1124,7 @@ async def logging_clearchannel(interaction: discord.Interaction):
     app_commands.Choice(name="ERROR", value="ERROR"),
 ])
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.check(app_commands.checks.is_owner())  # type: ignore[attr-defined]
+@is_owner_check()
 async def logging_setlevel(interaction: discord.Interaction, level: app_commands.Choice[str]):
 
     config = load_config()
@@ -1131,7 +1139,7 @@ async def logging_setlevel(interaction: discord.Interaction, level: app_commands
 @logging_group.command(name="test", description="Send a test log message to the configured channel")
 @app_commands.describe(message="Test message to send")
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.check(app_commands.checks.is_owner())  # type: ignore[attr-defined]
+@is_owner_check()
 async def logging_test(interaction: discord.Interaction, message: str = "Test log message"):
 
     await send_log_message(interaction.client, message, "INFO")  # type: ignore[arg-type]
