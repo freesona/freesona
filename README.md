@@ -287,7 +287,8 @@ Licensed under the **MIT License**. See [LICENSE](LICENSE).
 
 ### Short-term
 
-- [ ] Optional generation logging — local-only logs for abuse reporting and debugging; disabled by default, no data leaves the host
+- [x] Optional generation logging — local-only logs for abuse reporting and debugging; disabled by default, no data leaves the host; configurable Discord channel and 3-month rotating file output
+- [x] Granular logging sections — per-section enable/disable (AI, Memory, Media, Moderation, Security, Webhook, General, Config) via `/logging` commands
 
 ### Medium-term
 

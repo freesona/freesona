@@ -36,5 +36,19 @@
     "kb_enabled": true,
     "kb_top_k": 5,
     "kb_collection": null,
-    "kb_persist_directory": null
+    "kb_persist_directory": null,
+    "log_enabled": false,
+    "log_channel_id": 0,
+    "log_level": "INFO",
+    "log_file_path": "logs/freesona.log",
+    "log_file_max_months": 3,
+    "log_include_discord": true,
+    "log_section_general": true,
+    "log_section_config": false,
+    "log_section_ai": true,
+    "log_section_memory": false,
+    "log_section_media": false,
+    "log_section_moderation": false,
+    "log_section_security": true,
+    "log_section_webhook": false
 }

@@ -9,10 +9,43 @@
 from __future__ import annotations
 
 import logging
+import discord
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
 logger = logging.getLogger("FreesonaBot")
+
+
+# =============================================================================
+# Channel Info Dataclass
+# =============================================================================
+
+@dataclass
+class GuildChannelInfo:
+    """
+    Lightweight channel metadata for KB 2.0 and environmental awareness.
+    
+    This is NOT memory — it's the current server structure.
+    Fetched fresh when needed, no persistence.
+    """
+    id: int
+    name: str
+    type: str  # "text", "voice", "category", "stage", "forum", "thread"
+    topic: Optional[str] = None
+    position: int = 0
+    category_id: Optional[int] = None
+    nsfw: bool = False
+    
+    def format_for_prompt(self) -> str:
+        """Format as a compact line for prompt injection."""
+        parts = [f"#{self.name}"]
+        if self.topic:
+            parts.append(f"({self.topic})")
+        if self.type != "text":
+            parts.append(f"[{self.type}]")
+        if self.nsfw:
+            parts.append("[NSFW]")
+        return " ".join(parts)
 
 
 # =============================================================================
@@ -42,6 +75,17 @@ class GuildWorldAccessor(Protocol):
     async def get_guild_member_count(self, guild_id: int) -> Optional[int]:
         """Return approximate member count, or None if unavailable."""
         ...
+    
+    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
+        """
+        Return a list of all channels in the guild with basic metadata.
+        
+        Useful for KB 2.0 to understand server structure, tag knowledge to channels,
+        or let the persona reference other channels by name.
+        
+        Returns empty list if unavailable.
+        """
+        ...
 
 
 # Default no-op accessor (used when Discord context is unavailable)
@@ -63,6 +107,10 @@ class NullGuildWorldAccessor:
     async def get_guild_member_count(self, guild_id: int) -> Optional[int]:
         _ = guild_id
         return None
+    
+    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
+        _ = guild_id
+        return []
 
 
 NULL_ACCESSOR = NullGuildWorldAccessor()
@@ -178,13 +226,63 @@ class DiscordGuildWorldAccessor:
     
     async def get_channel_topic(self, channel_id: int) -> Optional[str]:
         channel = self.bot.get_channel(channel_id)
-        if channel and hasattr(channel, 'topic') and channel.topic:
-            return channel.topic
-        return None
+        topic = getattr(channel, 'topic', None) if channel else None
+        return topic
     
     async def get_guild_member_count(self, guild_id: int) -> Optional[int]:
         guild = self.bot.get_guild(guild_id)
         return guild.member_count if guild else None
+    
+    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
+        """
+        Return all channels in the guild with lightweight metadata.
+        
+        Uses bot's cache — no API calls. Includes text, voice, category,
+        stage, forum, and thread channels.
+        
+        Returns empty list if guild not in cache.
+        """
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return []
+        
+        channels = []
+        for channel in guild.channels:
+            # Determine channel type
+            channel_type = "unknown"
+            if isinstance(channel, discord.TextChannel):
+                channel_type = "text"
+            elif isinstance(channel, discord.VoiceChannel):
+                channel_type = "voice"
+            elif isinstance(channel, discord.CategoryChannel):
+                channel_type = "category"
+            elif isinstance(channel, discord.StageChannel):
+                channel_type = "stage"
+            elif isinstance(channel, discord.ForumChannel):
+                channel_type = "forum"
+            elif isinstance(channel, discord.Thread):
+                channel_type = "thread"
+            
+            # Get topic (only text/forum/stage channels have topics)
+            topic = getattr(channel, 'topic', None)
+            
+            # Get NSFW flag (text/forum/voice channels)
+            nsfw = getattr(channel, 'nsfw', False)
+            
+            # Get category/parent
+            category_id = getattr(channel, 'category_id', None)
+            
+            channels.append(GuildChannelInfo(
+                id=channel.id,
+                name=channel.name,
+                type=channel_type,
+                topic=topic,
+                position=getattr(channel, 'position', 0),
+                category_id=category_id,
+                nsfw=nsfw,
+            ))
+        
+        return channels
 
 
 __all__ = [
@@ -194,4 +292,5 @@ __all__ = [
     "GuildWorldContext",
     "build_guild_world_context",
     "DiscordGuildWorldAccessor",
+    "GuildChannelInfo",
 ]
