@@ -28,11 +28,11 @@ The authoritative provider ordering is declared in `utils/prompt_builder.py::_ge
 |:--------:|:--------------------------------|:--------------|:---------------------|
 |    10    | `SystemContextProvider`         | IMMUTABLE     | Implemented          |
 |    20    | `PersonaContextProvider`        | IMMUTABLE     | Implemented          |
-|  **25**  | **`CanonContextProvider`**      | **IMMUTABLE** | **Planned (Step 4)** |
+|  **25**  | **`CanonContextProvider`**      | **IMMUTABLE** | **Implemented**      |
 |    30    | `ConversationHistoryProvider`   | MUTABLE       | Implemented          |
 |    40    | `UserMemoryProvider`            | MUTABLE       | Implemented          |
-|    50    | `CharacterMemoryProvider`       | MUTABLE       | Placeholder (Step 3) |
-|  **55**  | **`GuildWorldContextProvider`** | **MUTABLE**   | **Planned**          |
+|    50    | `CharacterMemoryProvider`       | MUTABLE       | **Implemented**      |
+|  **55**  | **`GuildWorldContextProvider`** | **MUTABLE**   | **Implemented**      |
 |    60    | `PersonaKnowledgeBaseProvider`  | IMMUTABLE     | Implemented          |
 
 > **Rule**: New providers register via priority in `_get_default_providers()`. No other code determines ordering.
@@ -71,7 +71,7 @@ The authoritative provider ordering is declared in `utils/prompt_builder.py::_ge
 
 ---
 
-### 3.3 CanonContextProvider (Priority 25, IMMUTABLE) — **Planned (Step 4)**
+### 3.3 CanonContextProvider (Priority 25, IMMUTABLE) — **Implemented**
 
 | Attribute          | Definition                                                                                                                                                                                                  |
 |:-------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -118,7 +118,7 @@ The authoritative provider ordering is declared in `utils/prompt_builder.py::_ge
 
 ---
 
-### 3.6 CharacterMemoryProvider (Priority 50, MUTABLE) — **Placeholder (Step 3)**
+### 3.6 CharacterMemoryProvider (Priority 50, MUTABLE) — **Implemented**
 
 | Attribute          | Definition                                                                                                                                                                                                                                                                                                                                                                                                                         |
 |:-------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -133,7 +133,7 @@ The authoritative provider ordering is declared in `utils/prompt_builder.py::_ge
 
 ---
 
-### 3.7 GuildWorldContextProvider (Priority 55, MUTABLE) — **Planned**
+### 3.7 GuildWorldContextProvider (Priority 55, MUTABLE) — **Implemented**
 
 | Attribute          | Definition                                                                                                                                                                                                |
 |:-------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -246,26 +246,25 @@ class ContextBlock:
 
 ## 8. Implementation Sequence (Enforced by This ADR)
 
-| Step    | Deliverable                                             | Depends On                                    |
-|:--------|:--------------------------------------------------------|:----------------------------------------------|
-| **3.1** | `CanonContextProvider` + `utils/canon.py`               | This ADR approved                             |
-| **3.2** | `CharacterMemoryProvider` + `utils/character_memory.py` | This ADR approved; ConversationManager tested |
-| **3.3** | `GuildWorldContextProvider` + `utils/guild_world.py`    | This ADR approved                             |
-| **3.4** | Token budget integration in `PromptBuilder.build()`     | All providers implemented                     |
+| Step    | Deliverable                                             | Status       |
+|:--------|:--------------------------------------------------------|:-------------|
+| **3.1** | `CanonContextProvider` + `utils/canon.py`               | ✅ Completed |
+| **3.2** | `CharacterMemoryProvider` + `utils/character_memory.py` | ✅ Completed |
+| **3.3** | `GuildWorldContextProvider` + `utils/guild_world.py`    | ✅ Completed |
+| **3.4** | Token budget integration in `PromptBuilder.build()`     | ✅ Completed |
 
-> **No provider implementation begins until this ADR is accepted.**
+> **All provider implementations complete.** This ADR documents the final architecture.
 
 ---
 
 ## 9. Acceptance Criteria for This ADR
 
-- [ ] All 8 providers defined with complete semantics (responsibility, mutability, lifetime, authority, ownership, boundaries)
-
-- [ ] Priority ordering justified and documented
-- [ ] Cross-provider boundary rules explicitly stated
-- [ ] `PromptBuildContext` contract covers all current + planned providers
-- [ ] Token budget / mutability interaction defined
-- [ ] No implementation code written — only design documented
+- [x] All 8 providers defined with complete semantics (responsibility, mutability, lifetime, authority, ownership, boundaries)
+- [x] Priority ordering justified and documented
+- [x] Cross-provider boundary rules explicitly stated
+- [x] `PromptBuildContext` contract covers all current + planned providers
+- [x] Token budget / mutability interaction defined
+- [x] All providers implemented and integrated
 
 ---
 
@@ -277,4 +276,98 @@ class ContextBlock:
 - `utils/prompt_builder_providers.py` — Current provider implementations
 - `docs/architecture.md` — System architecture (to be updated post-A
 DR)
-- `docs/reports/architecture-review-v2.md` — Pre-ADR review findings
+
+---
+
+## 11. Logging Section Semantics (`utils/logging_utils.py`)
+
+Freesona's logging system supports granular log sections to control verbosity per subsystem. Each section maps to a set of logger name prefixes.
+
+### Section Definitions
+
+| Section | Config Key | Logger Prefixes | Default | Description |
+|:--------|:-----------|:----------------|:--------|:------------|
+| General | `log_section_general` | `main`, `cogs`, `utils` | ✅ Enabled | Bot lifecycle, cog loading, general events |
+| Config | `log_section_config` | `utils.config`, `cogs.system.admin` | ❌ Disabled | Configuration changes |
+| AI | `log_section_ai` | `utils.providers`, `utils.generation`, `utils.prompt_builder*`, `cogs.ai` | ✅ Enabled | AI provider calls, generation, prompt assembly |
+| Memory | `log_section_memory` | `utils.memory`, `utils.conversation`, `utils.character_memory`, `utils.canon`, `utils.chroma` | ❌ Disabled | Memory operations (conversation, facts, character, canon, KB) |
+| Media | `log_section_media` | `cogs.media`, `utils.search` | ❌ Disabled | Media operations (MVSEP, yt-dlp, search) |
+| Moderation | `log_section_moderation` | `cogs.moderation` | ❌ Disabled | Moderation actions (kick, ban, warn) |
+| Security | `log_section_security` | `utils.security` | ✅ Enabled | Security checks (injection detection, URL validation) |
+| Webhook | `log_section_webhook` | `fastapi_server` | ❌ Disabled | Webhook events (FastAPI/MVSEP) |
+
+### Rules
+
+1. **ERROR/CRITICAL always pass** — Regardless of section settings, ERROR and CRITICAL level logs are never filtered by the section filter.
+2. **Section filter is applied to all handlers** — Console, file, and Discord handlers all use the same `SectionFilter`.
+3. **Runtime changes** — Section enable/disable takes effect immediately via `refresh_section_filter()` without restart.
+4. **Discord commands** — Owner-only `/logging` command group provides status, enable/disable/toggle, channel management, level setting, and test messages.
+5. **Config panel** — Sections appear under "Logging Sections" category in `/config` panel.
+
+### Logger Name Mapping
+
+The mapping from logger name to section is prefix-based (longest match wins):
+
+```python
+LOGGER_SECTION_MAP = {
+    "main": "general",
+    "cogs": "general",
+    "utils": "general",
+    "utils.config": "config",
+    "cogs.system.admin": "config",
+    "utils.providers": "ai",
+    "utils.generation": "ai",
+    "utils.prompt_builder": "ai",
+    "utils.prompt_builder_providers": "ai",
+    "cogs.ai": "ai",
+    "utils.memory": "memory",
+    "utils.conversation": "memory",
+    "utils.character_memory": "memory",
+    "utils.canon": "memory",
+    "utils.chroma": "memory",
+    "cogs.media": "media",
+    "utils.search": "media",
+    "cogs.moderation": "moderation",
+    "utils.security": "security",
+    "fastapi_server": "webhook",
+}
+```
+
+This ensures predictable section assignment for all current and future loggers.
+
+---
+
+## 12. Guild World Context Channel Enumeration (`utils/guild_world.py`)
+
+The `GuildWorldAccessor` protocol includes a `get_guild_channels(guild_id)` method that returns a list of `GuildChannelInfo` dataclasses. This enables KB 2.0 and other features to understand server structure without persisting it as memory.
+
+### GuildChannelInfo Fields
+
+| Field | Type | Description |
+|:------|:-----|:------------|
+| `id` | `int` | Channel snowflake ID |
+| `name` | `str` | Channel name |
+| `type` | `str` | Channel type (`text`, `voice`, `category`, `stage`, `forum`, `thread`) |
+| `topic` | `Optional[str]` | Channel topic/description |
+| `position` | `int` | Channel position in the list |
+| `category_id` | `Optional[int]` | Parent category ID |
+| `nsfw` | `bool` | Whether channel is marked NSFW |
+
+### Design Principles
+
+- **Not memory** — Channel list is fetched fresh from Discord's cache on each request
+- **No persistence** — No database writes, no history, no cross-guild awareness
+- **Protocol-based** — `GuildWorldAccessor` is a Protocol; `DiscordGuildWorldAccessor` is the Discord.py implementation; `NullGuildWorldAccessor` provides safe defaults for testing
+- **KB 2.0 ready** — Enables tagging knowledge to specific channels, understanding server structure, and letting the persona reference other channels by name
+
+### Usage
+
+```python
+from utils.guild_world import DiscordGuildWorldAccessor, GuildChannelInfo
+
+accessor = DiscordGuildWorldAccessor(bot)
+channels: list[GuildChannelInfo] = await accessor.get_guild_channels(guild_id)
+
+for ch in channels:
+    print(ch.format_for_prompt())  # e.g., "#general (General chat)", "#voice-chat [voice]"
+```

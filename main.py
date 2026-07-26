@@ -17,7 +17,9 @@ from utils.config import load_config, save_config
 from utils.modules import CORE_EXTENSIONS, OPTIONAL_MODULES, load_enabled_modules
 from utils.conversation import start_cleanup_task, stop_cleanup_task
 from utils.character_memory import start_extraction_task, stop_extraction_task
+from utils.logging_utils import setup_logging
 
+# Initial basic logging until setup_logging is called
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,9 @@ class Freesona(commands.Bot):
         # Start background cleanup tasks
         await start_cleanup_task()
         await start_extraction_task()
+
+        # Setup logging after bot is initialized (for Discord channel logging)
+        setup_logging(self)
 
         enabled_modules = load_enabled_modules(self.config)
         extensions = CORE_EXTENSIONS + [

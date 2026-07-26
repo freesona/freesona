@@ -79,11 +79,10 @@ It must not use the channel identifier as part of the storage key.
 - Use descriptive headings that start with a noun or verb.
 - Put a blank line before and after lists, tables, and code blocks.
 - Give each table a header row and a separator row.
-- Use `text` after the opening fence for diagrams and other plain-text blocks.
-- Use complete sentences in prose. Tables may use sentence fragments when the
-  column header supplies the missing context.
-- Keep code, identifiers, commands, paths, and exact user-interface text in
-  backticks.
+- Use `mermaid` after the opening fence for flowcharts, sequence diagrams, class diagrams, and state diagrams.
+- Use `text` after the opening fence for simple ASCII art or fixed-width layouts that do not render well as Mermaid.
+- Use complete sentences in prose. Tables may use sentence fragments when the column header supplies the missing context.
+- Keep code, identifiers, commands, paths, and exact user-interface text in backticks.
 
 ## Review checklist
 

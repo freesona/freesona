@@ -63,39 +63,30 @@ All cogs depend on `utils/`. Cogs do not import from each other, except that `mv
 
 Every incoming Discord message that the bot sees passes through a linear pipeline inside `GenAIListenerCog.on_message`:
 
-```text
-Discord Message
-      │
-      ▼
-[1. Hard filters]
-  - Message is from a guild (not DM)?
-  - Message type is default or reply?
-  - Not a slash command interaction?
-  - Not a prefix command (ctx.valid)?
-  - Not the bot itself?
-  - Not a non-whitelisted bot?
-      │
-      ▼
-[2. Route: Conversation Channel?]
-  config["chat_channel_id"] == message.channel.id
-      │                │
-     Yes              No ──────────────────────────────────────┐
-      │                                                        │
-      ▼                                                        ▼
-[3a. Conversation channel path]                 [3b. Autonomy path]
-  Check conversation_response_mode               autonomy_on and role == "user"?
-  ("all" / "mentions" / "smart")                Check per-channel + per-user cooldowns
-      │                                          Evaluate intent (evaluate_intent)
-      ▼                                          confidence >= frequency_threshold?
-  Debounce (1.2s per user)                              │
-  Collapse rapid messages                              Yes
-      │                                                │
-      ▼                                                ▼
-[4. Generate]  ◄─────────────────────────────────[Generate]
-  safe_generate(payload, persona, channel_id, guild_id, user_id, ...)
-      │
-      ▼
-[5. send_response → split long text into chunks → send embeds/files]
+```mermaid
+flowchart TD
+    A[Discord Message] --> B[1. Hard Filters]
+    B --> B1["Message is from a guild (not DM)?"]
+    B --> B2["Message type is default or reply?"]
+    B --> B3["Not a slash command interaction?"]
+    B --> B4["Not a prefix command (ctx.valid)?"]
+    B --> B5["Not the bot itself?"]
+    B --> B6["Not a non-whitelisted bot?"]
+    B --> C[2. Route: Conversation Channel?]
+    C -->|Yes| D[3a. Conversation Channel Path]
+    C -->|No| E[3b. Autonomy Path]
+    D --> D1["Check conversation_response_mode\n(all / mentions / smart)"]
+    D1 --> D2[Debounce 1.2s per user]
+    D2 --> D3[Collapse rapid messages]
+    E --> E1["autonomy_on and role == user?"]
+    E1 --> E2[Check per-channel + per-user cooldowns]
+    E2 --> E3[Evaluate intent]
+    E3 --> E4{Confidence >= frequency_threshold?}
+    E4 -->|Yes| F[4. Generate]
+    E4 -->|No| G[Skip generation]
+    D3 --> F
+    F --> F1["safe_generate(payload, persona,\nchannel_id, guild_id, user_id, ...)"]
+    F1 --> H[5. send_response -> split -> send]
 ```
 
 ### Debounce
@@ -219,28 +210,26 @@ The knowledge base stores **canonical, factual information** about a persona —
 
 ### Architecture Diagram
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    Ingestion Pipeline                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Raw Source ──► Cleaning ──► Speaker ID ──► Semantic Chunking  │
-│       │                                                │        │
-│       ▼                                                ▼        │
-│  Metadata Assignment ──► Embedding ──► ChromaDB Storage        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Retrieval Pipeline                           │
-├─────────────────────────────────────────────────────────────────┤
-│  User Message ──► Embedding ──► Metadata Filtering ◄────────── │
-│       │                  │           Vector Search              │
-│       ▼                  ▼           ▼                           │
-│  Top-k Results ◄─── Re-ranking (optional) ◄─────────────────── │
-│       │                                                        │
-│       ▼                                                        │
-│  Context Assembly ──► Language Model (Persona + Memory + KB)   │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Ingestion[Ingestion Pipeline]
+        A[Raw Source] --> B[Cleaning]
+        B --> C[Speaker ID]
+        C --> D[Semantic Chunking]
+        D --> E[Metadata Assignment]
+        E --> F[Embedding]
+        F --> G[ChromaDB Storage]
+    end
+
+    G --> H[User Message]
+    H --> I[Embedding]
+    I --> J[Metadata Filtering]
+    J --> K[Vector Search]
+    J --> L[Re-ranking (optional)]
+    K --> M[Top-k Results]
+    L --> M
+    M --> N[Context Assembly]
+    N --> O[Language Model\n(Persona + Memory + KB)]
 ```
 
 Where supported by the vector database, metadata filtering occurs before or alongside vector search to reduce the candidate set. An optional re-ranking stage can be added later without changing the overall architecture.
@@ -249,22 +238,16 @@ Where supported by the vector database, metadata filtering occurs before or alon
 
 Embeddings, metadata schemas, and source material will inevitably change over the life of the project. The knowledge lifecycle acknowledges this:
 
-```text
-Source Material
-      ↓
-Cleaning
-      ↓
-Chunking
-      ↓
-Metadata Assignment
-      ↓
-Embedding
-      ↓
-Validation
-      ↓
-Serving
-      ↓
-Updates / Re-embedding
+```mermaid
+flowchart TD
+    A[Source Material] --> B[Cleaning]
+    B --> C[Chunking]
+    C --> D[Metadata Assignment]
+    D --> E[Embedding]
+    E --> F[Validation]
+    F --> G[Serving]
+    G --> H[Updates / Re-embedding]
+    H --> B
 ```
 
 When embedding models change or metadata schemas evolve, entries can be re-ingested with updated `schema_version` and `embedding_model` fields. The deterministic ingestion pipeline makes this process reproducible.
@@ -507,6 +490,119 @@ Expressions are validated by an AST-level safety checker (`is_safe_expression`) 
 | `sanitize_prompt(prompt)`  | Redacts matched injection phrases before forwarding to the model (does not just flag; actively removes)                                                            |
 | `unsafe_output(text)`      | Checks model output for injection echo artifacts                                                                                                                   |
 | `is_safe_expression(expr)` | AST-level allowlist for SymPy expressions — blocks `eval`, `exec`, `import`, `__dunder__` access, and any call not in `SAFE_FUNCTIONS`                             |
+
+---
+
+## Logging (`utils/logging_utils.py`)
+
+Freesona includes an optional logging system that can write to both rotating log files and a Discord channel. This is disabled by default and must be explicitly enabled.
+
+### Features
+
+- **File rotation**: Log files rotate every N months (default: 3 months) with filenames like `freesona_2024-01_to_2024-03.log`
+- **Discord channel output**: Optional real-time log forwarding to a designated Discord channel
+- **Configurable log level**: DEBUG, INFO, WARNING, ERROR
+- **Provider-agnostic**: Works identically across all AI providers
+- **Granular log sections**: Enable/disable logging for specific subsystems (AI, memory, media, moderation, security, etc.)
+
+### Configuration
+
+| Config Key | Type | Default | Description |
+|:-----------|:-----|:--------|:------------|
+| `log_enabled` | bool | `false` | Enable/disable logging system |
+| `log_channel_id` | int | `0` | Discord channel ID for log messages (0 = disabled) |
+| `log_level` | str | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `log_file_path` | str | `logs/freesona.log` | Base path for rotating log files |
+| `log_file_max_months` | int | `3` | Months per log file before rotation |
+| `log_include_discord` | bool | `true` | Also send logs to Discord channel |
+| `log_section_general` | bool | `true` | General bot events (startup, shutdown, cogs) |
+| `log_section_config` | bool | `false` | Configuration changes |
+| `log_section_ai` | bool | `true` | AI provider calls, generation, prompts |
+| `log_section_memory` | bool | `false` | Memory operations (conversation, facts, character, canon, KB) |
+| `log_section_media` | bool | `false` | Media operations (MVSEP, yt-dlp, search) |
+| `log_section_moderation` | bool | `false` | Moderation actions (kick, ban, warn) |
+| `log_section_security` | bool | `true` | Security checks (injection detection, URL validation) |
+| `log_section_webhook` | bool | `false` | Webhook events (FastAPI/MVSEP) |
+
+Environment variable overrides (see `.env.sample`):
+- `LOG_ENABLED`
+- `LOG_CHANNEL_ID`
+- `LOG_LEVEL`
+- `LOG_FILE_PATH`
+- `LOG_FILE_MAX_MONTHS`
+- `LOG_INCLUDE_DISCORD`
+- `LOG_SECTION_GENERAL`
+- `LOG_SECTION_CONFIG`
+- `LOG_SECTION_AI`
+- `LOG_SECTION_MEMORY`
+- `LOG_SECTION_MEDIA`
+- `LOG_SECTION_MODERATION`
+- `LOG_SECTION_SECURITY`
+- `LOG_SECTION_WEBHOOK`
+
+### Log Sections
+
+Log sections provide granular control over what gets logged. Each section maps to a set of logger name prefixes:
+
+| Section | Config Key | Logger Prefixes | Default |
+|:--------|:-----------|:----------------|:--------|
+| General | `log_section_general` | `main`, `cogs`, `utils` | ✅ Enabled |
+| Config | `log_section_config` | `utils.config`, `cogs.system.admin` | ❌ Disabled |
+| AI | `log_section_ai` | `utils.providers`, `utils.generation`, `utils.prompt_builder*`, `cogs.ai` | ✅ Enabled |
+| Memory | `log_section_memory` | `utils.memory`, `utils.conversation`, `utils.character_memory`, `utils.canon`, `utils.chroma` | ❌ Disabled |
+| Media | `log_section_media` | `cogs.media`, `utils.search` | ❌ Disabled |
+| Moderation | `log_section_moderation` | `cogs.moderation` | ❌ Disabled |
+| Security | `log_section_security` | `utils.security` | ✅ Enabled |
+| Webhook | `log_section_webhook` | `fastapi_server` | ❌ Disabled |
+
+**Note**: ERROR and CRITICAL level logs are *always* logged regardless of section settings to ensure critical failures are never missed.
+
+### Implementation
+
+The logging system is implemented in `utils/logging_utils.py` with three main components:
+
+1. **`MonthlyRotatingFileHandler`** — Custom `logging.handlers.BaseRotatingHandler` that creates a new file every N months based on the current date
+2. **`DiscordLogHandler`** — Custom `logging.Handler` that forwards formatted log records to a Discord channel asynchronously
+3. **`SectionFilter`** — Custom `logging.Filter` that allows/denies records based on enabled log sections
+4. **`setup_logging(bot)`** — Configures root logger with console, file, and optional Discord handlers based on config
+
+The `setup_logging()` function is called from `main.py` in `Freesona.setup_hook()` after the bot is initialized, allowing the Discord handler to access the bot instance.
+
+### Usage
+
+Logs are written using Python's standard `logging` module:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+logger.info("Generation completed", extra={"user_id": 123, "provider": "gemini"})
+```
+
+The Discord log channel receives formatted messages in code blocks:
+```
+[2024-01-15 14:32:10] [INFO] utils.generation: Generation completed for user 123 via gemini
+```
+
+### Discord Commands
+
+Owner-only slash commands for managing the logging system:
+
+| Command | Description |
+|:--------|:------------|
+| `/logging status` | Show current logging configuration and enabled sections |
+| `/logging enable <section>` | Enable a logging section |
+| `/logging disable <section>` | Disable a logging section |
+| `/logging toggle <section>` | Toggle a logging section on/off |
+| `/logging setchannel <channel>` | Set the Discord channel for log output |
+| `/logging clearchannel` | Clear the Discord log channel setting |
+| `/logging setlevel <level>` | Set log level (DEBUG, INFO, WARNING, ERROR) |
+| `/logging test [message]` | Send a test log message to the configured channel |
+
+Sections: `general`, `config`, `ai`, `memory`, `media`, `moderation`, `security`, `webhook`
+
+### Runtime Configuration
+
+Logging settings can be modified at runtime via the `/config` command panel (under "Logging" and "Logging Sections" categories) or directly with `/config set`. Section changes take effect immediately via `refresh_section_filter()`; other changes require the next logging setup (bot restart or manual reload).
 
 ---
 

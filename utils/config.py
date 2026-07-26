@@ -1,5 +1,6 @@
 # utils/config.py: Config I/O and shared embed helpers.
 
+import logging
 import os
 import json
 
@@ -29,6 +30,22 @@ DEFAULT_CONFIG = {
     "generation_rate_limit": 5,
     # Model settings
     "model_temperature": 0.7,
+    # Logging
+    "log_enabled": os.getenv("LOG_ENABLED", "false").lower() == "true",
+    "log_channel_id": int(os.getenv("LOG_CHANNEL_ID", "0")) if os.getenv("LOG_CHANNEL_ID") else 0,
+    "log_level": os.getenv("LOG_LEVEL", "INFO"),
+    "log_file_path": os.getenv("LOG_FILE_PATH", "logs/freesona.log"),
+    "log_file_max_months": int(os.getenv("LOG_FILE_MAX_MONTHS", "3")),
+    "log_include_discord": os.getenv("LOG_INCLUDE_DISCORD", "true").lower() == "true",
+    # Logging sections (granular control)
+    "log_section_general": os.getenv("LOG_SECTION_GENERAL", "true").lower() == "true",
+    "log_section_config": os.getenv("LOG_SECTION_CONFIG", "false").lower() == "true",
+    "log_section_ai": os.getenv("LOG_SECTION_AI", "true").lower() == "true",
+    "log_section_memory": os.getenv("LOG_SECTION_MEMORY", "false").lower() == "true",
+    "log_section_media": os.getenv("LOG_SECTION_MEDIA", "false").lower() == "true",
+    "log_section_moderation": os.getenv("LOG_SECTION_MODERATION", "false").lower() == "true",
+    "log_section_security": os.getenv("LOG_SECTION_SECURITY", "true").lower() == "true",
+    "log_section_webhook": os.getenv("LOG_SECTION_WEBHOOK", "false").lower() == "true",
 }
 
 DEFAULT_MODEL_NAME = os.getenv("MODEL_NAME", "gemini-flash-lite-latest")
@@ -46,8 +63,10 @@ def load_config() -> dict:
                 data = json.load(f)
                 if isinstance(data, dict):
                     config.update(data)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "Failed to load config from %s: %s", CONFIG_PATH, e, exc_info=True
+            )
     return config
 
 

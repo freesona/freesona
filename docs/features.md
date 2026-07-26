@@ -131,6 +131,19 @@ The character exists *through* Discord, not inside a single guild. Guild World C
 
 The same persona naturally adapts its wording to different servers without changing who it is. Guilds represent different communities, not different characters.
 
+**Channel Enumeration (KB 2.0 Support):**
+
+The `GuildWorldAccessor` protocol and its `DiscordGuildWorldAccessor` implementation provide a `get_guild_channels(guild_id)` method that returns a list of `GuildChannelInfo` objects. Each contains:
+- `id` — Channel snowflake ID
+- `name` — Channel name
+- `type` — Channel type (`text`, `voice`, `category`, `stage`, `forum`, `thread`)
+- `topic` — Channel topic/description (if applicable)
+- `position` — Channel position in the list
+- `category_id` — Parent category ID
+- `nsfw` — Whether the channel is marked NSFW
+
+This enables KB 2.0 to tag knowledge to specific channels, understand server structure, and let the persona reference other channels by name — all without persisting this data as memory. The channel list is fetched fresh from Discord's cache on each request.
+
 ---
 
 ## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/generation.py`)
@@ -151,28 +164,30 @@ The knowledge base stores **canonical, factual information** about a persona —
 
 
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    Ingestion Pipeline                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Raw Source ──► Cleaning ──► Speaker ID ──► Semantic Chunking  │
-│       │                                                │        │
-│       ▼                                                ▼        │
-│  Metadata Assignment ──► Embedding ──► ChromaDB Storage        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Retrieval Pipeline                           │
-├─────────────────────────────────────────────────────────────────┤
-│  User Message ──► Embedding ──► Metadata Filtering ◄────────── │
-│       │                  │           Vector Search              │
-│       ▼                  ▼           ▼                           │
-│  Top-k Results ◄─── Re-ranking (optional) ◄─────────────────── │
-│       │                                                        │
-│       ▼                                                        │
-│  Context Assembly ──► Language Model (Persona + Memory + KB)   │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Ingestion[Ingestion Pipeline]
+        A[Raw Source] --> B[Cleaning]
+        B --> C[Speaker ID]
+        C --> D[Semantic Chunking]
+        D --> E[Metadata Assignment]
+        E --> F[Embedding]
+        F --> G[ChromaDB Storage]
+    end
+
+    G --> H[Retrieval Pipeline]
+
+    subgraph Retrieval[Retrieval Pipeline]
+        H --> I[User Message]
+        I --> J[Embedding]
+        J --> K[Metadata Filtering]
+        J --> L[Vector Search]
+        K --> M[Top-k Results]
+        L --> M
+        M --> N[Re-ranking (optional)]
+        N --> O[Context Assembly]
+        O --> P[Language Model (Persona + Memory + KB)]
+    end
 ```
 
 
@@ -183,22 +198,16 @@ Where supported by the vector database, metadata filtering occurs before or alon
 
 Embeddings, metadata schemas, and source material will inevitably change over the life of the project. The knowledge lifecycle acknowledges this:
 
-```text
-Source Material
-      ↓
-Cleaning
-      ↓
-Chunking
-      ↓
-Metadata Assignment
-      ↓
-Embedding
-      ↓
-Validation
-      ↓
-Serving
-      ↓
-Updates / Re-embedding
+```mermaid
+flowchart TD
+    A[Source Material] --> B[Cleaning]
+    B --> C[Chunking]
+    C --> D[Metadata Assignment]
+    D --> E[Embedding]
+    E --> F[Validation]
+    F --> G[Serving]
+    G --> H[Updates / Re-embedding]
+    H --> B
 ```
 
 When embedding models change or metadata schemas evolve, entries can be re-ingested with updated `schema_version` and `embedding_model` fields. The deterministic ingestion pipeline makes this process reproducible.
