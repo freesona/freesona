@@ -33,7 +33,8 @@ PROVIDER_CHOICES: list[str] = ["gemini", "openai", "ollama", "nim", "azure", "gr
 def is_owner_check():
     """Check if the interaction user is the bot owner (for app_commands)."""
     async def predicate(interaction: discord.Interaction) -> bool:
-        return await interaction.client.is_owner(interaction.user)
+        info = await interaction.client.application_info()
+        return info.owner == interaction.user
     return app_commands.check(predicate)
 
 
