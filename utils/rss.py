@@ -151,9 +151,98 @@ def normalize_date(value: str) -> str:
     except Exception:
         return value
 
+
+def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem]:
+    """Parse RDF (RSS 1.0) format feeds."""
+    # Find channel element to get item references
+    channel = None
+    for child in root:
+        if child.tag.rsplit("}", 1)[-1].lower() == "channel":
+            channel = child
+            break
+    
+    if channel is None:
+        return []
+    
+    # Find items/Seq/li elements with rdf:resource attributes
+    item_urls = []
+    for child in channel:
+        tag = child.tag.rsplit("}", 1)[-1].lower()
+        if tag == "items":
+            for seq_child in child:
+                seq_tag = seq_child.tag.rsplit("}", 1)[-1].lower()
+                if seq_tag == "seq":
+                    for li in seq_child:
+                        li_tag = li.tag.rsplit("}", 1)[-1].lower()
+                        if li_tag == "li":
+                            resource = li.attrib.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource")
+                            if resource:
+                                item_urls.append(resource)
+    
+    # Now find item elements with matching rdf:about
+    items: list[FeedItem] = []
+    for child in root:
+        tag = child.tag.rsplit("}", 1)[-1].lower()
+        if tag == "item":
+            about = child.attrib.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about")
+            if about in item_urls:
+                if len(items) >= limit:
+                    break
+                
+                title = child_text(child, ("title",)) or "(untitled)"
+                if title.lower().startswith(("r to @", "re:")):
+                    continue
+                    
+                link = child_text(child, ("link",)) or about or ""
+                published = child_text(child, ("date", "dc:date", "dc.date", "pubdate", "published", "updated"))
+                summary = child_text(child, ("description", "summary", "content"))
+                author = child_text(child, ("creator", "author", "dc:creator", "dc.creator"))
+                
+                # Extract Image
+                image_url = ""
+                max_width = 0
+                
+                for subchild in list(child):
+                    sub_tag = subchild.tag.rsplit("}", 1)[-1].lower()
+                    if sub_tag in ("content", "thumbnail") and "url" in subchild.attrib:
+                        url = subchild.attrib["url"].strip()
+                        try:
+                            width = int(subchild.attrib.get("width", 0))
+                        except ValueError:
+                            width = 0
+                        if width >= max_width:
+                            max_width = width
+                            image_url = url
+                    elif sub_tag == "enclosure" and "url" in subchild.attrib:
+                        type_attr = subchild.attrib.get("type", "")
+                        if not image_url or "image" in type_attr:
+                            image_url = subchild.attrib["url"].strip()
+                
+                if not image_url:
+                    match = re.search(r'<img[^>]+src="([^">]+)"', summary)
+                    if match:
+                        image_url = match.group(1)
+                
+                items.append(FeedItem(
+                    title=strip_html(title),
+                    link=link,
+                    published=normalize_date(published),
+                    summary=strip_html(summary),
+                    author=strip_html(author),
+                    image_url=image_url,
+                ))
+    
+    return items
+
+
 def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
     root = element_tree.fromstring(xml_text)
     root_tag = root.tag.rsplit("}", 1)[-1].lower()
+    
+    # Handle RDF (RSS 1.0) feeds
+    if root_tag == "rdf":
+        return _parse_rdf_feed(root, limit)
+    
     if root_tag == "rss":
         channel = next(
             (c for c in root.iter() if c.tag.rsplit("}", 1)[-1].lower() == "channel"),
