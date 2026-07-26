@@ -35,11 +35,10 @@ def is_owner_check():
     """Check if the interaction user is the bot owner (for app_commands)."""
     async def predicate(interaction: discord.Interaction) -> bool:
         try:
-            # Cast client to Freesona to resolve Pylance attribute access issue
-            from main import Freesona
-            from typing import cast
-            client = cast(Freesona, interaction.client)
-            return await client.is_owner(interaction.user)
+            # interaction.client inherits is_owner from discord.Client via commands.Bot
+            # Use type: ignore to satisfy Pylance type checking since discord.Client.is_owner
+            # is not recognized on the base discord.Client type in stubs
+            return await interaction.client.is_owner(interaction.user)  # type: ignore[attr-defined]
         except Exception as e:
             # Log the error but don't fail silently - let the check fail
             logging.getLogger(__name__).warning(

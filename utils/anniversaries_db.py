@@ -1,6 +1,5 @@
 # utils/anniversaries_db.py: Generic anniversary tracking DB for Freesona.
 # Stores user-claimed anniversary entries with optional calendar sync support.
-# Compatible with cogs/fun/albums.py and any future anniversary-type features.
 
 from __future__ import annotations
 
@@ -31,6 +30,22 @@ async def init_db() -> None:
         """)
         await db.commit()
 
+
+class DuplicateClaimError(Exception):
+    """Raised when an anniversary is already claimed in a guild."""
+    def __init__(self, existing_entry: dict | None = None):
+        self.existing_entry = existing_entry
+        super().__init__("This anniversary has already been claimed in this server.")
+
+async def get_entry_by_id(entry_id: str) -> dict | None:
+    """Retrieve a single anniversary entry by its ID."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM anniversaries WHERE id = ?", (entry_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        return dict(row) if row else None
 
 async def insert_entry(data: dict) -> None:
     """

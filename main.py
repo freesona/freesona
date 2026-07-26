@@ -79,14 +79,6 @@ class Freesona(commands.Bot):
         await self.tree.sync()
         logger.info(f"Synced slash commands for {self.user}")
 
-    async def is_owner(self, user: discord.abc.User) -> bool:
-        """Check if the given user is the owner of the bot."""
-        try:
-            app_info = await self.application_info()
-            return app_info.owner.id == user.id
-        except Exception:
-            return False
-
     async def close(self):
         # Stop background cleanup tasks before closing
         await stop_cleanup_task()
