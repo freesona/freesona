@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 
 import discord
-from discord import ui, app_commands
+from discord import ui
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -24,6 +24,7 @@ PERSONA_FIELDS = [
     "beliefs",
     "language",
     "system_instructions",
+    "temperature",
 ]
 
 PERSONA_LABELS = {
@@ -32,6 +33,7 @@ PERSONA_LABELS = {
     "beliefs":             "Beliefs, Likes & Dislikes",
     "language":            "Language & Communication Style",
     "system_instructions": "System Instructions",
+    "temperature":         "Temperature (0.0-2.0)",
 }
 
 ASSEMBLY_ORDER = [
@@ -40,6 +42,7 @@ ASSEMBLY_ORDER = [
     "background",
     "beliefs",
     "language",
+    "temperature",
 ]
 
 # ---------------------------------------------------------------------------
@@ -48,6 +51,7 @@ ASSEMBLY_ORDER = [
 
 PERSONA_DATA:    dict = {}
 CURRENT_PERSONA: str  = ""
+CURRENT_PERSONA_ID: str = ""
 PERSONA_LOCKED:  bool = False
 LEGACY_DETECTED: bool = False
 
@@ -81,7 +85,6 @@ def save_persona_json(data: dict):
     with open(AI_PERSONA_JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-
 def assemble_persona(data: dict) -> str:
     xml_tags = {
         "system_instructions": "system_instructions",
@@ -89,6 +92,7 @@ def assemble_persona(data: dict) -> str:
         "background":          "background",
         "beliefs":             "beliefs",
         "language":            "language",
+        "temperature":         "temperature",
     }
     parts = []
     for f in ASSEMBLY_ORDER:
@@ -97,7 +101,6 @@ def assemble_persona(data: dict) -> str:
         if value:
             parts.append(f"<{tag}>\n{value}\n</{tag}>")
     return "\n\n".join(parts)
-
 
 def load_legacy_persona() -> Optional[str]:
     if os.path.exists(AI_PERSONA_PATH):
@@ -170,11 +173,19 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
         max_length=1024,
         placeholder="Origin, backstory, relevant history.",
     )
+    temperature = ui.TextInput(
+        label="Temperature (0.0-2.0)",
+        style=discord.TextStyle.short,
+        required=False,
+        max_length=4,
+        placeholder="0.7",
+    )
 
     def __init__(self, data: dict):
         super().__init__()
         self.core_personality.default = data.get("core_personality", "")
         self.background.default = data.get("background", "")
+        self.temperature.default = str(data.get("temperature", ""))
 
     async def on_submit(self, interaction: discord.Interaction):
         global PERSONA_DATA, CURRENT_PERSONA
@@ -183,6 +194,12 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
             return
         PERSONA_DATA["core_personality"] = self.core_personality.value.strip()
         PERSONA_DATA["background"] = self.background.value.strip()
+        temp_val = self.temperature.value.strip()
+        if temp_val:
+            try:
+                PERSONA_DATA["temperature"] = float(temp_val)
+            except ValueError:
+                PERSONA_DATA["temperature"] = 0.7
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
         try:
             save_persona_json(PERSONA_DATA)
@@ -278,7 +295,10 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
     def __init__(self, data: dict):
         super().__init__()
         for field_name in PERSONA_FIELDS:
-            getattr(self, field_name).default = data.get(field_name, "")
+            if field_name == "temperature":
+                continue  # Temperature is edited in the core modal; skip here (Discord limit: 5 components max)
+            value = data.get(field_name, "")
+            getattr(self, field_name).default = str(value) if value is not None else ""
 
     async def on_submit(self, interaction: discord.Interaction):
         global PERSONA_DATA, CURRENT_PERSONA
@@ -286,11 +306,13 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
             await interaction.response.send_message("Persona is locked. Use `/personaunlock` first.", ephemeral=True)
             return
         for field_name in PERSONA_FIELDS:
+            if field_name == "temperature":
+                continue  # Temperature is not in this modal; keep existing value
             PERSONA_DATA[field_name] = getattr(self, field_name).value.strip()
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
         try:
             save_persona_json(PERSONA_DATA)
-            await interaction.response.send_message("Persona saved.", ephemeral=True)
+            await interaction.response.send_message("Persona saved. (Temperature is edited in Core & Background modal)", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"Save failed: {e}", ephemeral=True)
 

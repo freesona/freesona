@@ -35,15 +35,50 @@ WOLFRAM_SHORT_APPID = os.getenv("WOLFRAM_APPID_SHORT")
 WOLFRAM_LLM_APPID = os.getenv("WOLFRAM_APPID_LLM")
 
 SAFE_FUNCTIONS = {
+    # Trigonometric
     'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
     'asin', 'acos', 'atan', 'acot', 'asec', 'acsc',
     'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
     'asinh', 'acosh', 'atanh', 'acoth', 'asech', 'acsch',
-    'sqrt', 'cbrt', 'exp', 'log', 'ln', 'log10', 'abs',
-    'factorial', 'gamma', 'floor', 'ceiling',
+    # Algebraic & Arithmetic
+    'sqrt', 'cbrt', 'exp', 'log', 'ln', 'log10', 'log2', 'abs',
+    'factorial', 'gamma', 'floor', 'ceiling', 'ceiling',
+    'mod', 'sign', 'max', 'min', 'sum', 'prod',
+    'pow', 'power', 'root',
+    # Calculus
     'limit', 'diff', 'integrate', 'solve', 'expand', 'simplify',
+    'series', 'dsolve', 'nsolve',
+    # Constants
     'pi', 'E', 'e', 'I', 'oo', 'Infinity', 'nan',
-    'summation', 'product', 'root', 'N', 'evalf'
+    'S', 'EulerGamma', 'Catalan', 'GoldenRatio',
+    # Special functions
+    'summation', 'product', 'N', 'evalf', 'n',
+    'zeta', 'polygamma', 'digamma', 'trigamma',
+    'besselj', 'bessely', 'besseli', 'besselk',
+    'airyai', 'airybi', 'legendre', 'chebyshevt', 'chebyshevu',
+    'hermite', 'laguerre', 'jacobi',
+    'erf', 'erfc', 'erfi', 'erfinv', 'erfcinv',
+    'fresnels', 'fresnelc',
+    'elliptic_e', 'elliptic_f', 'elliptic_k', 'elliptic_pi',
+    # Hyperbolic
+    'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
+    'asinh', 'acosh', 'atanh', 'acoth', 'asech', 'acsch',
+    # Matrix/Vector (basic)
+    'Matrix', 'det', 'trace', 'rank', 'eigenvals', 'eigenvects',
+    # Rounding
+    'round', 'trunc', 'frac',
+    # Sympy core symbols and functions (added for plotting and solve_locally)
+    'Symbol', 'symbols', 'Function', 'Eq', 'Ne', 'Lt', 'Le', 'Gt', 'Ge',
+    'Abs', 'conjugate', 're', 'im', 'arg',
+    'factorial2', 'rf', 'ff', 'binomial', 'multinomial',
+    'catalan', 'euler', 'harmonic', 'stirling', 'bernoulli',
+    'bell', 'fibonacci', 'lucas', 'partitions',
+    'fourier_transform', 'laplace_transform',
+    'inverse_fourier_transform', 'inverse_laplace_transform',
+    'eye', 'zeros', 'ones', 'diag',
+    'BlockMatrix', 'MutableMatrix', 'ImmutableMatrix',
+    # Additional constants
+    'NaN',
 }
 
 def check_ast_safe(node) -> bool:
@@ -56,9 +91,14 @@ def check_ast_safe(node) -> bool:
         ast.Tuple,
         ast.List,
         ast.keyword,
+        ast.Subscript,
+        ast.Slice,
         ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.FloorDiv,
         ast.UAdd, ast.USub,
         ast.Load, ast.Store, ast.Del,
+        ast.Compare, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+        ast.BoolOp, ast.And, ast.Or,
+        ast.Not,
     )
     
     if not isinstance(node, allowed_nodes):
@@ -68,7 +108,7 @@ def check_ast_safe(node) -> bool:
         return False
 
     if isinstance(node, ast.Name):
-        if node.id.startswith('__') or node.id in {'eval', 'exec', 'open', 'import', 'print', 'getattr', 'setattr', 'delattr', 'compile', 'globals', 'locals'}:
+        if node.id.startswith('__') or node.id in {'eval', 'exec', 'open', '__import__', 'print', 'getattr', 'setattr', 'delattr', 'compile', 'globals', 'locals', 'input', 'exit', 'quit', 'help', 'copyright', 'credits', 'license'}:
             return False
         return True
 
@@ -104,13 +144,25 @@ def _minimal_png_placeholder() -> io.BytesIO:
     return buf
 
 
-def generate_plot(func_str: str) -> io.BytesIO:
+def _generate_explicit_plot(func_str: str) -> io.BytesIO:
+    """Generate plot for explicit functions y = f(x)."""
     if Figure is None:
         return _minimal_png_placeholder()
 
     clean_func = func_str.replace('^', '**')
+    
+    # Handle function notation f(x) = expr, y = expr, x = expr -> extract expr
+    if '=' in clean_func and '==' not in clean_func:
+        lhs, rhs = clean_func.split('=', 1)
+        lhs = lhs.strip()
+        rhs = rhs.strip()
+        # Check if LHS looks like f(x), g(x), y, or x (non-parametric)
+        if ('(' in lhs and ')' in lhs and lhs.endswith(')')) or lhs.lower() in ('y', 'x'):
+            # Function notation or simple y=expr or x=expr - use RHS
+            clean_func = rhs
+    
     x_symbol = sympy.Symbol('x')
-    expr = sympy.sympify(clean_func, evaluate=True)
+    expr = sympy.sympify(clean_func, evaluate=True)  # type: ignore[call-arg]
     y_func = sympy.lambdify(x_symbol, expr, "numpy")
     
     x = np.linspace(-10, 10, 400)
@@ -137,6 +189,192 @@ def generate_plot(func_str: str) -> io.BytesIO:
     buf.seek(0)
     return buf
 
+
+def _generate_implicit_plot(func_str: str) -> io.BytesIO:
+    """Generate plot for implicit functions f(x, y) = 0 or f(x, y) = g(x, y)."""
+    if Figure is None:
+        return _minimal_png_placeholder()
+
+    clean_func = func_str.replace('^', '**')
+    
+    # Parse the equation - handle f(x)=expr, f(x,y)=expr, etc.
+    if '=' in clean_func and '==' not in clean_func:
+        lhs_str, rhs_str = clean_func.split('=', 1)
+        lhs = lhs_str.strip()
+        rhs = rhs_str.strip()
+        
+        # Check if LHS is a function call like f(x), f(x,y), etc.
+        # If so, we need to treat it as an implicit equation
+        try:
+            lhs_expr = sympy.sympify(lhs, evaluate=False)  # type: ignore[call-arg]
+            rhs_expr = sympy.sympify(rhs, evaluate=False)  # type: ignore[call-arg]
+            expr = sympy.Eq(lhs_expr, rhs_expr)
+        except Exception:
+            # If parsing fails, try whole expression
+            expr = sympy.sympify(clean_func, evaluate=False)  # type: ignore[call-arg]
+    else:
+        expr = sympy.sympify(clean_func, evaluate=False)  # type: ignore[call-arg]
+    
+    # Get free symbols to determine variables
+    free_symbols = expr.free_symbols
+    x_sym = sympy.Symbol('x')
+    y_sym = sympy.Symbol('y')
+    
+    # Use matplotlib to plot implicit function by creating a contour plot
+    try:
+        # Convert expression to a form suitable for contour plotting
+        # For Eq(lhs, rhs), we plot lhs - rhs = 0
+        if isinstance(expr, sympy.Eq):
+            implicit_expr = expr.lhs - expr.rhs # type: ignore
+        else:
+            implicit_expr = expr
+        
+        # Lambdify for numerical evaluation
+        f = sympy.lambdify((x_sym, y_sym), implicit_expr, "numpy")
+        
+        # Create grid
+        x = np.linspace(-10, 10, 400)
+        y = np.linspace(-10, 10, 400)
+        X, Y = np.meshgrid(x, y)
+        
+        with np.errstate(divide='ignore', invalid='ignore'):
+            Z = f(X, Y)
+        
+        # Handle complex values
+        if np.iscomplexobj(Z):
+            Z = np.real(Z)
+        
+        # Replace inf/nan with large values
+        Z = np.nan_to_num(Z, nan=1e10, posinf=1e10, neginf=-1e10)
+        
+        # Create contour plot at level 0
+        fig = Figure(figsize=(6, 4))
+        ax = fig.subplots()
+        ax.contour(X, Y, Z, levels=[0], colors='blue', linewidths=2)
+        ax.set_title(f"Plot of {func_str}")
+        ax.grid(True)
+        ax.set_xlim(-10, 10)
+        ax.set_ylim(-10, 10)
+        ax.set_aspect('equal', adjustable='box')
+        
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png')
+        buf.seek(0)
+        return buf
+        
+    except Exception as e:
+        logging.warning(f"Implicit plot failed, falling back to placeholder: {e}")
+        return _minimal_png_placeholder()
+
+
+def _generate_parametric_plot(func_str: str) -> io.BytesIO:
+    """Generate plot for parametric equations x = f(t), y = g(t)."""
+    if Figure is None:
+        return _minimal_png_placeholder()
+
+    clean_func = func_str.replace('^', '**')
+    
+    # Parse parametric equations: x = ..., y = ...
+    parts = [p.strip() for p in clean_func.split(',')]
+    x_expr = None
+    y_expr = None
+    t_sym = sympy.Symbol('t')
+    
+    for part in parts:
+        if '=' in part:
+            lhs, rhs = part.split('=', 1)
+            lhs = lhs.strip()
+            rhs = rhs.strip()
+            if lhs in ('x', 'X'):
+                try:
+                    x_expr = sympy.sympify(rhs, evaluate=False)  # type: ignore[call-arg]
+                except Exception:
+                    pass
+            elif lhs in ('y', 'Y'):
+                try:
+                    y_expr = sympy.sympify(rhs, evaluate=False)  # type: ignore[call-arg]
+                except Exception:
+                    pass
+    
+    if x_expr is None or y_expr is None:
+        return _minimal_png_placeholder()
+    
+    try:
+        # Lambdify for numerical evaluation
+        x_func = sympy.lambdify(t_sym, x_expr, "numpy")
+        y_func = sympy.lambdify(t_sym, y_expr, "numpy")
+        
+        # Create parameter range
+        t = np.linspace(-10, 10, 1000)
+        
+        with np.errstate(divide='ignore', invalid='ignore'):
+            x_vals = x_func(t)
+            y_vals = y_func(t)
+        
+        # Handle complex values
+        if np.iscomplexobj(x_vals):
+            x_vals = np.real(x_vals)
+        if np.iscomplexobj(y_vals):
+            y_vals = np.real(y_vals)
+        
+        # Replace inf/nan
+        x_vals = np.nan_to_num(x_vals, nan=0, posinf=0, neginf=0)
+        y_vals = np.nan_to_num(y_vals, nan=0, posinf=0, neginf=0)
+        
+        fig = Figure(figsize=(6, 4))
+        ax = fig.subplots()
+        ax.plot(x_vals, y_vals, 'b-', linewidth=1.5)
+        ax.set_title(f"Plot of {func_str}")
+        ax.grid(True)
+        ax.set_aspect('equal', adjustable='box')
+        
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png')
+        buf.seek(0)
+        return buf
+        
+    except Exception as e:
+        logging.warning(f"Parametric plot failed, falling back to placeholder: {e}")
+        return _minimal_png_placeholder()
+
+
+def generate_plot(func_str: str) -> io.BytesIO:
+    """Generate plot for various types of mathematical expressions."""
+    if Figure is None:
+        return _minimal_png_placeholder()
+
+    clean_func = func_str.replace('^', '**')
+    
+    # Detect plot type
+    has_equals = '=' in clean_func and '==' not in clean_func
+    has_parametric = has_equals and any(c in clean_func.lower() for c in ['t', 'θ', 'theta'])
+    
+    # Check for function notation like f(x)=expr, g(x)=expr, y=expr -> treat as explicit
+    is_function_notation = False
+    if has_equals:
+        lhs = clean_func.split('=', 1)[0].strip()
+        # Pattern: f(x), g(x), y, etc.
+        if lhs.endswith(')') and '(' in lhs:
+            # f(x), g(x), etc.
+            is_function_notation = True
+        elif lhs.lower() in ('y', 'x'):
+            # y = expr or x = expr (but x = is usually parametric, so check for t)
+            is_function_notation = True
+    
+    try:
+        if has_parametric and clean_func.count('=') >= 2:
+            # Parametric: x = f(t), y = g(t)
+            return _generate_parametric_plot(clean_func)
+        elif has_equals and not is_function_notation:
+            # Implicit: f(x, y) = 0 or f(x, y) = g(x, y)
+            return _generate_implicit_plot(clean_func)
+        else:
+            # Explicit: y = f(x) or function notation f(x)=expr
+            return _generate_explicit_plot(clean_func)
+    except Exception as e:
+        logging.error(f"Plot generation failed: {e}")
+        raise
+
 class MathCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -145,13 +383,39 @@ class MathCog(commands.Cog):
         try:
             clean_query = query.replace('^', '**')
             
+            # Handle function definitions/equations (e.g., f(x)=x^2, y=mx+b)
+            # Check for single = but not comparison operators
+            if '=' in clean_query and '==' not in clean_query and '!=' not in clean_query and '<=' not in clean_query and '>=' not in clean_query:
+                try:
+                    # Try to parse as sympy equation and solve
+                    lhs_str, rhs_str = clean_query.split('=', 1)
+                    lhs = sympy.sympify(lhs_str.strip(), evaluate=False)  # type: ignore[call-arg]
+                    rhs = sympy.sympify(rhs_str.strip(), evaluate=False)  # type: ignore[call-arg]
+                    equation = sympy.Eq(lhs, rhs)
+                    
+                    # Find free symbols to solve for
+                    free_symbols = equation.free_symbols
+                    if free_symbols:
+                        # Solve for the first free symbol (typically x)
+                        solutions = sympy.solve(equation, list(free_symbols)[0], dict=True)
+                        if solutions:
+                            # Format solutions nicely
+                            result_parts = []
+                            for sol in solutions:
+                                for var, val in sol.items():
+                                    result_parts.append(f"{var} = {val}")
+                            return "; ".join(result_parts)
+                except Exception:
+                    # If equation parsing fails, fall through to normal evaluation
+                    pass
+            
             # 1. Critical safety validation
             if not is_safe_expression(clean_query):
-                logging.warning(f"Unsafe expression blocked: {query}")
+                logging.debug(f"Expression not valid for local eval (will try Wolfram): {query}")
                 return None
                 
-            parsed_expr = sympy.sympify(clean_query, evaluate=False)
-            result = sympy.sympify(clean_query, evaluate=True)
+            parsed_expr = sympy.sympify(clean_query, evaluate=False)  # type: ignore[call-arg]
+            result = sympy.sympify(clean_query, evaluate=True)  # type: ignore[call-arg]
             
             # If the result is a SymPy Symbol, it's just a variable name (unsimplified/unsolved)
             if getattr(result, 'is_Symbol', False):
@@ -185,12 +449,7 @@ class MathCog(commands.Cog):
             await ctx.send("Please provide a mathematical function of `x` to plot (e.g., `x**2` or `sin(x)`).")
             return
             
-        # 2. Critical safety validation
-        if not is_safe_expression(func_str_clean.replace('^', '**')):
-            await ctx.send("Error: Unsafe characters or expressions detected in the plotting query.")
-            return
-
-        # 3. Offload blocking matplotlib rendering to a separate thread
+        # 2. Offload blocking matplotlib rendering to a separate thread
         try:
             buf = await asyncio.to_thread(generate_plot, func_str_clean)
         except Exception as e:
@@ -235,9 +494,11 @@ class MathCog(commands.Cog):
     async def math(self, ctx, *, query: str):
         await ctx.defer()
         
-        # Handle Plotting
-        if "plot" in query.lower():
-            func = query.lower().replace("plot", "").strip()
+        # Handle Plotting (both "plot" and "graph" keywords)
+        query_lower = query.lower()
+        if "plot" in query_lower or "graph" in query_lower:
+            # Remove the first occurrence of "plot" or "graph"
+            func = query_lower.replace("plot", "").replace("graph", "", 1).strip()
             await self.plot_function(ctx, func)
             return
 
@@ -260,7 +521,7 @@ class MathCog(commands.Cog):
 
     async def query_short_answer(self, query: str) -> str | None:
         if not WOLFRAM_SHORT_APPID: return None
-        url = "http://api.wolframalpha.com/v1/result"
+        url = "https://api.wolframalpha.com/v1/result"
         params = {"appid": WOLFRAM_SHORT_APPID, "i": query, "units": "metric"}
         try:
             async with aiohttp.ClientSession() as session:

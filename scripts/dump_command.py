@@ -3,9 +3,8 @@ import logging
 import sys
 import warnings
 import yaml
-from collections import OrderedDict
 from pathlib import Path
-from typing import Any, List, Union, Iterable
+from typing import Any, List, Iterable
 
 import discord
 from discord.ext import commands
@@ -126,7 +125,10 @@ async def main() -> None:
             "prefix": prefix,
             "extension_count": len(loaded_successfully),
             "loaded_extensions": loaded_successfully,
-            "modules": {name: enabled_modules.get(name, True) for name in sorted(OPTIONAL_MODULES)},
+            "modules": {
+                module_name: enabled_modules.get(module_name, True)
+                for module_name in sorted(OPTIONAL_MODULES)
+            },
             "failed_extensions": failed_extensions,
         },
         "prefix_commands": process_commands(bot.commands, is_tree=False),

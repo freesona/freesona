@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import time
+from pathlib import Path
 
 import discord
 from discord import app_commands
@@ -31,7 +32,7 @@ def _normalize_url(url: str) -> str:
     return url.replace("music.youtube.com", "www.youtube.com")
 
 
-async def _run(*cmd: str, timeout: int | None = None) -> int:
+def _clear_dir(directory: str) -> None:
     """Remove all files in a directory, ignoring errors."""
     for name in os.listdir(directory):
         try:
@@ -58,8 +59,10 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
     except asyncio.TimeoutError:
         proc.kill()
         raise
-    assert proc.returncode is not None  # guaranteed after wait()
-    return proc.returncode
+    return_code = proc.returncode
+    if return_code is None:
+        raise RuntimeError("Subprocess finished without an exit code.")
+    return return_code
 
 
 async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]:
@@ -76,8 +79,10 @@ async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]
     except asyncio.TimeoutError:
         proc.kill()
         raise
-    assert proc.returncode is not None  # guaranteed after communicate()
-    return proc.returncode, stdout.decode().strip()
+    return_code = proc.returncode
+    if return_code is None:
+        raise RuntimeError("Subprocess finished without an exit code.")
+    return return_code, stdout.decode().strip()
 
 
 class YtDlp(commands.Cog):
@@ -102,17 +107,18 @@ class YtDlp(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    def _cookies_for(self, url: str) -> list[str]:
+    @staticmethod
+    def _cookies_for(url: str) -> list[str]:
         """
         Return ['--cookies', '<path>'] if a COOKIES_<PLATFORM> env var is set,
         its file exists, and the platform name appears in the URL hostname.
-        Otherwise return [] (no auth).
+        Otherwise, return [] (no auth).
         """
         import re
         from urllib.parse import urlparse
         try:
             hostname = urlparse(url).hostname or ""
-        except Exception:
+        except (TypeError, ValueError):
             return []
 
         for key, path in os.environ.items():
@@ -134,7 +140,8 @@ class YtDlp(commands.Cog):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _get_duration(self, path: str) -> float | None:
+    @staticmethod
+    async def _get_duration(path: str) -> float | None:
         """Return the duration of a media file in seconds, or None on failure."""
         _, output = await _run_capture(
             "ffprobe", "-v", "error",
@@ -148,7 +155,8 @@ class YtDlp(commands.Cog):
             log.warning("ffprobe could not determine duration for %s", path)
             return None
 
-    async def _has_audio_stream(self, path: str) -> bool:
+    @staticmethod
+    async def _has_audio_stream(path: str) -> bool:
         """Return True if the file contains at least one audio stream."""
         _, output = await _run_capture(
             "ffprobe", "-v", "error",
@@ -232,7 +240,7 @@ class YtDlp(commands.Cog):
         for height in _VIDEO_RESOLUTIONS:
             _clear_dir(tmp_dir)
 
-            output_template = os.path.join(tmp_dir, "%(uploader)s – %(title)s.mp4")
+            output_template = str(Path(tmp_dir, "%(uploader)s – %(title)s.mp4"))
             code = await _run(
                 "yt-dlp",
                 *self._cookies_for(url),
@@ -261,7 +269,7 @@ class YtDlp(commands.Cog):
                 log.warning("Downloaded file has no audio stream at %dp; skipping.", height)
                 continue
 
-            size = os.path.getsize(path)
+            size = Path(path).stat().st_size
             if size <= self.LIMIT_BYTES:
                 return path
 
@@ -273,6 +281,7 @@ class YtDlp(commands.Cog):
 
     async def fetch_ytdlp(self, ctx: commands.Context, url: str, is_audio: bool = True, tmp_dir: str | None = None) -> str | None:
         """Download media into the provided temp directory and return the local file path."""
+        _ = ctx
         url = _normalize_url(url)
         if not is_public_http_url(url):
             raise RuntimeError("Please provide a public http(s) URL.")

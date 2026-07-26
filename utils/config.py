@@ -1,5 +1,6 @@
 # utils/config.py: Config I/O and shared embed helpers.
 
+import logging
 import os
 import json
 
@@ -27,9 +28,29 @@ DEFAULT_CONFIG = {
     "generation_split_delay_per_char": 0.012,
     "generation_split_delay_max": 3.5,
     "generation_rate_limit": 5,
+    # Model settings
+    "model_temperature": 0.7,
+    # Logging
+    "log_enabled": os.getenv("LOG_ENABLED", "false").lower() == "true",
+    "log_channel_id": int(os.getenv("LOG_CHANNEL_ID", "0")) if os.getenv("LOG_CHANNEL_ID") else 0,
+    "log_level": os.getenv("LOG_LEVEL", "INFO"),
+    "log_file_path": os.getenv("LOG_FILE_PATH", "logs/freesona.log"),
+    "log_file_max_months": int(os.getenv("LOG_FILE_MAX_MONTHS", "3")),
+    "log_include_discord": os.getenv("LOG_INCLUDE_DISCORD", "true").lower() == "true",
+    # Logging sections (granular control)
+    "log_section_general": os.getenv("LOG_SECTION_GENERAL", "true").lower() == "true",
+    "log_section_config": os.getenv("LOG_SECTION_CONFIG", "false").lower() == "true",
+    "log_section_ai": os.getenv("LOG_SECTION_AI", "true").lower() == "true",
+    "log_section_memory": os.getenv("LOG_SECTION_MEMORY", "false").lower() == "true",
+    "log_section_media": os.getenv("LOG_SECTION_MEDIA", "false").lower() == "true",
+    "log_section_moderation": os.getenv("LOG_SECTION_MODERATION", "false").lower() == "true",
+    "log_section_security": os.getenv("LOG_SECTION_SECURITY", "true").lower() == "true",
+    "log_section_webhook": os.getenv("LOG_SECTION_WEBHOOK", "false").lower() == "true",
 }
 
 DEFAULT_MODEL_NAME = os.getenv("MODEL_NAME", "gemini-flash-lite-latest")
+DEFAULT_MODEL_TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", "0.7"))
+DEFAULT_KB_TOP_K = int(os.getenv("KB_TOP_K", "5"))
 
 LAST_DEBUG: dict[int, str] = {}
 
@@ -42,8 +63,10 @@ def load_config() -> dict:
                 data = json.load(f)
                 if isinstance(data, dict):
                     config.update(data)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "Failed to load config from %s: %s", CONFIG_PATH, e, exc_info=True
+            )
     return config
 
 
@@ -69,6 +92,38 @@ def get_provider_name() -> str:
 def get_provider_model() -> str:
     model = load_config().get("provider_model") or os.getenv("AI_PROVIDER_MODEL") or get_model_name()
     return str(model).strip() or get_model_name()
+
+
+def get_model_temperature() -> float:
+    temp = load_config().get("model_temperature")
+    if isinstance(temp, (int, float, str)):
+        try:
+            return float(temp)
+        except (ValueError, TypeError):
+            pass
+    return DEFAULT_MODEL_TEMPERATURE
+
+
+def get_kb_top_k() -> int:
+    """Get the KB top-k value from config (default: 5)."""
+    val = load_config().get("kb_top_k")
+    if isinstance(val, (int, float, str)):
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            pass
+    return DEFAULT_KB_TOP_K
+
+
+def get_prompt_token_budget() -> int:
+    """Get the prompt token budget from config (default: 8000)."""
+    val = load_config().get("prompt_token_budget")
+    if isinstance(val, (int, float, str)):
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            pass
+    return 8000
 
 
 def embed_footer(author_display: str, query: str, max_query_len: int = 80) -> str:

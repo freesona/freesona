@@ -1,11 +1,11 @@
 import unittest
 import sys
-import os
+from pathlib import Path
 
 # Add workspace directory to path to allow importing cogs
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from cogs.tools.math import is_safe_expression, MathCog
+from cogs.tools.math import is_safe_expression, generate_plot, MathCog
 
 class MockBot:
     pass
@@ -80,15 +80,41 @@ class MathCogTests(unittest.TestCase):
             with self.subTest(query=query):
                 self.assertIsNone(self.cog.solve_locally(query))
 
-    def test_generate_plot(self):
-        from cogs.tools.math import generate_plot
+    def test_generate_plot_explicit(self):
         import io
-        # Test generating plot for a simple expression
-        buf = generate_plot("x**2")
-        self.assertIsInstance(buf, io.BytesIO)
-        # Ensure the bytes returned are actually a PNG image
-        png_data = buf.getvalue()
-        self.assertTrue(png_data.startswith(b"\x89PNG\r\n\x1a\n"))
+        # Test generating plot for explicit functions (regression)
+        for expr in ["x**2", "sin(x)", "x**3 - 2*x + 1", "y = x**2", "f(x)=x**2"]:
+            with self.subTest(expr=expr):
+                buf = generate_plot(expr)
+                self.assertIsInstance(buf, io.BytesIO)
+                png_data = buf.getvalue()
+                self.assertTrue(png_data.startswith(b"\x89PNG\r\n\x1a\n"))
+
+    def test_generate_plot_implicit(self):
+        import io
+        # Test generating plot for implicit functions
+        for expr in [
+            "x**2 + y**2 = 1",  # circle
+            "(x**2 + y**2 - 1)**3 - x**2 * y**3 = 0",  # heart curve
+        ]:
+            with self.subTest(expr=expr):
+                buf = generate_plot(expr)
+                self.assertIsInstance(buf, io.BytesIO)
+                png_data = buf.getvalue()
+                self.assertTrue(png_data.startswith(b"\x89PNG\r\n\x1a\n"))
+
+    def test_generate_plot_parametric(self):
+        import io
+        # Test generating plot for parametric equations
+        for expr in [
+            "x = cos(t), y = sin(t)",  # circle
+            "x = 16*sin(t)**3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",  # heart
+        ]:
+            with self.subTest(expr=expr):
+                buf = generate_plot(expr)
+                self.assertIsInstance(buf, io.BytesIO)
+                png_data = buf.getvalue()
+                self.assertTrue(png_data.startswith(b"\x89PNG\r\n\x1a\n"))
 
     def test_format_wolfram_text(self):
         # Test basic filtering
@@ -97,12 +123,41 @@ class MathCogTests(unittest.TestCase):
         self.assertEqual(self.cog.format_wolfram_text("Name | Value\nApple | Red"), "**Name ** | Value\n**Apple ** | Red")
         # Test stripping links and Wolfram ads
         self.assertEqual(
-            self.cog.format_wolfram_text("Wolfram Language code: foo\nResult:\n4\nplot: http://example.com/plot.png"),
+            self.cog.format_wolfram_text("Wolfram Language code: foo\nResult:\n4\nplot: https://example.com/plot.png"),
             "4"
         )
         self.assertEqual(self.cog.format_wolfram_text(""), "No result found.")
 
+    def test_regression_expressions_previously_failing(self):
+        """Test that expressions which previously failed the is_safe_expression check now work for plotting."""
+        # These expressions used to fail with "Unsafe characters or expressions detected"
+        # They should now generate valid plots
+        import io
+        for expr in [
+            "f(x)=x**2",  # function notation
+            "(x^2 + y^2 - 1)^3 - x^2*y^3 = 0",  # heart curve (with ^)
+            "x = 16*sin(t)^3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",  # parametric heart
+        ]:
+            with self.subTest(expr=expr):
+                buf = generate_plot(expr)
+                self.assertIsInstance(buf, io.BytesIO)
+                png_data = buf.getvalue()
+                self.assertTrue(png_data.startswith(b"\x89PNG\r\n\x1a\n"))
+
+    def test_solve_locally_still_secure(self):
+        """Ensure solve_locally still rejects dangerous expressions (security regression test)."""
+        dangerous = [
+            "__import__('os').system('whoami')",
+            "eval('2+2')",
+            "lambda x: x",
+            "open('file.txt')",
+            "__builtins__",
+        ]
+        for expr in dangerous:
+            with self.subTest(expr=expr):
+                result = self.cog.solve_locally(expr)
+                self.assertIsNone(result, f"solve_locally should reject: {expr}")
+
 
 if __name__ == "__main__":
     unittest.main()
-

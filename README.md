@@ -5,59 +5,80 @@
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-# Freesona - The Discord Bot You Customize
+# Freesona
 
-Most AI Discord bots give you a product. Verba, MEE6, and every other hosted platform give you a personality someone else built, running on infrastructure you don't control, with a ceiling you'll eventually hit.
+Freesona is an open-source, self-hosted Discord AI bot. It keeps persona,
+conversation, long-term memory, knowledge, and environment as separate systems.
 
-Freesona is different. It's a free, open alternative to hosted persona bots — with no ceiling. Fork it, drop in your API key, and get a self-hosted bot that can be a convincing AI character, a focused server utility, or both.
+Provide an API key, select an AI provider, and run the bot on your own
+infrastructure. Use Freesona to build a character, server companion, or utility
+bot with a defined persona.
 
-No credits. No voting. No "upgrade to unlock." Just a bot that does what you tell it.
-
-Freesona is a **BYOK** (Bring Your Own Key) project — you provide your own API credentials, and everything runs on your infrastructure.
+Freesona uses the **BYOK** (Bring Your Own Key) model. The selected provider
+and your infrastructure set the available capacity and cost.
 
 → [Features](docs/features.md) · [Commands](docs/commands.md) · [Discord](https://discord.gg/vXPRs2cHSE)
 
 ---
 
-## What makes it worth forking
+## Main features
 
-**The persona system is built to feel alive.** `/setpersona` opens a button-based editor for structured persona fields. Changes take effect immediately, no restart required.
-
-**It remembers people.** Facts about each user are extracted from conversation, scored by importance, and persisted to SQLite — injected automatically into future conversations. The identity key is the Discord `guild_id + user_id`, so memory stays isolated even in busy multi-user channels.
-
-**It can retrieve context semantically.** When ChromaDB is enabled, relevant knowledge chunks are queried and injected alongside the user's fact memory, giving the active provider a provider-neutral retrieval layer.
-
-**It can still use provider continuity when available.** Gemini's server-side `previous_interaction_id` flow is supported as an optional continuity path; other providers instead fall back to stateless prompt-based memory injection.
-
-**It won't double-reply.** A per-user-per-channel debounce collapses rapid successive messages into one response.
-
-**It can chime in on its own — intelligently.** Autonomous mode uses a confidence-scored intent evaluator, not random chance. Per-channel cooldowns prevent it from dominating a conversation.
-
-**It handles more than text.** Attach images, PDFs, audio, video, or code files — all processed through the active provider's multimodal pipeline.
-
-**It can target multiple AI backends.** The generation pipeline supports Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, and OpenRouter through a shared provider abstraction. The same commands work across all of them.
-
-**It has an optional local knowledge base.** ChromaDB-backed semantic retrieval is available for injecting relevant documents into generation context, and the bot ships with `/kbsearch`, `/kbadd`, `/kblist`, and `/kbdelete` for local knowledge-base management.
-
-**It's built to be extended.** Logic lives in `utils/` — generation, memory, persona, intent, security, search, config, provider routing, and ChromaDB are all separate modules. See [utils/README.md](utils/README.md).
+- User Memory stores user facts in SQLite. The `guild_id + user_id` key keeps
+  facts separate between Discord servers.
+- Character Memory stores shared experiences for a guild, user, and persona.
+  It works across channels in the same server.
+- ChromaDB can get relevant knowledge and add it to a generation request.
+- `ConversationManager` owns conversation history. AI providers remain
+  stateless and receive the same context through the system prompt.
+- A per-user, per-channel debounce combines rapid messages into one response.
+- Autonomous mode evaluates message intent and applies a per-channel cooldown.
+- The bot can process images, PDFs, audio, video, and code files.
+- The shared provider interface supports Gemini, OpenAI, Ollama, NVIDIA NIM,
+  Azure AI Foundry, Groq, and OpenRouter.
+- The optional knowledge base provides `/kbsearch`, `/kbadd`, `/kblist`, and
+  `/kbdelete` commands.
+- Shared logic is in `utils/`. See [the utilities guide](utils/README.md).
 
 ---
 
 ## Getting Started
 
+1. Clone the repository and create a virtual environment.
+
 ```bash
 git clone https://github.com/soquincy/Freesona.git
 cd Freesona
+python3 -m venv .venv
+```
+
+1. Activate the environment and install the dependencies.
+
+```bash
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Note for Windows users: Python's `zoneinfo` may lack IANA time zone data on some Windows installs. Install `tzdata` in your environment so `/settimezone` (and other `ZoneInfo` lookups) work correctly:
+For Windows PowerShell, run:
 
 ```powershell
-.venv\Scripts\pip.exe install tzdata
+.\.venv\Scripts\activate.ps1
+pip install -r requirements.txt
 ```
 
-`tzdata` is included in `requirements.txt` so it will be installed with `pip install -r requirements.txt` on new setups.
+```cmd
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+```
+
+On some Windows installations, Python `zoneinfo` does not include IANA time
+zone data. Install `tzdata` so `/settimezone` and other `ZoneInfo` calls work.
+
+```powershell
+pip install tzdata
+```
+
+`requirements.txt` includes `tzdata`. The dependency-installation command adds
+it to a new environment.
 
 Before pushing changes, run the local checks:
 
@@ -98,7 +119,7 @@ CHANNEL_ID=YOUR_LOG_CHANNEL_ID
 BOT_NAME=Freesona
 
 # AI Provider
-AI_PROVIDER=gemini          # gemini | openai | ollama | nim | azure | groq | openrouter
+AI_PROVIDER=          # gemini | openai | ollama | nim | azure | groq | openrouter
 AI_PROVIDER_MODEL=          # override the default model for the chosen provider
 MODEL_NAME=gemini-flash-lite-latest
 GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
@@ -115,10 +136,6 @@ GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
 # OPENROUTER_API_KEY=
 # OPENROUTER_SITE_URL=
 # OPENROUTER_SITE_NAME=Freesona
-
-# Search (optional legacy fallback for /search)
-GOOGLE_SEARCH_API_KEY=
-SEARCH_ENGINE_ID=
 
 # ChromaDB (optional — required for knowledge base retrieval)
 CHROMA_COLLECTION=freesona
@@ -152,35 +169,39 @@ ANNIVERSARIES_FILE_PATH=anniversaries.db
 # ANNIVERSARIES_FILE_PATH=/data/anniversaries.db
 ```
 
-| Environment | Path prefix | Notes |
-| :--- | :--- | :--- |
-| **Local** | `./` | Files saved in project folder |
-| **Railway** | `/data/` | Requires volume mounted to `/data` |
-| **Render** | `/data/` | Create files manually in environment page |
+| Environment | Path prefix | Notes                                     |
+|:------------|:------------|:------------------------------------------|
+| **Local**   | `./`        | Files saved in project folder             |
+| **Railway** | `/data/`    | Requires volume mounted to `/data`        |
+| **Render**  | `/data/`    | Create files manually in environment page |
 
-Without a persistent volume on cloud hosts, file changes won't survive a redeploy.
+Without a persistent volume on cloud hosts, file changes won't survive a redeployment.
 
 ---
 
 ## Persistence & Storage
 
-| File | What it stores |
-| :--- | :--- |
-| `config.json` | Prefix, conversation channel, autonomy settings, module states |
-| `persona.json` | Active persona fields |
-| `personas.json` | Saved persona presets |
-| `memory.db` | Long-term user facts, keyed by `guild_id + user_id` for provider-neutral memory injection |
-| `warnings.db` | Per-guild moderation warnings with hex IDs and timestamps |
-| `anniversaries.db` | User-claimed anniversary entries with optional calendar sync metadata |
-| `.chroma/` | ChromaDB vector store for knowledge base retrieval (optional) |
+| File                  | What it stores                                                                                                                   |
+|:----------------------|:---------------------------------------------------------------------------------------------------------------------------------|
+| `config.json`         | Prefix, conversation channel, autonomy settings, module states                                                                   |
+| `persona.json`        | Active persona fields                                                                                                            |
+| `personas.json`       | Saved persona presets                                                                                                            |
+| `memory.db`           | Long-term user facts, keyed by `guild_id + user_id` for provider-neutral memory injection                                        |
+| `character_memory.db` | Character Memory — shared experiences, promises, recurring jokes, relationship progression (per guild/user/persona)              |
+| `canon.db`            | Canon Framework — modular immutable identity components (identity, beliefs, motivations, rules, world assumptions, explanations) |
+| `warnings.db`         | Per-guild moderation warnings with hex IDs and timestamps                                                                        |
+| `anniversaries.db`    | User-claimed anniversary entries with optional calendar sync metadata                                                            |
+| `.chroma/`            | ChromaDB vector store for knowledge base retrieval (optional)                                                                    |
 
-Conversation history is maintained server-side via the Interactions API — no local per-channel message log. Clear it per-channel with `/clearmemory`.
+Conversation history is maintained by **ConversationManager** (provider-agnostic, in SQLite). Clear it per-channel with `/clearmemory`.
 
 ---
 
 ## Runtime Controls
 
 Admins can control optional modules without editing `main.py`:
+
+The `genai` module is an aggregate loader that registers AI commands by type-specific cogs (listener, generation, persona, memory, channel, autonomy).
 
 ```text
 /module list
@@ -250,23 +271,37 @@ Licensed under the **MIT License**. See [LICENSE](LICENSE).
 
 ## Roadmap
 
-### Short-term
+### Completed
 
-- [x] Finish the cog folder migration and clean up stale imports
-- [x] Fix help-panel interaction failures and make the help view resilient
-- [x] Make `/botwhitelist` show the current whitelist entries directly
-- [x] Migrate short-term memory from local rolling context to server-side Interactions API
-
-### Medium-term
-
-- [x] Multi-provider support — swap AI providers without changing command code (Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, OpenRouter)
+- [x] Provider abstraction — swap AI providers without changing command code (Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, OpenRouter)
 - [x] RSS monitors — post matching feed items into selected channels
 - [x] Warning system — per-guild moderation warnings with hex IDs, auto-threshold actions, and DM notifications
 - [x] Anniversary tracking — generic `anniversaries.db` backend for user-claimed date entries with optional calendar sync
 - [x] Full knowledge base commands — `/kbadd`, `/kblist`, `/kbdelete` on top of the existing ChromaDB retrieval layer
-- [ ] Optional generation logging — local-only logs for abuse reporting and debugging; disabled by default, no data leaves the host
+- [x] **ConversationManager** — Provider-agnostic short-term memory with budgets, TTL, and prompt injection
+- [x] **PromptBuilder** — Modular ContextProvider architecture with explicit ordering and inspection
+- [x] **Canon Framework** — Modular immutable identity components (identity, beliefs, motivations, rules, world assumptions, explanations)
+- [x] **Character Memory** — Shared experiences, promises, relationship progression (guild-scoped, cross-channel)
+- [x] **Guild World Context** — Environmental grounding (server name, channel, topic) as request-scoped context
+- [x] **Canonical Truth Invariant** — Architectural boundary: only Canon and PKB may define objective facts
 
-### Long-term
+### Short-term
+
+- [x] Optional generation logging — local-only logs for abuse reporting and debugging; disabled by default, no data leaves the host; configurable Discord channel and 3-month rotating file output
+- [x] Granular logging sections — per-section enable/disable (AI, Memory, Media, Moderation, Security, Webhook, General, Config) via `/logging` commands
+
+### Medium-term
 
 - [ ] Web dashboard via FastAPI — `fastapi_server.py` is already in the repo
 - [ ] Message claiming system for multi-instance deployments
+
+### Long-term
+
+- [ ] Knowledge Base 2.0 — Structured entry types (Canon Scene, Character Profile, World Rule, etc.) with rich metadata
+- [ ] Improved KB authoring tooling — deterministic ingestion, validation, and formatting guides
+
+---
+
+### AI-assisted development notice
+
+- *This project is developed using AI coding assistants as part of the development workflow. AI is used to accelerate implementation, refactoring, testing, and documentation, while architectural decisions, project philosophy, and final code review remain under human control. Generated code is reviewed, tested, and may be modified before inclusion.*

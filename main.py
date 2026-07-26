@@ -7,14 +7,19 @@ import os
 import logging
 import asyncio
 import uvicorn
+from pathlib import Path
 from fastapi_server import app
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 from utils.config import load_config, save_config
 from utils.modules import CORE_EXTENSIONS, OPTIONAL_MODULES, load_enabled_modules
+from utils.conversation import start_cleanup_task, stop_cleanup_task
+from utils.character_memory import start_extraction_task, stop_extraction_task
+from utils.logging_utils import setup_logging
 
+# Initial basic logging until setup_logging is called
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -32,6 +37,7 @@ except ValueError:
 
 def get_prefix(bot, message):
     """Reads the prefix from the in-memory bot config."""
+    _ = message
     return getattr(bot, "config", {}).get("prefix", "~")
 
 # --- Bot Class Definition ---
@@ -42,7 +48,22 @@ class Freesona(commands.Bot):
         self._legacy_notice_sent = False  # guard: only DM once per session
         self._startup_sent = False        # guard: only send startup message once per session
 
+    @property
+    def startup_sent(self) -> bool:
+        return self._startup_sent
+
+    @startup_sent.setter
+    def startup_sent(self, value: bool) -> None:
+        self._startup_sent = value
+
     async def setup_hook(self):
+        # Start background cleanup tasks
+        await start_cleanup_task()
+        await start_extraction_task()
+
+        # Setup logging after bot is initialized (for Discord channel logging)
+        setup_logging(self)
+
         enabled_modules = load_enabled_modules(self.config)
         extensions = CORE_EXTENSIONS + [
             ext for name, ext in OPTIONAL_MODULES.items()
@@ -57,6 +78,12 @@ class Freesona(commands.Bot):
 
         await self.tree.sync()
         logger.info(f"Synced slash commands for {self.user}")
+
+    async def close(self):
+        # Stop background cleanup tasks before closing
+        await stop_cleanup_task()
+        await stop_extraction_task()
+        await super().close()
 
     async def notify_owner_legacy(self, bot_name: str):
         """DM the bot owner about legacy persona.txt — called from genai cog."""
@@ -80,10 +107,10 @@ class Freesona(commands.Bot):
 
 # Initialize Bot
 intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.dm_messages = True
-intents.guilds = True
+setattr(intents, "message_content", True)
+setattr(intents, "members", True)
+setattr(intents, "dm_messages", True)
+setattr(intents, "guilds", True)
 
 bot = Freesona(command_prefix=get_prefix, intents=intents)
 bot.remove_command('help')
@@ -113,8 +140,8 @@ async def change_prefix(ctx, new_prefix: str):
 async def on_ready():
     logger.info(f'Logged in as {bot.user}')
 
-    if not bot._startup_sent:
-        bot._startup_sent = True
+    if not bot.startup_sent:
+        bot.startup_sent = True
         channel = bot.get_channel(CHANNEL_ID)
         if isinstance(channel, abc.Messageable):
             bot_name = os.getenv("BOT_NAME", "Bot")

@@ -3,10 +3,9 @@ import re
 import asyncio
 import logging
 import time
-import base64
 
 from dataclasses import dataclass, field
-from typing import Optional, Union, Dict, Any, cast
+from typing import Optional, Union, Dict, Any
 
 import discord
 from dotenv import load_dotenv
@@ -14,16 +13,22 @@ from dotenv import load_dotenv
 try:
     from google import genai
     from google.genai import types
-except Exception:
+except ImportError:
     genai = None
     types = None
 
-from utils.memory import (
-    inject_user_memory,
-)
+from utils.chroma import query_knowledge
 from utils.security import sanitize_prompt
-from utils.config import get_model_name, get_provider_name, get_provider_model, load_config
+from utils.config import get_model_name, get_provider_name, get_provider_model, load_config, get_model_temperature, get_kb_top_k
 from utils.providers import generate_text
+from utils.prompt_builder import build_system_prompt
+from utils.persona import PERSONA_DATA as GLOBAL_PERSONA_DATA
+from utils.conversation import (
+    add_user_message,
+    add_assistant_message,
+    get_last_interaction_id,
+    set_last_interaction_id,
+)
 
 load_dotenv()
 
@@ -33,6 +38,10 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 BOT_NAME       = os.getenv("BOT_NAME", "Bot")
 
 PROVIDER = get_provider_name()
+
+# Knowledge base config
+KB_TOP_K = get_kb_top_k()
+KB_ENABLED = os.getenv("KB_ENABLED", "true").lower() == "true"
 
 # Global state tracking for rate limiting
 call_timestamps: list[float] = []
@@ -54,6 +63,10 @@ def _get_split_delay_max() -> float:
 def _get_rate_limit() -> int:
     return int(load_config().get("generation_rate_limit", 5))
 
+# Note: We no longer use Gemini's Interactions API for conversation continuity.
+# Conversation history is now managed by Freesona's ConversationManager (utils/conversation.py)
+# which provides provider-agnostic short-term memory for ALL providers.
+# The client is kept for other Gemini-specific operations if needed.
 client = None
 if PROVIDER == "gemini" and genai is not None and GOOGLE_API_KEY:
     client = genai.Client(api_key=GOOGLE_API_KEY)
@@ -233,56 +246,78 @@ async def extract_attachments(message: Optional[discord.Message]) -> list[tuple[
     return results
 
 # ---------------------------------------------------------------------------
-# Input builders
+# Knowledge Base Retrieval
 # ---------------------------------------------------------------------------
 
-def _build_input(
-    text: str,
-    attachments: Optional[list[tuple[bytes, str]]],
-    reply: Optional[dict],
-    instruction_prefix: str,
-    username: str,
-) -> list[dict[str, Any]]:
-    payload: list[dict[str, Any]] = []
+async def retrieve_knowledge_context(
+    query: str,
+    persona: str,
+    top_k: int = KB_TOP_K,
+) -> str:
+    """
+    Retrieves relevant knowledge base entries for the given persona and query.
+    
+    Args:
+        query: The user's message/query to search for.
+        persona: The active persona identifier.
+        top_k: Maximum number of entries to retrieve.
+    
+    Returns:
+        Formatted knowledge context string, or empty string if disabled/no results.
+    """
+    if not KB_ENABLED:
+        return ""
+    
+    if not persona or not persona.strip():
+        return ""
+    
+    try:
+        # Run query off-thread to avoid blocking
+        entries = await asyncio.to_thread(query_knowledge, query, limit=top_k, persona=persona)
+        
+        if not entries:
+            return ""
+        
+        # Format entries as context
+        lines = ["Relevant Canonical Context"]
+        for i, entry in enumerate(entries, 1):
+            meta = entry.get("metadata", {})
+            document = entry.get("document", "").strip()
+            source = meta.get("source", "unknown")
+            entry_type = meta.get("entry_type", "unknown")
+            scene = meta.get("scene", "")
+            speaker = meta.get("speaker", "")
+            chapter = meta.get("chapter", "")
+            timestamp = meta.get("timestamp", "")
+            canon_level = meta.get("canon_level", "")
+            
+            context_parts = [f"{i}. {document}"]
+            details = []
+            if source and source != "unknown":
+                details.append(f"Source: {source}")
+            if entry_type and entry_type != "unknown":
+                details.append(f"Type: {entry_type}")
+            if scene:
+                details.append(f"Scene: {scene}")
+            if speaker:
+                details.append(f"Speaker: {speaker}")
+            if chapter:
+                details.append(f"Chapter: {chapter}")
+            if timestamp:
+                details.append(f"Timestamp: {timestamp}")
+            if canon_level:
+                details.append(f"Canon: {canon_level}")
+            
+            if details:
+                context_parts.append(f"   ({', '.join(details)})")
+            
+            lines.extend(context_parts)
+        
+        return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"Knowledge base retrieval failed: {e}")
+        return ""
 
-    if reply:
-        payload.append({"type": "text", "text": "When replying, address the author of the most recent message."})
-        payload.append({"type": "text", "text": f"[quoted from {reply['author']}]:\n{reply['content']}"})
-
-    name_tag = f"[{username}]: " if username else ""
-    user_text = f"{instruction_prefix}\n\n{name_tag}{text}".strip() if instruction_prefix else f"{name_tag}{text}".strip()
-
-    if user_text:
-        payload.append({"type": "text", "text": user_text})
-
-    for att_bytes, att_mime in (attachments or []):
-        b64_data = base64.b64encode(att_bytes).decode("utf-8")
-        media_type = "image" if att_mime.startswith("image/") else "document"
-        payload.append({"type": media_type, "data": b64_data, "mime_type": att_mime})
-
-    if not payload:
-        payload.append({"type": "text", "text": "Hello"})
-
-    return payload
-
-def _consume_stream(client_obj, kwargs_dict):
-    stream = client_obj.interactions.create(stream=True, **kwargs_dict)
-    text_acc = ""
-    last_interaction_id = None
-
-    for event in stream:
-        # Per official SDK cookbook: events are raw StepDelta objects.
-        # Check for text delta directly: hasattr(event, "delta") and event.delta.text
-        if hasattr(event, "delta") and hasattr(event.delta, "text") and event.delta.text:
-            text_acc += str(event.delta.text)
-
-        # Capture interaction ID from completed events
-        if hasattr(event, "event_type") and event.event_type == "interaction.completed":
-            interaction = getattr(event, "interaction", None)
-            if interaction and getattr(interaction, "id", None):
-                last_interaction_id = str(interaction.id)
-
-    return text_acc, last_interaction_id
 
 # ---------------------------------------------------------------------------
 # Core generation
@@ -300,62 +335,89 @@ async def generate(
     instruction_prefix: str = "",
     username: str = "",
     attachments: Optional[list[tuple[bytes, str]]] = None,
+    persona_id: str = "",
+    guild_world_accessor: Any = None,
 ) -> ConversationResponse:
     await rate_limit()
 
-    text = prompt.get("content", "") if isinstance(prompt, dict) else (prompt or "")
-    text = sanitize_prompt(text)
+    # Extract content and metadata from prompt dict (payload from listener)
+    if isinstance(prompt, dict):
+        text = prompt.get("content", "")
+        mentions = prompt.get("mentions", [])
+        reply = prompt.get("reply")
+    else:
+        text = prompt or ""
+        mentions = []
+        reply = None
     
-    persona = current_persona if apply_persona else ""
-    if apply_persona and guild_id and user_id:
-        memory_block = await inject_user_memory(guild_id, user_id, username)
-        if memory_block:
-            persona = f"{current_persona}\n\n{memory_block}"
+    text = sanitize_prompt(text)
 
-    input_payload = _build_input(text, attachments, None, instruction_prefix, username)
+    # Add user message to conversation history (short-term memory)
+    if guild_id and channel_id and user_id:
+        await add_user_message(guild_id, channel_id, user_id, text, message_id, username, mentions, reply)
+
+    # Build system prompt using PromptBuilder (includes conversation history via ConversationHistoryProvider)
+    persona = await build_system_prompt(
+        current_persona=current_persona,
+        persona_id=persona_id,
+        guild_id=guild_id,
+        channel_id=channel_id,
+        user_id=user_id,
+        username=username,
+        apply_persona=apply_persona,
+        instruction_prefix=instruction_prefix,
+        kb_enabled=KB_ENABLED,
+        kb_top_k=KB_TOP_K,
+        user_message=text,
+        persona_data=GLOBAL_PERSONA_DATA,
+        guild_world_accessor=guild_world_accessor,
+    )
 
     try:
         provider_name = get_provider_name()
         current_model = get_provider_model() or get_model_name()
-        kwargs_interaction: Optional[Dict[str, Any]] = None
-        output_text: Optional[str] = None
+        current_temperature = get_model_temperature()
 
-        if provider_name != "gemini":
-            output = generate_text(text, system_prompt=persona, provider=provider_name, model=current_model)
+        # All providers now use the same stateless generate_text interface.
+        # Conversation history is injected via the system prompt (ConversationHistoryProvider),
+        # NOT via provider-specific APIs like Gemini's Interactions API.
+        # This makes providers completely stateless and interchangeable.
+        
+        # Get previous interaction ID for Gemini multi-turn support
+        previous_interaction_id = None
+        if provider_name == "gemini" and guild_id and channel_id and user_id:
+            from utils.conversation import get_last_interaction_id
+            previous_interaction_id = await get_last_interaction_id(guild_id, channel_id, user_id)
+        
+        output = generate_text(
+            text,
+            system_prompt=persona,
+            provider=provider_name,
+            model=current_model,
+            max_output_tokens=2048,
+            temperature=current_temperature,
+            attachments=attachments,
+            instruction_prefix=instruction_prefix,
+            username=username,
+            user_id=user_id,
+            extra_payload={"previous_interaction_id": previous_interaction_id} if previous_interaction_id else None,
+        )
+        
+        # Handle new return type (tuple of output_text, interaction_id)
+        if isinstance(output, tuple):
+            output_text, interaction_id = output
+        else:
             output_text = output or "Something went wrong."
+            interaction_id = None
+        
+        # Store interaction ID for next turn
+        if interaction_id and provider_name == "gemini" and guild_id and channel_id and user_id:
+            from utils.conversation import set_last_interaction_id
+            await set_last_interaction_id(guild_id, channel_id, user_id, interaction_id)
 
-        elif client and types:
-            if hasattr(client, "interactions"):
-                # Interactions API: input is a list of part dicts with "type" keys,
-                # or a plain string. _build_input already returns the correct format.
-                kwargs_interaction = {
-                    "model": current_model,
-                    "input": input_payload,
-                    "generation_config": {"max_output_tokens": 1024},
-                }
-                if apply_persona and persona:
-                    kwargs_interaction["system_instruction"] = persona
-
-                full_text, _ = await asyncio.to_thread(_consume_stream, client, kwargs_interaction)
-                output_text = full_text
-            else:
-                # Models API: expects SDK types
-                # Cast to Any to satisfy Pylance strictness for this specific parameter
-                content_objs = [
-                    types.Content(role="user", parts=[
-                        types.Part.from_text(text=p["text"]) if p["type"] == "text"
-                        else types.Part.from_bytes(data=base64.b64decode(p["data"]), mime_type=p["mime_type"])
-                        for p in input_payload
-                    ])
-                ]
-                config = types.GenerateContentConfig(system_instruction=persona) if persona else None
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=current_model,
-                    contents=cast(Any, content_objs),
-                    config=config,
-                )
-                output_text = response.text if response else None
+        # Add assistant response to conversation history
+        if guild_id and channel_id and user_id and output_text:
+            await add_assistant_message(guild_id, channel_id, user_id, output_text)
 
         return build_response(clean_text(output_text or "Something went wrong."))
 
@@ -371,4 +433,4 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
     except Exception:
         return build_response("Something went wrong. Try again.")
 
-__all__ = ["ConversationResponse", "build_response", "extract_attachments", "safe_generate", "send_response"]
+__all__ = ["ConversationResponse", "build_response", "extract_attachments", "retrieve_knowledge_context", "safe_generate", "send_response"]

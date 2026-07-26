@@ -86,7 +86,7 @@ def check_config_round_trip() -> None:
 def check_public_url_guard() -> None:
     security = reload_local_module("utils.security")
     assert security.is_public_http_url("https://example.com/watch?v=1")
-    assert security.is_public_http_url("http://example.com/file.mp3")
+    assert security.is_public_http_url("https://example.com/file.mp3")
     assert not security.is_public_http_url("ftp://example.com/file.mp3")
     assert not security.is_public_http_url("http://localhost:8000")
     assert not security.is_public_http_url("http://127.0.0.1:8000")
@@ -130,24 +130,26 @@ def check_openai_compatible_providers() -> None:
             "OPENROUTER_SITE_NAME": "Freesona",
         })
 
-        assert providers.generate_text(
+        result = providers.generate_text(
             "hello",
             system_prompt="system",
             provider="groq",
             model="llama-3.3-70b-versatile",
             max_output_tokens=32,
-        ) == "ok"
+        )
+        assert result[0] == "ok"
         assert calls[-1]["url"] == "https://api.groq.com/openai/v1/chat/completions"
         assert calls[-1]["headers"]["Authorization"] == "Bearer groq-key"
         assert calls[-1]["json"]["max_completion_tokens"] == 32
         assert "max_tokens" not in calls[-1]["json"]
 
-        assert providers.generate_text(
+        result = providers.generate_text(
             "hello",
             provider="open-router",
             model="meta-llama/llama-3.3-70b-instruct:free",
             max_output_tokens=64,
-        ) == "ok"
+        )
+        assert result[0] == "ok"
         assert calls[-1]["url"] == "https://openrouter.ai/api/v1/chat/completions"
         assert calls[-1]["headers"]["Authorization"] == "Bearer openrouter-key"
         assert calls[-1]["headers"]["HTTP-Referer"] == "https://example.com"

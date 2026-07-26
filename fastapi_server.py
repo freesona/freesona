@@ -2,15 +2,29 @@
 import asyncio
 import json
 import logging
-import os
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
 
-app = FastAPI()
 logger = logging.getLogger("FreesonaBot")
 
 _mvsep_jobs: dict[str, asyncio.Future] = {}
+
+
+@asynccontextmanager
+async def lifespan(fastapi_app: FastAPI):
+    _ = fastapi_app
+    # Startup
+    yield
+    # Shutdown - clean up pending futures
+    for job_hash, future in list(_mvsep_jobs.items()):
+        if not future.done():
+            future.cancel()
+    _mvsep_jobs.clear()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/")
@@ -62,7 +76,9 @@ async def mvsep_webhook(request: Request):
         return {"status": "ok"}
 
     if not _is_valid_mvsep_payload(payload):
-        logger.warning(f"MVSEP webhook rejected invalid payload from {request.client.host if request.client else 'unknown'}")
+        client = request.client
+        client_host = client.host if client is not None else "unknown"
+        logger.warning("MVSEP webhook rejected invalid payload from %s", client_host)
         return Response(status_code=400)
 
     job_hash = _mvsep_hash(payload)
