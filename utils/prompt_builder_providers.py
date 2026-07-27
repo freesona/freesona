@@ -55,9 +55,12 @@ class SystemContextProvider(ContextProvider):
         
         # Add Discord-specific instructions for proper mention format
         discord_instructions = (
-            "When mentioning users on Discord, ALWAYS use the <@USER_ID> format "
-            "(e.g., <@123456789012345678>). Do NOT use @username format — it will not ping the user. "
-            "User IDs are provided in message context when available."
+            "Discord mention guidelines:\n"
+            "- When REPLYING to a message (using Discord's reply feature), do NOT add a @mention — the reply already notifies the user.\n"
+            "- When mentioning the user you're responding to in a NON-reply message, use <@USER_ID> format to ping them.\n"
+            "- When referencing other users in conversation, prefer their display name or nickname naturally; use <@USER_ID> only when you want to actively ping/notify them.\n"
+            "- User IDs and mention formats are provided in message context when available.\n"
+            "- Do NOT use @username format — it will not ping the user."
         )
         
         # Match current XML tag format from persona.py assemble_persona()
