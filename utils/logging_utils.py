@@ -223,6 +223,9 @@ class DiscordLogHandler(logging.Handler):
         """Emit a log record to Discord (async)."""
         if not self.bot.is_ready():
             return
+        # Skip discord internal loggers to avoid feedback loops
+        if record.name.startswith("discord."):
+            return
         channel = self.bot.get_channel(self.channel_id)
         if channel is None or not hasattr(channel, "send"):
             return

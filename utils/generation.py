@@ -217,7 +217,12 @@ async def send_response(
                     await asyncio.sleep(segment.delay)
 
             if i == 0 and reply_to is not None:
-                await reply_to.reply(segment.text)
+                try:
+                    await reply_to.reply(segment.text)
+                except discord.NotFound:
+                    # Message was deleted or is inaccessible; fall back to regular send
+                    logger.debug(f"Reply target message not found, falling back to channel.send")
+                    await channel.send(segment.text)
             else:
                 await channel.send(segment.text)
         except discord.Forbidden:
