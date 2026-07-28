@@ -295,7 +295,7 @@ class ConfigBackButton(Button):
         super().__init__(label="← Back", style=discord.ButtonStyle.danger, row=4)
 
     async def callback(self, interaction: discord.Interaction):
-        view: ConfigPanelView = self.view  # type: ignore
+        view = self.view
         embed = await ConfigPanelView.create_initial_embed(view.mode)
         await interaction.response.edit_message(embed=embed, view=ConfigPanelView(view.bot, view.mode))
 
