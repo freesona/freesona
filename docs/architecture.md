@@ -559,12 +559,13 @@ Log sections provide granular control over what gets logged. Each section maps t
 
 ### Implementation
 
-The logging system is implemented in `utils/logging_utils.py` with three main components:
+The logging system is implemented in `utils/logging_utils.py` with four main components:
 
 1. **`MonthlyRotatingFileHandler`** — Custom `logging.handlers.BaseRotatingHandler` that creates a new file every N months based on the current date
 2. **`DiscordLogHandler`** — Custom `logging.Handler` that forwards formatted log records to a Discord channel asynchronously
 3. **`SectionFilter`** — Custom `logging.Filter` that allows/denies records based on enabled log sections
-4. **`setup_logging(bot)`** — Configures root logger with console, file, and optional Discord handlers based on config
+4. **`DiscordFeedbackFilter`** — Custom `logging.Filter` that suppresses log records from `discord.*` loggers (e.g., `discord.http`, `discord.gateway`, `discord.client`) to prevent feedback loops where Discord library debug logs trigger HTTP requests that generate more logs
+5. **`setup_logging(bot)`** — Configures root logger with console, file, and optional Discord handlers based on config
 
 The `setup_logging()` function is called from `main.py` in `Freesona.setup_hook()` after the bot is initialized, allowing the Discord handler to access the bot instance.
 

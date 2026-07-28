@@ -217,18 +217,27 @@ async def send_response(
                     await asyncio.sleep(segment.delay)
 
             if i == 0 and reply_to is not None:
-                try:
-                    await reply_to.reply(segment.text)
-                except discord.NotFound:
-                    # Message was deleted or is inaccessible; fall back to regular send
-                    logger.debug(f"Reply target message not found, falling back to channel.send")
-                    await channel.send(segment.text)
+                await _send_first_segment_with_reply(channel, segment.text, reply_to)
             else:
                 await channel.send(segment.text)
         except discord.Forbidden:
             channel_id = getattr(channel, "id", "Unknown")
             logger.warning(f"Missing permissions to send messages in channel {channel_id}")
             return
+
+
+async def _send_first_segment_with_reply(
+    channel: discord.abc.Messageable,
+    text: str,
+    reply_to: discord.Message,
+) -> None:
+    """Send the first segment, trying reply first then falling back to regular send."""
+    try:
+        await reply_to.reply(text)
+    except discord.NotFound:
+        # Message was deleted or is inaccessible; fall back to regular send
+        logger.debug(f"Reply target message not found, falling back to channel.send")
+        await channel.send(text)
 
 # ---------------------------------------------------------------------------
 # Attachment helper

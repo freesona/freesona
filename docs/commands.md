@@ -82,6 +82,7 @@ The bot responds to messages in the configured conversation channel. `all` repli
 | `/personalist` (`~personalist`, alias `~plist`)                   | List saved persona presets                                             | Bot Owner                  |
 | `/personadelete <name>` (`~personadelete`, alias `~pdel`)         | Delete a saved persona preset                                          | Bot Owner                  |
 | `/debugpersona` (`~debugpersona`, alias `~pdeb`)                  | Show active persona, last prompt, provider/model, lock state, autonomy | Bot Owner                  |
+| `/personareload` (`~personareload`, alias `~preload`)             | Reload persona from JSON file without rebooting                        | Bot Owner                  |
 | `/memorylist [user]` (`~memorylist`, alias `~meml`)               | List long-term memory facts for a user                                 | User (own) / Administrator |
 | `/memoryclear [user]` (`~memoryclear`, alias `~memcl`)            | Clear long-term memory facts for a user                                | User (own) / Administrator |
 | `/memorydelete <index> [user]` (`~memorydelete`, alias `~memdel`) | Delete a specific memory fact by list number                           | User (own) / Administrator |
@@ -106,6 +107,7 @@ The bot responds to messages in the configured conversation channel. `all` repli
 | `/botwhitelist remove <bot_id>`                | Remove a bot ID from the whitelist                                                           | Administrator |
 | `/sync`                                        | Sync global slash commands                                                                   | Bot Owner     |
 | `/dumpconfig`                                  | Dump current `config.json` contents                                                          | Bot Owner     |
+| `/reboot`                                      | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart.   | Bot Owner     |
 | `/config show [key]`                           | Show all runtime config values, or a specific key                                            | Bot Owner     |
 | `/config list`                                 | List all configurable keys with descriptions                                                 | Bot Owner     |
 | `/config set <key> <value>`                    | Set a config value (type-converted)                                                          | Bot Owner     |

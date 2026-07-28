@@ -766,6 +766,15 @@ class AdminCog(commands.Cog):
             await ctx.send(f"Sync failed: {e}", ephemeral=True)
 
     # ------------------------------------------------------------------
+    # /reboot
+    # ------------------------------------------------------------------
+    @commands.hybrid_command(name="reboot", help="Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart.")
+    @commands.is_owner()
+    async def reboot_cmd(self, ctx):
+        await ctx.send("Rebooting...", ephemeral=True if ctx.interaction else False)
+        await self.bot.close()
+
+    # ------------------------------------------------------------------
     # /settimezone
     # ------------------------------------------------------------------
     @commands.hybrid_command(name="settimezone", help="Set the bot's timezone for time-sensitive features.", usage="<timezone>")
