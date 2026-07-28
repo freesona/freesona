@@ -149,8 +149,6 @@ fi
 # Optional: Complimentary tokens
 echo ""
 echo "--- Optional Integrations (press Enter to skip) ---"
-read -p "Logokit Token [${LOGOKIT_TOKEN:-YOUR_LOGOKIT_KEY_HERE}]: " input
-LOGOKIT_TOKEN="${input:-${LOGOKIT_TOKEN:-YOUR_LOGOKIT_KEY_HERE}}"
 read -p "MVSEP API Key [${MVSEP_API_KEY:-YOUR_MVSEP_API_KEY}]: " input
 MVSEP_API_KEY="${input:-${MVSEP_API_KEY:-YOUR_MVSEP_API_KEY}}"
 read -p "MVSEP Webhook URL [${MVSEP_WEBHOOK_URL:-https://your-public-host.example.com/webhooks/mvsep}]: " input
@@ -201,7 +199,6 @@ KB_ENABLED=${KB_ENABLED}
 KB_TOP_K=${KB_TOP_K:-5}
 
 # Complimentary tokens
-LOGOKIT_TOKEN=${LOGOKIT_TOKEN}
 MVSEP_API_KEY=${MVSEP_API_KEY}
 MVSEP_WEBHOOK_URL=${MVSEP_WEBHOOK_URL}
 MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR=false

@@ -142,7 +142,6 @@ CHROMA_COLLECTION=freesona
 CHROMA_PERSIST_DIRECTORY=./.chroma
 
 # Complimentary tokens
-LOGOKIT_TOKEN=YOUR_LOGOKIT_KEY_HERE   # for source logos in RSS embeds
 MVSEP_API_KEY=YOUR_MVSEP_API_KEY
 MVSEP_WEBHOOK_URL=https://your-public-host.example.com/webhooks/mvsep
 MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR=false

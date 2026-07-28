@@ -214,7 +214,7 @@ class ConfigPanelView(View):
             await interaction.response.edit_message(embed=embed, view=self)
         else:
             # Edit mode: show buttons for each key
-            view = ConfigKeySelectView(self.bot, category)
+            view = ConfigKeySelectView(self.bot, category, self.mode)
             embed = discord.Embed(
                 title=f"Edit Config: {category}",
                 description="Select a key to edit:",
@@ -247,10 +247,11 @@ class ConfigPanelView(View):
 class ConfigKeySelectView(View):
     """View with buttons for each config key in a category."""
 
-    def __init__(self, bot: commands.Bot, category: str):
+    def __init__(self, bot: commands.Bot, category: str, mode: str = "edit"):
         super().__init__(timeout=300)
         self.bot = bot
         self.category = category
+        self.mode = mode  # "list" or "edit"
 
         # Add buttons for each key in the category
         keys = CONFIG_CATEGORIES.get(category, [])

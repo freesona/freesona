@@ -184,7 +184,48 @@ def build_response(text: str) -> ConversationResponse:
         segments.append(MessageSegment(text=seg, delay=delay, typing=True))
     return ConversationResponse(segments=segments)
 
+def _strip_reasoning_tags(text: str) -> str:
+    """
+    Strip reasoning/thinking tags from AI output.
+    
+    Some models (especially reasoning models) output their thought process
+    in XML-like tags such as <thought>, <thinking>, <reasoning>, etc.
+    These should not be shown to users.
+    """
+    # Pattern matches: <thought>...</thought>, <thinking>...</thinking>,
+    # <reasoning>...</reasoning>, and self-closing variants like <thought/> or <thought id="1"/>
+    reasoning_tags = [
+        r"<thought>.*?</thought>",
+        r"<thinking>.*?</thinking>",
+        r"<reasoning>.*?</reasoning>",
+        r"<reflection>.*?</reflection>",
+        r"<analysis>.*?</analysis>",
+        r"<internal_monologue>.*?</internal_monologue>",
+        r"<scratchpad>.*?</scratchpad>",
+        # Self-closing tags (with optional attributes)
+        r"<thought(?:\s[^>]*)?\s*/>",
+        r"<thinking(?:\s[^>]*)?\s*/>",
+        r"<reasoning(?:\s[^>]*)?\s*/>",
+        r"<reflection(?:\s[^>]*)?\s*/>",
+        r"<analysis(?:\s[^>]*)?\s*/>",
+        r"<internal_monologue(?:\s[^>]*)?\s*/>",
+        r"<scratchpad(?:\s[^>]*)?\s*/>",
+    ]
+    
+    for pattern in reasoning_tags:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Clean up any extra whitespace left by removed tags
+    text = re.sub(r"\n\s*\n\s*\n", "\n\n", text)  # Max 2 consecutive newlines
+    text = text.strip()
+    
+    return text
+
+
 def clean_text(text: str, limit: int = 4000) -> str:
+    # Strip reasoning tags first
+    text = _strip_reasoning_tags(text)
+    
     if len(text) <= limit:
         return text
     cut = text[:limit]
@@ -359,16 +400,18 @@ async def generate(
         text = prompt.get("content", "")
         mentions = prompt.get("mentions", [])
         reply = prompt.get("reply")
+        embeds = prompt.get("embeds", [])
     else:
         text = prompt or ""
         mentions = []
         reply = None
+        embeds = []
     
     text = sanitize_prompt(text)
 
     # Add user message to conversation history (short-term memory)
     if guild_id and channel_id and user_id:
-        await add_user_message(guild_id, channel_id, user_id, text, message_id, username, mentions, reply)
+        await add_user_message(guild_id, channel_id, user_id, text, message_id, username, mentions, reply, embeds)
 
     # Build system prompt using PromptBuilder (includes conversation history via ConversationHistoryProvider)
     persona = await build_system_prompt(

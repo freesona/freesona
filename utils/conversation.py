@@ -30,6 +30,7 @@ class ConversationMessage:
     mentions: Optional[list[dict]] = None
     reply: Optional[dict] = None
     interaction_id: Optional[str] = None  # For Gemini Interactions API multi-turn support
+    embeds: Optional[list[str]] = None  # Text representation of message embeds
 
 
 @dataclass
@@ -91,6 +92,7 @@ async def add_message(
     username: Optional[str] = None,
     mentions: Optional[list[dict]] = None,
     reply: Optional[dict] = None,
+    embeds: Optional[list[str]] = None,
 ) -> None:
     """Add a message to the conversation history."""
     if not content or not content.strip():
@@ -106,6 +108,7 @@ async def add_message(
         username=username,
         mentions=mentions,
         reply=reply,
+        embeds=embeds,
     )
     state.messages.append(msg)
     await _enforce_limits(state)
@@ -120,9 +123,10 @@ async def add_user_message(
     username: Optional[str] = None,
     mentions: Optional[list[dict]] = None,
     reply: Optional[dict] = None,
+    embeds: Optional[list[str]] = None,
 ) -> None:
     """Add a user message to the conversation history."""
-    await add_message(guild_id, channel_id, user_id, "user", content, message_id, username, mentions, reply)
+    await add_message(guild_id, channel_id, user_id, "user", content, message_id, username, mentions, reply, embeds)
 
 
 async def add_assistant_message(
@@ -241,8 +245,19 @@ async def build_conversation_context(
                     r_author_id = reply.get("author_id", "Unknown")
                     r_content = reply.get("content", "")
                     parts.append(f"  {r_role.capitalize()} ({r_author}, ID: {r_author_id}): {r_content}")
+                    # Add reply embeds if present
+                    if reply.get("embeds"):
+                        parts.append("  Embeds:")
+                        for embed_text in reply["embeds"]:
+                            parts.append(f"    {embed_text}")
             
             parts.append(f"Message:\n{msg.content}")
+            
+            # Add embeds if present
+            if msg.embeds:
+                parts.append("Embeds:")
+                for embed_text in msg.embeds:
+                    parts.append(f"  {embed_text}")
             
         else:
             parts.append(f"Assistant: {msg.content}")
@@ -289,6 +304,15 @@ def _estimate_tokens(state: ConversationState) -> int:
     total_chars = 0
     for msg in state.messages:
         total_chars += len(msg.content)
+        # Include embeds in token estimation
+        if msg.embeds:
+            for embed_text in msg.embeds:
+                total_chars += len(embed_text)
+        # Include reply embeds in token estimation
+        if msg.reply and isinstance(msg.reply, dict):
+            if msg.reply.get("embeds"):
+                for embed_text in msg.reply["embeds"]:
+                    total_chars += len(embed_text)
     # Rough estimate: 4 chars per token
     return total_chars // 4
 

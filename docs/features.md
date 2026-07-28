@@ -492,7 +492,7 @@ Attach an image, PDF, audio file, video, or code file to any AI command or conve
 
 ## RSS News Feeds
 
-`/rss latest <feed>` reads RSS/Atom feeds and posts the latest headlines. `/rss add`, `/rss remove`, and `/rss list` manage feed sources. Default feeds include BBC World, BBC Tech, NPR News, and Al Jazeera. Auto-posting polls every 5 minutes and sends new articles to the configured channel. Source logos are fetched via LogoKit if `LOGOKIT_TOKEN` is set.
+`/rss latest <feed>` reads RSS/Atom feeds and posts the latest headlines. `/rss add`, `/rss remove`, and `/rss list` manage feed sources. Default feeds include BBC World, BBC Tech, NPR News, and Al Jazeera. Auto-posting polls every 5 minutes and sends new articles to the configured channel.
 
 ---
 

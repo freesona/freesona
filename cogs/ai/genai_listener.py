@@ -28,8 +28,37 @@ class ReplyPayload(TypedDict, total=False):
     is_webhook: bool
     role: str
 
-PayloadValue: TypeAlias = str | int | bool | None | list[MentionPayload] | ReplyPayload
+PayloadValue: TypeAlias = str | int | bool | None | list[MentionPayload] | ReplyPayload | list[str]
 PayloadDict: TypeAlias = dict[str, PayloadValue]
+
+
+def _extract_embeds(embeds: list[discord.Embed]) -> list[str]:
+    """
+    Extract text representation from Discord embeds.
+    
+    Args:
+        embeds: List of Discord Embed objects.
+        
+    Returns:
+        List of text representations of the embeds.
+    """
+    embed_texts = []
+    for embed in embeds:
+        parts = []
+        if embed.title:
+            parts.append(f"**{embed.title}**")
+        if embed.description:
+            parts.append(embed.description)
+        if embed.fields:
+            for field in embed.fields:
+                parts.append(f"**{field.name}**: {field.value}")
+        if embed.footer and embed.footer.text:
+            parts.append(f"*{embed.footer.text}*")
+        if embed.author and embed.author.name:
+            parts.append(f"-- {embed.author.name}")
+        if parts:
+            embed_texts.append("\n".join(parts))
+    return embed_texts
 
 
 def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDict:
@@ -55,6 +84,13 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
         "reply": None,
     }
 
+    # Include embeds from any message with embeds
+    # Embeds are converted to text representation for the AI to process
+    if message.embeds:
+        embed_texts = _extract_embeds(message.embeds)
+        if embed_texts:
+            payload["embeds"] = embed_texts
+
     if message.reference and isinstance(message.reference.resolved, discord.Message):
         ref = message.reference.resolved
         payload["reply"] = {
@@ -65,6 +101,11 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
             "is_webhook": ref.webhook_id is not None,
             "role": resolve_message_role(ref, bot_id),
         }
+        # Also include embeds from replied-to message
+        if ref.embeds:
+            embed_texts = _extract_embeds(ref.embeds)
+            if embed_texts:
+                payload["reply"]["embeds"] = embed_texts
 
     return payload
 
