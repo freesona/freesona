@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 # ASCII Art Banner
 print_banner() {
 cat << 'EOF'
+
                     IIIII                                                                                                                  
                     II II                                                                                                                  
                     II II                                                                                                                  
@@ -257,7 +258,7 @@ python scripts/check_project.py
 
 echo ""
 echo "====================================================="
-echo "  Setup complete! Starting Freesona..."
+echo "         Setup complete! Starting Freesona...        "
 echo "====================================================="
 echo ""
 python main.py
