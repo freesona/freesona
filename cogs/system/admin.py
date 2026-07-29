@@ -972,7 +972,6 @@ logging_group = app_commands.Group(name="logging", description="Logging system c
 
 
 @logging_group.command(name="status", description="Show current logging configuration and enabled sections")
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_status(interaction: discord.Interaction):
 
@@ -1034,7 +1033,6 @@ async def logging_status(interaction: discord.Interaction):
     app_commands.Choice(name="Security", value="security"),
     app_commands.Choice(name="Webhook", value="webhook"),
 ])
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_enable(interaction: discord.Interaction, section: app_commands.Choice[str]):
 
@@ -1063,7 +1061,6 @@ async def logging_enable(interaction: discord.Interaction, section: app_commands
     app_commands.Choice(name="Security", value="security"),
     app_commands.Choice(name="Webhook", value="webhook"),
 ])
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_disable(interaction: discord.Interaction, section: app_commands.Choice[str]):
 
@@ -1092,7 +1089,6 @@ async def logging_disable(interaction: discord.Interaction, section: app_command
     app_commands.Choice(name="Security", value="security"),
     app_commands.Choice(name="Webhook", value="webhook"),
 ])
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_toggle(interaction: discord.Interaction, section: app_commands.Choice[str]):
 
@@ -1113,7 +1109,6 @@ async def logging_toggle(interaction: discord.Interaction, section: app_commands
 
 @logging_group.command(name="setchannel", description="Set the Discord channel for log output")
 @app_commands.describe(channel="Discord channel to send logs to")
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
 
@@ -1125,7 +1120,6 @@ async def logging_setchannel(interaction: discord.Interaction, channel: discord.
 
 
 @logging_group.command(name="clearchannel", description="Clear the Discord log channel setting")
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_clearchannel(interaction: discord.Interaction):
 
@@ -1144,7 +1138,6 @@ async def logging_clearchannel(interaction: discord.Interaction):
     app_commands.Choice(name="WARNING", value="WARNING"),
     app_commands.Choice(name="ERROR", value="ERROR"),
 ])
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_setlevel(interaction: discord.Interaction, level: app_commands.Choice[str]):
 
@@ -1159,7 +1152,6 @@ async def logging_setlevel(interaction: discord.Interaction, level: app_commands
 
 @logging_group.command(name="test", description="Send a test log message to the configured channel")
 @app_commands.describe(message="Test message to send")
-@app_commands.checks.has_permissions(administrator=True)
 @is_owner_check()
 async def logging_test(interaction: discord.Interaction, message: str = "Test log message"):
 
