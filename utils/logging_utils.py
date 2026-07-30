@@ -42,7 +42,7 @@ LOG_SECTIONS = {
 LOGGER_SECTION_MAP = {
     # Config changes (more specific)
     "utils.config": "config",
-    "cogs.system.admin": "config",
+    "cogs.system.config": "config",
     # AI providers and generation (more specific)
     "utils.providers": "ai",
     "utils.generation": "ai",
@@ -222,6 +222,9 @@ class DiscordLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord):
         """Emit a log record to Discord (async)."""
         if not self.bot.is_ready():
+            return
+        # Skip discord internal loggers to avoid feedback loops
+        if record.name.startswith("discord."):
             return
         channel = self.bot.get_channel(self.channel_id)
         if channel is None or not hasattr(channel, "send"):

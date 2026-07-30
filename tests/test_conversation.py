@@ -20,12 +20,12 @@ from utils.conversation import (
     clear_conversation,
     get_conversation_stats,
     cleanup_expired_conversations,
+    _estimate_tokens,
 )
 
 _conversation_store = getattr(conversation_module, "_conversation_store")
 _store_lock = getattr(conversation_module, "_store_lock")
 _conversation_key = getattr(conversation_module, "_conversation_key")
-_estimate_tokens = getattr(conversation_module, "_estimate_tokens")
 
 
 class TestConversationMessage(unittest.TestCase):
@@ -430,6 +430,153 @@ class TestConversationFormat(unittest.IsolatedAsyncioTestCase):
         self.assertLess(idx_msg1, idx_assistant)
         self.assertLess(idx_assistant, idx_user2)
         self.assertLess(idx_user2, idx_msg2)
+
+
+class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
+    """Tests for embeds in conversation context."""
+
+    async def asyncSetUp(self):
+        async with _store_lock:
+            _conversation_store.clear()
+
+    async def asyncTearDown(self):
+        async with _store_lock:
+            _conversation_store.clear()
+
+    async def test_build_context_with_embeds_in_user_message(self):
+        """Test that embeds in user messages are included in conversation context."""
+        await add_user_message(
+            guild_id=1,
+            channel_id=2,
+            user_id=3,
+            content="Check this out",
+            message_id=100,
+            username="Alice",
+            embeds=["**Title**\nDescription\n**Field**: Value"],
+        )
+
+        result = await build_conversation_context(1, 2, 3)
+
+        self.assertIn("Embeds:", result)
+        self.assertIn("**Title**\nDescription\n**Field**: Value", result)
+
+    async def test_build_context_with_multiple_embeds_in_user_message(self):
+        """Test that multiple embeds in user messages are all included."""
+        await add_user_message(
+            guild_id=1,
+            channel_id=2,
+            user_id=3,
+            content="Multiple embeds",
+            message_id=100,
+            username="Alice",
+            embeds=["Embed 1 content", "Embed 2 content", "Embed 3 content"],
+        )
+
+        result = await build_conversation_context(1, 2, 3)
+
+        self.assertIn("Embeds:", result)
+        self.assertIn("Embed 1 content", result)
+        self.assertIn("Embed 2 content", result)
+        self.assertIn("Embed 3 content", result)
+
+    async def test_build_context_with_embeds_in_reply(self):
+        """Test that embeds in reply messages are included in conversation context."""
+        await add_user_message(
+            guild_id=1,
+            channel_id=2,
+            user_id=3,
+            content="Replying to this",
+            message_id=101,
+            username="Alice",
+            reply={
+                "role": "user",
+                "author": "Bob",
+                "author_id": 4,
+                "content": "Original message",
+                "embeds": ["**Reply Embed**\nEmbed description"],
+            },
+        )
+
+        result = await build_conversation_context(1, 2, 3)
+
+        self.assertIn("Reply to:", result)
+        self.assertIn("Reply Embed", result)
+        self.assertIn("Embed description", result)
+        # Check that embeds are indented under reply
+        self.assertIn("  Embeds:", result)
+        self.assertIn("    **Reply Embed**\nEmbed description", result)
+
+    async def test_build_context_with_embeds_in_both_message_and_reply(self):
+        """Test that embeds in both message and reply are included."""
+        await add_user_message(
+            guild_id=1,
+            channel_id=2,
+            user_id=3,
+            content="My message with embed",
+            message_id=100,
+            username="Alice",
+            embeds=["**Message Embed**\nContent here"],
+            reply={
+                "role": "assistant",
+                "author": "Bot",
+                "author_id": 999,
+                "content": "Bot reply",
+                "embeds": ["**Reply Embed**\nReply content"],
+            },
+        )
+
+        result = await build_conversation_context(1, 2, 3)
+
+        # Check message embeds
+        self.assertIn("**Message Embed**\nContent here", result)
+        # Check reply embeds
+        self.assertIn("**Reply Embed**\nReply content", result)
+
+    async def test_token_estimation_includes_embeds(self):
+        """Test that token estimation includes embeds content."""
+        state = await get_conversation(1, 2, 3)
+        
+        # Add message with embeds
+        msg = conversation_module.ConversationMessage(
+            role="user",
+            content="Hello",
+            timestamp=time.time(),
+            embeds=["Embed content here"],
+        )
+        state.messages.append(msg)
+        
+        # Add message with reply embeds
+        msg2 = conversation_module.ConversationMessage(
+            role="user",
+            content="Reply",
+            timestamp=time.time(),
+            reply={"embeds": ["Reply embed content"]},
+        )
+        state.messages.append(msg2)
+
+        tokens = _estimate_tokens(state)
+        
+        # "Hello" (5) + "Reply" (5) + "Embed content here" (18) + "Reply embed content" (19) = 47 chars
+        # 47 // 4 = 11 tokens
+        self.assertGreaterEqual(tokens, 11)
+
+    async def test_token_estimation_includes_reply_embeds(self):
+        """Test that token estimation includes reply embeds."""
+        state = await get_conversation(1, 2, 3)
+        
+        msg = conversation_module.ConversationMessage(
+            role="user",
+            content="Hi",
+            timestamp=time.time(),
+            reply={"embeds": ["Reply embed here"]},
+        )
+        state.messages.append(msg)
+
+        tokens = _estimate_tokens(state)
+        
+        # "Hi" (2) + "Reply embed here" (16) = 18 chars
+        # 18 // 4 = 4 tokens (minimum)
+        self.assertGreaterEqual(tokens, 4)
 
 
 if __name__ == "__main__":

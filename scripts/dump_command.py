@@ -1,3 +1,4 @@
+# scripts/dump_command.py: Python module.
 import asyncio
 import logging
 import sys

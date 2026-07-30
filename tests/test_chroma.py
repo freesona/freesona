@@ -1,3 +1,4 @@
+# tests/test_chroma.py: Python module.
 import io
 import unittest
 import zipfile

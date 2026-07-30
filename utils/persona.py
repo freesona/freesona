@@ -133,22 +133,35 @@ def save_profiles(profiles: dict):
         json.dump(profiles, f, indent=2, ensure_ascii=False)
 
 
-def init_persona():
-    global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
+def _load_and_assemble_persona() -> tuple[str, bool, dict]:
+    """Load persona from JSON file or legacy file. Returns (assembled_persona, legacy_detected, persona_data)."""
     if os.path.exists(AI_PERSONA_JSON_PATH):
-        PERSONA_DATA = load_persona_json()
-        CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
-        LEGACY_DETECTED = False
+        persona_data = load_persona_json()
+        current_persona = assemble_persona(persona_data)
+        legacy_detected = False
     else:
         legacy = load_legacy_persona()
         if legacy:
-            PERSONA_DATA = default_persona_json()
-            CURRENT_PERSONA = legacy
-            LEGACY_DETECTED = True
+            persona_data = default_persona_json()
+            current_persona = legacy
+            legacy_detected = True
         else:
-            PERSONA_DATA = default_persona_json()
-            CURRENT_PERSONA = os.getenv("AI_PERSONA", "You are a helpful assistant.")
-            LEGACY_DETECTED = False
+            persona_data = default_persona_json()
+            current_persona = os.getenv("AI_PERSONA", "You are a helpful assistant.")
+            legacy_detected = False
+    return current_persona, legacy_detected, persona_data
+
+
+def init_persona():
+    global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
+    CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = _load_and_assemble_persona()
+
+
+def reload_persona() -> tuple[str, bool]:
+    """Reload persona from JSON file. Returns (assembled_persona, legacy_detected)."""
+    global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
+    CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = _load_and_assemble_persona()
+    return CURRENT_PERSONA, LEGACY_DETECTED
 
 
 # Run on import

@@ -1,8 +1,8 @@
-# cogs/system/news.py: RSS/Atom news feed commands + auto-posting loop.
+# cogs/system/news.py: RSS/Atom news feed commands and auto-posting loop.
 
-import os
 import asyncio
 import logging
+import re
 import aiohttp
 import discord
 from discord import app_commands
@@ -31,49 +31,6 @@ async def feed_autocomplete(
             choices.append(app_commands.Choice(name=name, value=name))
     return choices[:25]
 
-def get_logo_url(article_link: str) -> str:
-    """Extracts base domain and returns LogoKit URL with environment-based token."""
-    if not article_link:
-        return ""
-    
-    token = os.getenv("LOGOKIT_TOKEN")
-    if not token:
-        logger.warning("LOGOKIT_TOKEN is missing from environment variables.")
-        return ""
-
-    # Clean only surrounding whitespace; avoid stripping quotes that may be part of the token
-    token = token.strip()
-    # Only strip surrounding quotes if they wrap the entire token
-    if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
-        token = token[1:-1]
-    if not token:
-        return ""
-
-    try:
-        hostname = urlparse(article_link).netloc.lower()
-        # Strip port if present
-        if ":" in hostname:
-            hostname = hostname.split(":")[0]
-            
-        parts = hostname.split('.')
-        if len(parts) < 2:
-            return ""
-            
-        # Logic to handle second-level domains (e.g., .co.uk, .com.au, .org.uk, .co.jp, etc.)
-        # Common second-level TLDs
-        second_level_tlds = {
-            "co", "com", "org", "net", "gov", "edu", "ac", "mil", "mod", "police",
-            "ne", "or", "gr", "sch", "ac", "go", "lg", "nhs", "nic", "govt", "k12"
-        }
-        if len(parts) >= 3 and parts[-2] in second_level_tlds:
-            domain = ".".join(parts[-3:])
-        else:
-            domain = ".".join(parts[-2:])
-            
-        return f"https://img.logokit.com/{domain}?token={token}"
-    except Exception as e:
-        logger.debug(f"LogoKit URL generation failed for {article_link}: {e}")
-        return ""
 
 class NewsCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -85,9 +42,7 @@ class NewsCog(commands.Cog):
 
     @staticmethod
     def _build_news_embed(item, name: str):
-        """Standardized embed builder with LogoKit footer icon."""
-        logo_url = get_logo_url(item.link)
-        
+        """Standardized embed builder for news articles."""
         # Deduplicate title and summary (Nitter feeds often put tweet text in both)
         title = item.title[:256]
         summary = item.summary[:400] if item.summary else ""
@@ -118,10 +73,7 @@ class NewsCog(commands.Cog):
         if item.published:
             footer_text += f"  •  {item.published}"
         
-        if logo_url:
-            embed.set_footer(text=footer_text, icon_url=logo_url)
-        else:
-            embed.set_footer(text=footer_text)
+        embed.set_footer(text=footer_text)
         return embed
 
     @tasks.loop(minutes=POLL_INTERVAL_MINUTES)

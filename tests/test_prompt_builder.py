@@ -169,7 +169,11 @@ class TestSystemContextProvider(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.mutability, Mutability.IMMUTABLE)
         # System instructions should be present, plus Discord mention instruction appended
         self.assertIn("<system_instructions>\nYou are a helpful assistant.", result.content)
-        self.assertIn("When mentioning users on Discord, ALWAYS use the <@USER_ID> format", result.content)
+        self.assertIn("Discord mention guidelines:", result.content)
+        self.assertIn("When REPLYING to a message (using Discord's reply feature), do NOT add a @mention", result.content)
+        self.assertIn("When mentioning the user you're responding to in a NON-reply message, use <@USER_ID> format to ping them", result.content)
+        self.assertIn("When referencing other users in conversation, prefer their display name or nickname naturally", result.content)
+        self.assertIn("Do NOT use @username format", result.content)
         self.assertTrue(result.content.endswith("</system_instructions>"))
     
     async def test_build_returns_empty_when_no_system_instructions(self):
@@ -664,7 +668,8 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
             apply_persona=True,
         )
         self.assertIn("Global sys", result)
-        self.assertIn("When mentioning users on Discord, ALWAYS use the <@USER_ID> format", result)
+        self.assertIn("Discord mention guidelines:", result)
+        self.assertIn("When REPLYING to a message (using Discord's reply feature), do NOT add a @mention", result)
         self.assertIn("<role>\nGlobal core\n</role>", result)
     
     @patch("utils.memory.get_user_facts_prompt")
@@ -680,7 +685,8 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
             persona_data={"system_instructions": "Provided sys", "core_personality": "Provided core"}
         )
         self.assertIn("Provided sys", result)
-        self.assertIn("When mentioning users on Discord, ALWAYS use the <@USER_ID> format", result)
+        self.assertIn("Discord mention guidelines:", result)
+        self.assertIn("When REPLYING to a message (using Discord's reply feature), do NOT add a @mention", result)
         self.assertIn("<role>\nProvided core\n</role>", result)
 
 

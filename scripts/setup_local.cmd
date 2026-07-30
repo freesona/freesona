@@ -133,8 +133,6 @@ if /I "%KB_ENABLED%"=="true" (
 REM Optional: Complimentary tokens
 echo.
 echo --- Optional Integrations (press Enter to skip) ---
-set /p LOGOKIT_TOKEN="Logokit Token [%LOGOKIT_TOKEN%]: "
-if "%LOGOKIT_TOKEN%"=="" set "LOGOKIT_TOKEN=YOUR_LOGOKIT_KEY_HERE"
 set /p MVSEP_API_KEY="MVSEP API Key [%MVSEP_API_KEY%]: "
 if "%MVSEP_API_KEY%"=="" set "MVSEP_API_KEY=YOUR_MVSEP_API_KEY"
 set /p MVSEP_WEBHOOK_URL="MVSEP Webhook URL [%MVSEP_WEBHOOK_URL%]: "
@@ -185,7 +183,6 @@ echo KB_ENABLED=%KB_ENABLED%
 echo KB_TOP_K=%KB_TOP_K%
 echo.
 echo # Complimentary tokens
-echo LOGOKIT_TOKEN=%LOGOKIT_TOKEN%
 echo MVSEP_API_KEY=%MVSEP_API_KEY%
 echo MVSEP_WEBHOOK_URL=%MVSEP_WEBHOOK_URL%
 echo MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR=false

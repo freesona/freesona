@@ -288,7 +288,7 @@ Freesona's logging system supports granular log sections to control verbosity pe
 | Section | Config Key | Logger Prefixes | Default | Description |
 |:--------|:-----------|:----------------|:--------|:------------|
 | General | `log_section_general` | `main`, `cogs`, `utils` | ✅ Enabled | Bot lifecycle, cog loading, general events |
-| Config | `log_section_config` | `utils.config`, `cogs.system.admin` | ❌ Disabled | Configuration changes |
+| Config | `log_section_config` | `utils.config`, `cogs.system.config` | ❌ Disabled | Configuration changes |
 | AI | `log_section_ai` | `utils.providers`, `utils.generation`, `utils.prompt_builder*`, `cogs.ai` | ✅ Enabled | AI provider calls, generation, prompt assembly |
 | Memory | `log_section_memory` | `utils.memory`, `utils.conversation`, `utils.character_memory`, `utils.canon`, `utils.chroma` | ❌ Disabled | Memory operations (conversation, facts, character, canon, KB) |
 | Media | `log_section_media` | `cogs.media`, `utils.search` | ❌ Disabled | Media operations (MVSEP, yt-dlp, search) |
@@ -314,7 +314,7 @@ LOGGER_SECTION_MAP = {
     "cogs": "general",
     "utils": "general",
     "utils.config": "config",
-    "cogs.system.admin": "config",
+    "cogs.system.config": "config",
     "utils.providers": "ai",
     "utils.generation": "ai",
     "utils.prompt_builder": "ai",

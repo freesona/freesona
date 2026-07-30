@@ -6,7 +6,7 @@ CORE_EXTENSIONS = [
     "cogs.system.help",
     "cogs.tools.ping",
     "cogs.system.status",
-    "cogs.system.admin",
+    "cogs.system.system",  # Aggregate extension that loads split system command cogs.
 ]
 
 OPTIONAL_MODULES = {
@@ -20,6 +20,14 @@ OPTIONAL_MODULES = {
     "mvsep":      "cogs.media.mvsep",
     "warns":      "cogs.moderation.warns",
     "chroma":     "cogs.ai.chroma",
+    # Granular system modules (can be enabled/disabled independently)
+    "module":     "cogs.system.module",
+    "model":      "cogs.system.model",
+    "provider":   "cogs.system.provider",
+    "config":     "cogs.system.config",
+    "logging":    "cogs.system.logging",
+    "core":       "cogs.system.core",
+    "timezone":   "cogs.system.timezone",
 }
 
 DEFAULT_ENABLED_MODULES = {name: True for name in OPTIONAL_MODULES}

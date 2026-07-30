@@ -1,3 +1,5 @@
+# cogs/ai/genai_common.py: Shared constants and helpers for AI cogs.
+
 import asyncio
 import logging
 import os

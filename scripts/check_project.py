@@ -1,3 +1,4 @@
+# scripts/check_project.py: Python module.
 #!/usr/bin/env python3
 """Project checks that can run before pushing without editor tooling."""
 
@@ -332,4 +333,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

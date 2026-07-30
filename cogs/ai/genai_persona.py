@@ -1,3 +1,4 @@
+# cogs/ai/genai_persona.py: Python module.
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -10,6 +11,7 @@ from utils.persona import (
     default_persona_json,
     load_profiles,
     open_persona_panel,
+    reload_persona,
     save_persona_json,
     save_profiles,
 )
@@ -141,3 +143,15 @@ class GenAIPersonaCog(commands.Cog):
         )
         embed.add_field(name="Last Prompt (this channel)", value=f"```{last[:900]}```", inline=False)
         await ctx.send(embed=embed, ephemeral=True if ctx.interaction else False)
+
+    # -------------------------------------------------------------------
+    # /personareload
+    # -------------------------------------------------------------------
+    @commands.hybrid_command(
+        name="personareload", aliases=["preload"], help="Reload persona from persona.json (Owner only)."
+    )
+    @commands.is_owner()
+    async def persona_reload(self, ctx: commands.Context):
+        persona, legacy = reload_persona()
+        status = " (legacy mode)" if legacy else ""
+        await ctx.send(f"Persona reloaded from `persona.json`.{status}", ephemeral=True if ctx.interaction else False)

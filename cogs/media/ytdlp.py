@@ -1,4 +1,4 @@
-# cogs/media/ytdlp.py: yt-dlp video downloader
+# cogs/media/ytdlp.py: yt-dlp video downloader for Discord.
 
 import asyncio
 import logging

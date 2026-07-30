@@ -1,3 +1,5 @@
+# cogs/ai/genai_autonomy.py: Autonomy mode configuration and bot whitelist management.
+
 from typing import Optional
 
 import discord

@@ -26,7 +26,14 @@ Freesona/
 │   │   ├── core.py           # Kick, ban, timeout, purge
 │   │   └── warns.py          # Warn, delwarn, warnthresholds
 │   ├── system/
-│   │   ├── admin.py          # Module, model, provider, sync, timezone, dumpconfig
+│   │   ├── system.py         # Aggregate system extension loader (registers split system cogs)
+│   │   ├── core.py           # Core commands: /sync, /reboot, /dumpconfig
+│   │   ├── config.py         # Configuration management: /config
+│   │   ├── logging.py        # Logging configuration: /logging
+│   │   ├── module.py         # Module management: /module
+│   │   ├── model.py          # Model management: /model
+│   │   ├── provider.py       # Provider management: /provider
+│   │   ├── timezone.py       # Timezone commands: /settimezone, /timezone
 │   │   ├── help.py           # Custom help panel
 │   │   ├── news.py           # RSS/Atom feed fetching and auto-posting
 │   │   └── status.py         # /ping
@@ -40,6 +47,7 @@ Freesona/
     ├── canon.py              # Canon Framework — modular immutable identity components
     ├── character_memory.py   # Character Memory — shared experiences, promises, relationships
     ├── config.py             # Config I/O (config.json), embed_footer
+    ├── config_schema.py      # Centralized configuration schema definitions
     ├── conversation.py       # ConversationManager — short-term memory, budgets, context
     ├── generation.py         # Provider orchestration, PromptBuilder integration, send_response
     ├── guild_world.py        # Guild World Context — environmental grounding
@@ -52,7 +60,9 @@ Freesona/
     ├── roles.py              # Role resolution for message author tagging
     ├── rss.py                # RSS/Atom XML parser, feed CRUD, seen-link deduplication
     ├── search.py             # Gemini grounding + Google Custom Search fallback
-    └── security.py           # URL guard, injection detection, output sanitization
+    ├── security.py           # URL guard, injection detection, output sanitization
+    └── views/
+        └── config_views.py   # Interactive Discord UI components for /config panel
 ```
 
 All cogs depend on `utils/`. Cogs do not import from each other, except that `mvsep.py` calls `ytdlp.py` via `bot.get_cog("YtDlp")` (not a direct import) to download platform audio before submitting to MVSEP.
@@ -437,15 +447,28 @@ Config keys (see `config.sample.json`):
 Cogs are split into **core** (always loaded) and **optional** (can be toggled at runtime without restart):
 
 ```python
-CORE_EXTENSIONS = [help, ping, status, admin]
-OPTIONAL_MODULES = {genai, math, news, ytdlp, mvsep, moderation, warns, hello, random}
+CORE_EXTENSIONS = ["cogs.system.core", "cogs.system.help", "cogs.system.status", "cogs.system.config",
+                   "cogs.system.module", "cogs.system.model", "cogs.system.provider", "cogs.system.logging",
+                   "cogs.system.timezone"]
+OPTIONAL_MODULES = {
+    "genai": "cogs.ai.genai",
+    "math": "cogs.tools.math",
+    "news": "cogs.system.news",
+    "ytdlp": "cogs.media.ytdlp",
+    "mvsep": "cogs.media.mvsep",
+    "moderation": "cogs.moderation.core",
+    "warns": "cogs.moderation.warns",
+    "hello": "cogs.fun.hello",
+    "random": "cogs.fun.random",
+}
 ```
 
 `genai` maps to `cogs.ai.genai`, an aggregate extension that registers multiple AI cogs by command type.
+The core system cogs (`cogs.system.*`) are now granular modules — `system.py` is an aggregate extension that registers all split system cogs.
 
 Enabled/disabled state persists in `config.json` under `"enabled_modules"`. The `/module enable`, `/module disable`, and `/module reload` commands call `bot.load_extension` / `unload_extension` / `reload_extension` at runtime and re-sync slash commands automatically.
 
-**Dependency guard:** `mvsep` requires `ytdlp` — the admin cog enforces this at enable/disable time.
+**Dependency guard:** `mvsep` requires `ytdlp` — the module cog enforces this at enable/disable time.
 
 > [!NOTE]
 > `/provider set` now routes through the shared provider abstraction in `utils/providers.py`. All providers are stateless and receive conversation context via the system prompt (ConversationHistoryProvider). The legacy Gemini Interactions API has been removed.
@@ -547,7 +570,7 @@ Log sections provide granular control over what gets logged. Each section maps t
 | Section | Config Key | Logger Prefixes | Default |
 |:--------|:-----------|:----------------|:--------|
 | General | `log_section_general` | `main`, `cogs`, `utils` | ✅ Enabled |
-| Config | `log_section_config` | `utils.config`, `cogs.system.admin` | ❌ Disabled |
+| Config | `log_section_config` | `utils.config`, `cogs.system.config` | ❌ Disabled |
 | AI | `log_section_ai` | `utils.providers`, `utils.generation`, `utils.prompt_builder*`, `cogs.ai` | ✅ Enabled |
 | Memory | `log_section_memory` | `utils.memory`, `utils.conversation`, `utils.character_memory`, `utils.canon`, `utils.chroma` | ❌ Disabled |
 | Media | `log_section_media` | `cogs.media`, `utils.search` | ❌ Disabled |
@@ -559,12 +582,13 @@ Log sections provide granular control over what gets logged. Each section maps t
 
 ### Implementation
 
-The logging system is implemented in `utils/logging_utils.py` with three main components:
+The logging system is implemented in `utils/logging_utils.py` with four main components:
 
 1. **`MonthlyRotatingFileHandler`** — Custom `logging.handlers.BaseRotatingHandler` that creates a new file every N months based on the current date
 2. **`DiscordLogHandler`** — Custom `logging.Handler` that forwards formatted log records to a Discord channel asynchronously
 3. **`SectionFilter`** — Custom `logging.Filter` that allows/denies records based on enabled log sections
-4. **`setup_logging(bot)`** — Configures root logger with console, file, and optional Discord handlers based on config
+4. **`DiscordFeedbackFilter`** — Custom `logging.Filter` that suppresses log records from `discord.*` loggers (e.g., `discord.http`, `discord.gateway`, `discord.client`) to prevent feedback loops where Discord library debug logs trigger HTTP requests that generate more logs
+5. **`setup_logging(bot)`** — Configures root logger with console, file, and optional Discord handlers based on config
 
 The `setup_logging()` function is called from `main.py` in `Freesona.setup_hook()` after the bot is initialized, allowing the Discord handler to access the bot instance.
 

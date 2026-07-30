@@ -1,3 +1,4 @@
+# utils/providers.py: Python module.
 import os
 import logging
 from typing import Any
@@ -192,6 +193,16 @@ def _get_mime_category(mime_type: str) -> str:
         return "file"
 
 
+def _normalize_mime_type(mime_type: str) -> str:
+    """Normalize MIME types to ones supported by Gemini API."""
+    # Map unsupported MIME types to supported equivalents
+    mime_mapping = {
+        "video/quicktime": "video/mov",
+        "video/x-quicktime": "video/mov",
+    }
+    return mime_mapping.get(mime_type.lower(), mime_type)
+
+
 def build_interactions_input(
     user_prompt: str,
     attachments: list[tuple[bytes, str]] | None = None,
@@ -230,6 +241,9 @@ def build_interactions_input(
                     "uri": url,
                 })
                 continue
+            
+            # Normalize MIME type to supported equivalent
+            att_mime = _normalize_mime_type(att_mime)
             
             mime_category = _get_mime_category(att_mime)
             
