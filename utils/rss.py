@@ -3,11 +3,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 import html
 import re
 import xml.etree.ElementTree as element_tree
 
 from utils.config import load_config, save_config
+
+# RDF namespace constant
+RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+
+
+class _ImageURLExtractor(HTMLParser):
+    """HTML parser to extract the first image URL from HTML content."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.image_url: str = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() == "img" and not self.image_url:
+            for name, value in attrs:
+                if name == "src" and value:
+                    self.image_url = value
+                    break
+
+
+def extract_image_url_from_html(html_text: str) -> str:
+    """Extract the first image URL from HTML content using a proper HTML parser."""
+    if not html_text:
+        return ""
+    parser = _ImageURLExtractor()
+    parser.feed(html_text)
+    return parser.image_url
 
 RSS_FEEDS_KEY    = "rss_feeds"
 RSS_SEEN_KEY     = "rss_seen"       # set of seen article links, persisted in config.json
@@ -120,6 +148,64 @@ def mark_links_seen(links: list[str]) -> None:
 # XML helpers
 # ---------------------------------------------------------------------------
 
+def _deduplicate_short_urls(text: str) -> str:
+    """Remove duplicate short URLs (like reut.rs/xxx) from text.
+    
+    Nitter feeds often duplicate short URLs in titles and descriptions.
+    """
+    # Pattern to match short URLs with or without protocol
+    url_pattern = r'(?:https?://)?(?:reut\.rs|t\.co|bit\.ly|tinyurl\.com|goo\.gl|ow\.ly|is\.gd|buff\.ly|adf\.ly|bit\.do|short\.io|cutt\.ly|v\.gd|tr\.im|u\.nu|yourls\.org)/[a-zA-Z0-9]+'
+    matches = list(re.finditer(url_pattern, text))
+    if len(matches) <= 1:
+        return text
+    
+    # Keep only the first occurrence of each unique URL (normalized to include protocol)
+    seen_urls = set()
+    result = text
+    for match in reversed(matches):
+        url = match.group(0)
+        # Normalize URL for comparison (add protocol if missing)
+        normalized = url if url.startswith('http') else 'http://' + url
+        if normalized in seen_urls:
+            # Remove this duplicate occurrence
+            start, end = match.span()
+            result = result[:start] + result[end:]
+        else:
+            seen_urls.add(normalized)
+    
+    return result
+
+
+def _clean_title_and_summary(title: str, summary: str) -> tuple[str, str]:
+    """Clean title and summary by removing duplicates.
+    
+    Nitter feeds often have:
+    - Duplicate short URLs in title
+    - Title repeated at the start of summary (with or without "Link " prefix)
+    """
+    # Remove duplicate short URLs from title
+    title = _deduplicate_short_urls(title)
+    
+    # If summary starts with title (or title without trailing punctuation), strip it
+    if summary and title:
+        title_stripped = title.rstrip(" .,;:!?")
+        # Check if summary starts with title
+        if summary.startswith(title_stripped):
+            summary = summary[len(title_stripped):].lstrip(" .,;:!?\n\t")
+        elif summary.startswith(title):
+            summary = summary[len(title):].lstrip(" .,;:!?\n\t")
+        # Check if summary starts with "Link " + title (Nitter format)
+        elif summary.startswith("Link " + title_stripped):
+            summary = summary[len("Link " + title_stripped):].lstrip(" .,;:!?\n\t")
+        elif summary.startswith("Link " + title):
+            summary = summary[len("Link " + title):].lstrip(" .,;:!?\n\t")
+    
+    # Also deduplicate URLs in summary
+    summary = _deduplicate_short_urls(summary)
+    
+    return title, summary
+
+
 def strip_html(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text or "")
     return re.sub(r"\s+", " ", html.unescape(text)).strip()
@@ -175,7 +261,7 @@ def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem
                     for li in seq_child:
                         li_tag = li.tag.rsplit("}", 1)[-1].lower()
                         if li_tag == "li":
-                            resource = li.attrib.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource")
+                            resource = li.attrib.get(f"{{{RDF_NS}}}resource")
                             if resource:
                                 item_urls.append(resource)
     
@@ -184,7 +270,7 @@ def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem
     for child in root:
         tag = child.tag.rsplit("}", 1)[-1].lower()
         if tag == "item":
-            about = child.attrib.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about")
+            about = child.attrib.get(f"{{{RDF_NS}}}about")
             if about in item_urls:
                 if len(items) >= limit:
                     break
@@ -192,45 +278,52 @@ def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem
                 title = child_text(child, ("title",)) or "(untitled)"
                 if title.lower().startswith(("r to @", "re:")):
                     continue
-                    
-                link = child_text(child, ("link",)) or about or ""
-                published = child_text(child, ("date", "dc:date", "dc.date", "pubdate", "published", "updated"))
-                summary = child_text(child, ("description", "summary", "content"))
-                author = child_text(child, ("creator", "author", "dc:creator", "dc.creator"))
-                
-                # Extract Image
-                image_url = ""
-                max_width = 0
-                
-                for subchild in list(child):
-                    sub_tag = subchild.tag.rsplit("}", 1)[-1].lower()
-                    if sub_tag in ("content", "thumbnail") and "url" in subchild.attrib:
-                        url = subchild.attrib["url"].strip()
-                        try:
-                            width = int(subchild.attrib.get("width", 0))
-                        except ValueError:
-                            width = 0
-                        if width >= max_width:
-                            max_width = width
-                            image_url = url
-                    elif sub_tag == "enclosure" and "url" in subchild.attrib:
-                        type_attr = subchild.attrib.get("type", "")
-                        if not image_url or "image" in type_attr:
-                            image_url = subchild.attrib["url"].strip()
-                
-                if not image_url:
-                    match = re.search(r'<img[^>]+src="([^">]+)"', summary)
-                    if match:
-                        image_url = match.group(1)
-                
-                items.append(FeedItem(
-                    title=strip_html(title),
-                    link=link,
-                    published=normalize_date(published),
-                    summary=strip_html(summary),
-                    author=strip_html(author),
-                    image_url=image_url,
-                ))
+            
+            link = child_text(child, ("link",)) or about or ""
+            published = child_text(child, ("date", "dc:date", "dc.date", "pubdate", "published", "updated"))
+            summary = child_text(child, ("description", "summary", "content"))
+            author = child_text(child, ("creator", "author", "dc:creator", "dc.creator"))
+            
+            # Strip HTML from title and summary first
+            title = strip_html(title)
+            summary = strip_html(summary)
+            
+            # Clean title and summary (deduplicate URLs and title repetition)
+            title, summary = _clean_title_and_summary(title, summary)
+            
+            # Extract Image
+            image_url = ""
+            max_width = 0
+            
+            for subchild in list(child):
+                sub_tag = subchild.tag.rsplit("}", 1)[-1].lower()
+                if sub_tag in ("content", "thumbnail") and "url" in subchild.attrib:
+                    url = subchild.attrib["url"].strip()
+                    try:
+                        width = int(subchild.attrib.get("width", 0))
+                    except ValueError:
+                        import logging
+                        logging.debug(f"Invalid width attribute for image: {subchild.attrib.get('width')}")
+                        width = 0
+                    if width >= max_width:
+                        max_width = width
+                        image_url = url
+                elif sub_tag == "enclosure" and "url" in subchild.attrib:
+                    type_attr = subchild.attrib.get("type", "")
+                    if not image_url or "image" in type_attr:
+                        image_url = subchild.attrib["url"].strip()
+            
+            if not image_url:
+                image_url = extract_image_url_from_html(summary)
+            
+            items.append(FeedItem(
+                title=strip_html(title),
+                link=link,
+                published=normalize_date(published),
+                summary=strip_html(summary),
+                author=strip_html(author),
+                image_url=image_url,
+            ))
     
     return items
 
@@ -266,6 +359,13 @@ def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
         summary = child_text(node, ("description", "summary", "content"))
         author = child_text(node, ("creator", "author"))
         
+        # Strip HTML from title and summary first
+        title = strip_html(title)
+        summary = strip_html(summary)
+        
+        # Clean title and summary (deduplicate URLs and title repetition)
+        title, summary = _clean_title_and_summary(title, summary)
+        
         # Extract Image
         image_url = ""
         max_width = 0
@@ -277,6 +377,8 @@ def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
                 try:
                     width = int(child.attrib.get("width", 0))
                 except ValueError:
+                    import logging
+                    logging.debug(f"Invalid width attribute for image: {child.attrib.get('width')}")
                     width = 0
                 if width >= max_width:
                     max_width = width
@@ -287,9 +389,7 @@ def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
                     image_url = child.attrib["url"].strip()
 
         if not image_url:
-            match = re.search(r'<img[^>]+src="([^">]+)"', summary)
-            if match:
-                image_url = match.group(1)
+            image_url = extract_image_url_from_html(summary)
 
         items.append(FeedItem(
             title=strip_html(title),

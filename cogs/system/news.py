@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import aiohttp
 import discord
 from discord import app_commands

@@ -16,6 +16,13 @@ from utils.config_schema import (
     get_config_description,
 )
 
+# Allowed values for enum-like config keys
+CONFIG_ALLOWED_VALUES = {
+    "conversation_response_mode": ["all", "mentions", "reply", "dm"],
+    "log_level": ["DEBUG", "INFO", "WARNING", "ERROR"],
+    "provider": ["gemini", "openai", "anthropic", "openrouter", "nvidia", "ollama", "deepinfra", "together", "groq", "fireworks", "perplexity", "cerebras", "sambanova", "xai", "deepseek", "moonshot", "zhipu", "baichuan", "minimax", "stepfun", "volcengine", "siliconflow", "modelslab", "infermatic", "hyperbolic", "novita", "runpod", "vast", "lambda", "together-legacy", "openai-compatible"],
+}
+
 
 class ConfigModal(ui.Modal, title="Edit Config Value"):
     """Modal for editing a single config value."""
@@ -69,6 +76,21 @@ class ConfigModal(ui.Modal, title="Edit Config Value"):
                         ephemeral=True,
                     )
                     return
+
+        # Validate enum-like values
+        if self.key in CONFIG_ALLOWED_VALUES:
+            allowed = CONFIG_ALLOWED_VALUES[self.key]
+            if str(new_value).lower() not in [v.lower() for v in allowed]:
+                await interaction.response.send_message(
+                    f"❌ Invalid value for `{self.key}`. Allowed: {', '.join(allowed)}",
+                    ephemeral=True,
+                )
+                return
+            # Normalize to the canonical case
+            for v in allowed:
+                if v.lower() == str(new_value).lower():
+                    new_value = v
+                    break
 
         config = load_config()
         config[self.key] = new_value
