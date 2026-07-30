@@ -1,3 +1,4 @@
+# cogs/ai/genai_memory.py: Python module.
 from typing import Optional
 
 import aiosqlite

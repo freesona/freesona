@@ -1,3 +1,5 @@
+# cogs/ai/genai_listener.py: Discord event listeners for AI mentions and message handling.
+
 import asyncio
 import time
 
@@ -27,6 +29,7 @@ class ReplyPayload(TypedDict, total=False):
     is_bot: bool
     is_webhook: bool
     role: str
+    embeds: list[str]
 
 PayloadValue: TypeAlias = str | int | bool | None | list[MentionPayload] | ReplyPayload | list[str]
 PayloadDict: TypeAlias = dict[str, PayloadValue]
@@ -93,7 +96,7 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
 
     if message.reference and isinstance(message.reference.resolved, discord.Message):
         ref = message.reference.resolved
-        payload["reply"] = {
+        reply_payload: ReplyPayload = {
             "author": ref.author.display_name,
             "author_id": ref.author.id,
             "content": ref.content or "",
@@ -105,7 +108,8 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
         if ref.embeds:
             embed_texts = _extract_embeds(ref.embeds)
             if embed_texts:
-                payload["reply"]["embeds"] = embed_texts
+                reply_payload["embeds"] = embed_texts
+        payload["reply"] = reply_payload
 
     return payload
 

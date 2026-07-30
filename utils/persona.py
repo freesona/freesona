@@ -133,8 +133,8 @@ def save_profiles(profiles: dict):
         json.dump(profiles, f, indent=2, ensure_ascii=False)
 
 
-def _load_and_assemble_persona() -> tuple[str, bool]:
-    """Load persona from JSON file or legacy file. Returns (assembled_persona, legacy_detected)."""
+def _load_and_assemble_persona() -> tuple[str, bool, dict]:
+    """Load persona from JSON file or legacy file. Returns (assembled_persona, legacy_detected, persona_data)."""
     if os.path.exists(AI_PERSONA_JSON_PATH):
         persona_data = load_persona_json()
         current_persona = assemble_persona(persona_data)

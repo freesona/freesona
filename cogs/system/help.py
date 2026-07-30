@@ -1,6 +1,4 @@
-# cogs/system/help.py: Help index
-# Obviosly if you need help this is the cog to go to. Lolz.
-# Buttons. Yay!
+# cogs/system/help.py: Help index with interactive button-based navigation.
 
 import logging
 import os

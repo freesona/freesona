@@ -90,30 +90,75 @@ The bot responds to messages in the configured conversation channel. `all` repli
 
 ## Runtime Controls
 
-| Command                                        | Action                                                                                       | Permissions   |
-|:-----------------------------------------------|:---------------------------------------------------------------------------------------------|:--------------|
-| `/module list`                                 | List enabled/disabled modules with load state                                                | Administrator |
-| `/module enable <name>`                        | Enable and load a module                                                                     | Administrator |
-| `/module disable <name>`                       | Disable and unload a module                                                                  | Administrator |
-| `/module reload <name>`                        | Reload an enabled module                                                                     | Administrator |
-| `/model show`                                  | Show the active model                                                                        | Bot Owner     |
-| `/model set <name>`                            | Set the active model                                                                         | Bot Owner     |
-| `/model reset`                                 | Reset to the environment/default model                                                       | Bot Owner     |
-| `/provider show`                               | Show the active AI provider                                                                  | Bot Owner     |
-| `/provider set <name>`                         | Set the active provider (`gemini`, `openai`, `ollama`, `nim`, `azure`, `groq`, `openrouter`) | Bot Owner     |
-| `/provider reset`                              | Reset provider to the environment/default                                                    | Bot Owner     |
-| `/botwhitelist` (`~botwhitelist`, alias `~bw`) | List whitelisted bot IDs                                                                     | Administrator |
-| `/botwhitelist add <bot_id>`                   | Add a bot ID (integer snowflake) to the whitelist                                            | Administrator |
-| `/botwhitelist remove <bot_id>`                | Remove a bot ID from the whitelist                                                           | Administrator |
-| `/sync`                                        | Sync global slash commands                                                                   | Bot Owner     |
-| `/dumpconfig`                                  | Dump current `config.json` contents                                                          | Bot Owner     |
-| `/reboot`                                      | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart.   | Bot Owner     |
-| `/config show [key]`                           | Show all runtime config values, or a specific key                                            | Bot Owner     |
-| `/config list`                                 | List all configurable keys with descriptions                                                 | Bot Owner     |
-| `/config set <key> <value>`                    | Set a config value (type-converted)                                                          | Bot Owner     |
-| `/config reset <key>`                          | Reset a config key to its default value                                                      | Bot Owner     |
-| `/settimezone <timezone>`                      | Set the bot's timezone (IANA format, e.g. `Asia/Manila`)                                     | Administrator |
-| `/timezone`                                    | Show the bot's currently configured timezone                                                 | Anyone        |
+Commands are organized by granular system cogs (`cogs/system/*.py`). All are owner or administrator only unless noted.
+
+### Module Management (`cogs/system/module.py`)
+
+| Command              | Action                                  | Permissions   |
+|:---------------------|:----------------------------------------|:--------------|
+| `/module list`       | List enabled/disabled modules with load state | Administrator |
+| `/module enable <name>` | Enable and load a module               | Administrator |
+| `/module disable <name>` | Disable and unload a module           | Administrator |
+| `/module reload <name>`  | Reload an enabled module               | Administrator |
+
+### Model Management (`cogs/system/model.py`)
+
+| Command                     | Action                                          | Permissions |
+|:----------------------------|:------------------------------------------------|:------------|
+| `/model show`               | Show the active provider and model              | Bot Owner   |
+| `/model set <name>`         | Set the active model (autocomplete)             | Bot Owner   |
+| `/model reset`              | Reset to the environment/default model          | Bot Owner   |
+| `/model temperature <value>`| Set model temperature (0.0–2.0)                 | Bot Owner   |
+| `/model temperature_reset`  | Reset temperature to default (0.7)              | Bot Owner   |
+
+### Provider Management (`cogs/system/provider.py`)
+
+| Command           | Action                                                                     | Permissions |
+|:------------------|:---------------------------------------------------------------------------|:------------|
+| `/provider show`  | Show the active AI provider                                                | Bot Owner   |
+| `/provider set <name>` | Set the active provider (`gemini`, `openai`, `ollama`, `nim`, `azure`, `groq`, `openrouter`) | Bot Owner |
+| `/provider reset` | Reset provider to the environment/default                                  | Bot Owner   |
+
+### Core System Commands (`cogs/system/core.py`)
+
+| Command      | Action                                                                  | Permissions |
+|:-------------|:------------------------------------------------------------------------|:------------|
+| `/sync`      | Sync global slash commands                                              | Bot Owner   |
+| `/reboot`    | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart. | Bot Owner |
+| `/dumpconfig`| Dump current `config.json` contents                                     | Bot Owner   |
+
+### Configuration Management (`cogs/system/config.py`)
+
+| Command                       | Action                                                           | Permissions |
+|:------------------------------|:-----------------------------------------------------------------|:------------|
+| `/config show [key]`          | Show all runtime config values, or a specific key                | Bot Owner   |
+| `/config list`                | List all configurable keys with descriptions                     | Bot Owner   |
+| `/config set <key> <value>`   | Set a config value (type-converted)                              | Bot Owner   |
+| `/config reset <key>`         | Reset a config key to its default value                          | Bot Owner   |
+| `/config edit`                | Open interactive button panel to edit config via modal           | Bot Owner   |
+| `/config view`                | Open interactive dropdown to view a config value in detail       | Bot Owner   |
+| `/config reset-interactive`   | Open interactive dropdown to reset a config key to default       | Bot Owner   |
+| `/config dump`                | Dump the current `config.json` contents                          | Bot Owner   |
+
+### Logging Configuration (`cogs/system/logging.py`)
+
+| Command                       | Action                                                           | Permissions |
+|:------------------------------|:-----------------------------------------------------------------|:------------|
+| `/logging status`             | Show current logging configuration and enabled sections          | Bot Owner   |
+| `/logging enable <section>`   | Enable a logging section (general, config, ai, memory, media, moderation, security, webhook) | Bot Owner |
+| `/logging disable <section>`  | Disable a logging section                                        | Bot Owner   |
+| `/logging toggle <section>`   | Toggle a logging section on/off                                  | Bot Owner   |
+| `/logging setchannel <#ch>`   | Set the Discord channel for log output                           | Bot Owner   |
+| `/logging clearchannel`       | Clear the Discord log channel setting                            | Bot Owner   |
+| `/logging setlevel <level>`   | Set log level (DEBUG, INFO, WARNING, ERROR)                      | Bot Owner   |
+| `/logging test [message]`     | Send a test log message to the configured channel                | Bot Owner   |
+
+### Timezone (`cogs/system/timezone.py`)
+
+| Command              | Action                                                     | Permissions   |
+|:---------------------|:-----------------------------------------------------------|:--------------|
+| `/settimezone <tz>`  | Set the bot's timezone (IANA format, e.g. `Asia/Manila`)   | Administrator |
+| `/timezone`          | Show the bot's currently configured timezone               | Anyone        |
 
 Module and model names include slash-command autocomplete suggestions.
 

@@ -42,7 +42,7 @@ LOG_SECTIONS = {
 LOGGER_SECTION_MAP = {
     # Config changes (more specific)
     "utils.config": "config",
-    "cogs.system.admin": "config",
+    "cogs.system.config": "config",
     # AI providers and generation (more specific)
     "utils.providers": "ai",
     "utils.generation": "ai",

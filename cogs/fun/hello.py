@@ -1,6 +1,5 @@
 # cogs/fun/hello.py: Simple response and sample logic for future commands.
-# This is for my sanity and to make sure the bot is responding to commands properly.
-# It also serves as a template for future commands, so I don't have to keep writing the same boilerplate code over and over again.
+# This cog provides a template for implementing basic Discord commands.
 
 from discord.ext import commands
 

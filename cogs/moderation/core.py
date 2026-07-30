@@ -1,4 +1,4 @@
-# cogs/moderation/core.py: Moderation actions like ban, timeouts, kicks
+# cogs/moderation/core.py: Moderation actions like ban, timeout, and kick commands.
 
 import discord
 from discord.ext import commands

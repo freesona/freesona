@@ -1,9 +1,4 @@
-# cogs/media/mvsep.py: MVSEP audio source separation (vocals/instrumental via BS Roformer)
-# YES I make mashups and I need this shut up. You may disable this module with /module disable mvsep if you don't care about separating audio;
-# But hey it's a fun party trick, and it works surprisingly well for a free API.
-
-# Current problem: no way to cancel; links expire after some time; only one job at a time on free tier.
-# But hey it works, and it's free, so I'm not complaining. My broke ass appreciates it.
+# cogs/media/mvsep.py: MVSEP audio source separation (vocals/instrumental via BS Roformer).
 
 import os
 import asyncio

@@ -1,4 +1,4 @@
-# cogs/system/news.py: RSS/Atom news feed commands + auto-posting loop.
+# cogs/system/news.py: RSS/Atom news feed commands and auto-posting loop.
 
 import asyncio
 import logging

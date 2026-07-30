@@ -1,3 +1,4 @@
+# utils/ingest_pdf.py: Python module.
 from pypdf import PdfReader
 from utils.chroma import get_collection
 

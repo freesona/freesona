@@ -1,3 +1,5 @@
+# cogs/ai/genai_generation.py: AI generation commands (~write, ~ask, etc.).
+
 import urllib.parse
 
 import discord

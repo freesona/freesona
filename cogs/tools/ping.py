@@ -1,4 +1,4 @@
-# Adapted from the Python Discord bot project
+# cogs/tools/ping.py: Adapted from the Python Discord bot project
 # https://github.com/python-discord/bot
 # Copyright (c) 2018 Python Discord
 # Licensed under the MIT License

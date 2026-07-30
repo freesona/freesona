@@ -1,4 +1,5 @@
 # cogs/ai/chroma.py: ChromaDB Cog for Discord bot to manage a local knowledge base.
+
 import asyncio
 import discord
 from discord import ui, app_commands

@@ -1,3 +1,4 @@
+# utils/roles.py: Python module.
 import discord
 
 def resolve_message_role(message: discord.Message, bot_user_id: int) -> str:

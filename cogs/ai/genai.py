@@ -1,4 +1,4 @@
-"""Aggregate AI extension loader for split command-type cogs."""
+# cogs/ai/genai.py: Aggregate AI extension loader for split command-type cogs.
 
 from utils.persona import LEGACY_DETECTED  # noqa: F401
 
