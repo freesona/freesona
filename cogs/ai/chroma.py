@@ -239,7 +239,7 @@ class ChromaCog(commands.Cog):
     @app_commands.describe(
         title="Title for the knowledge entry",
         content="Text content (optional if attaching a file)",
-        attachment="File attachment (PDF, EPUB, TXT, JSON)",
+        attachment="File attachment (PDF, EPUB, TXT, JSON, MD)",
     )
     @commands.has_permissions(administrator=True)
     async def kbadd(
@@ -275,14 +275,14 @@ class ChromaCog(commands.Cog):
 
             if not extracted.strip():
                 await ctx.send(
-                    "Could not extract readable text from that file. Supported input includes PDF, EPUB, TXT, and JSON files.",
+                    "Could not extract readable text from that file. Supported input includes PDF, EPUB, TXT, JSON, and MD files.",
                     ephemeral=True,
                 )
                 return
             text_parts.append(extracted)
 
         if not text_parts:
-            await ctx.send("Provide text or attach a supported file (PDF, EPUB, TXT, JSON).", ephemeral=True)
+            await ctx.send("Provide text or attach a supported file (PDF, EPUB, TXT, JSON, MD).", ephemeral=True)
             return
 
         document = "\n\n".join(text_parts)

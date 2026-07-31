@@ -95,7 +95,7 @@ def parse_discord_chat_json(raw_bytes: bytes) -> str:
 
 
 def extract_text_from_bytes(filename: str, data: bytes) -> str:
-    """Extracts plain text from various file formats (JSON, PDF, EPUB, TXT)."""
+    """Extracts plain text from various file formats (JSON, PDF, EPUB, TXT, MD)."""
     lower_name = (filename or "").lower()
 
     if lower_name.endswith(".json"):

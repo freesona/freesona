@@ -271,13 +271,14 @@ def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem
         tag = child.tag.rsplit("}", 1)[-1].lower()
         if tag == "item":
             about = child.attrib.get(f"{{{RDF_NS}}}about")
+            
+            title = child_text(child, ("title",)) or "(untitled)"
+            if title.lower().startswith(("r to @", "re:")):
+                continue
+
             if about in item_urls:
                 if len(items) >= limit:
                     break
-                
-                title = child_text(child, ("title",)) or "(untitled)"
-                if title.lower().startswith(("r to @", "re:")):
-                    continue
             
             link = child_text(child, ("link",)) or about or ""
             published = child_text(child, ("date", "dc:date", "dc.date", "pubdate", "published", "updated"))
