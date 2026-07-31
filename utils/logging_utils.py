@@ -1,25 +1,24 @@
-# utils/logging_utils.py: Logging utilities with file rotation and optional Discord channel output.
+# utils/logging_utils.py: Logging utilities with file rotation and
+# optional Discord channel output.
 
+import asyncio
 import calendar
 import logging
 import logging.handlers
-import os
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-import asyncio
+
 import discord
 from discord import Client
-from discord.ext import commands
 
-from utils.config import load_config, CONFIG_PATH
-
+from utils.config import CONFIG_PATH, load_config
 
 # Track background tasks for Discord log handler to avoid silent exception loss
 _background_tasks: set[asyncio.Task] = set()
 
 # Global bot instance for logging reconfiguration
-_bot_instance: Optional[Client] = None
+_bot_instance: Client | None = None
 
 # Track handlers added by this module (using id() to avoid attribute issues)
 _our_handler_ids: set[int] = set()
@@ -83,8 +82,7 @@ class SectionFilter(logging.Filter):
         """Load enabled sections from config."""
         config = load_config()
         self._enabled_sections = {
-            section for section, key in LOG_SECTIONS.items()
-            if config.get(key, False)
+            section for section, key in LOG_SECTIONS.items() if config.get(key, False)
         }
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -114,7 +112,7 @@ class SectionFilter(logging.Filter):
 _section_filter: Optional["SectionFilter"] = None
 
 
-def get_section_filter() -> SectionFilter:
+def get_section_filter() -> SectionFilter | None:
     """Get or create the global section filter."""
     global _section_filter
     if _section_filter is None:
@@ -126,6 +124,9 @@ def refresh_section_filter():
     """Refresh the section filter with latest config."""
     global _section_filter
     if _section_filter is not None:
+        _section_filter.refresh()
+    else:
+        _section_filter = SectionFilter()
         _section_filter.refresh()
 
 
@@ -147,10 +148,10 @@ class MonthlyRotatingFileHandler(logging.handlers.BaseRotatingHandler):
 
     def _compute_filename(self) -> Path:
         """Compute the filename for the current rotation period."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         # Calculate the start of the current rotation period
         period_start_month = ((now.month - 1) // self.months) * self.months + 1
-        period_start = datetime(now.year, period_start_month, 1)
+        period_start = datetime(now.year, period_start_month, 1, tzinfo=timezone.utc)
         # Calculate period end accurately using calendar.monthrange
         period_end_month = period_start_month + self.months - 1
         period_end_year = now.year
@@ -158,17 +159,19 @@ class MonthlyRotatingFileHandler(logging.handlers.BaseRotatingHandler):
             period_end_month -= 12
             period_end_year += 1
         _, last_day = calendar.monthrange(period_end_year, period_end_month)
-        period_end = datetime(period_end_year, period_end_month, last_day)
+        period_end = datetime(
+            period_end_year, period_end_month, last_day, tzinfo=timezone.utc
+        )
         suffix = period_start.strftime("%Y-%m") + "_to_" + period_end.strftime("%Y-%m")
         stem = self.base_filename.stem
         return self.base_filename.parent / f"{stem}_{suffix}{self.base_filename.suffix}"
 
-    def shouldRollover(self, record: logging.LogRecord) -> bool:
+    def should_rollover(self, record: logging.LogRecord) -> bool:
         """Check if we should rollover to a new file."""
         new_filename = self._compute_filename()
         return new_filename != self.current_filename
 
-    def doRollover(self):
+    def do_rollover(self):
         """Perform the rollover."""
         if self.stream:
             self.stream.close()
@@ -186,17 +189,23 @@ class DiscordLogHandler(logging.Handler):
         super().__init__(level)
         self.bot = bot
         self.channel_id = channel_id
-        self._channel: Optional[discord.abc.Messageable] = None
-        self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        self._channel: discord.abc.Messageable | None = None
+        self.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        )
 
-    async def _get_channel(self) -> Optional[discord.abc.Messageable]:
+    async def _get_channel(self) -> discord.abc.Messageable | None:
         """Get the Discord channel, caching it."""
         if self._channel is None:
             channel = self.bot.get_channel(self.channel_id)
             if channel is None:
                 try:
                     channel = await self.bot.fetch_channel(self.channel_id)
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                except (
+                    discord.NotFound,
+                    discord.Forbidden,
+                    discord.HTTPException,
+                ):
                     channel = None
             # Only cache if it's a messageable channel
             if channel is not None and hasattr(channel, "send"):
@@ -210,13 +219,17 @@ class DiscordLogHandler(logging.Handler):
             task.result()
         except asyncio.CancelledError:
             pass
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+        except (
+            discord.NotFound,
+            discord.Forbidden,
+            discord.HTTPException,
+        ) as e:
             logging.getLogger(__name__).warning(
                 "Discord log handler failed to send message: %s", e
             )
-        except Exception as e:
-            logging.getLogger(__name__).error(
-                "Unexpected error in Discord log handler: %s", e, exc_info=True
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Unexpected error in Discord log handler"
             )
 
     def emit(self, record: logging.LogRecord):
@@ -235,20 +248,26 @@ class DiscordLogHandler(logging.Handler):
             if len(msg) > 1900:
                 msg = msg[:1900] + "... [truncated]"
             # Use create_task to avoid blocking, track the task
-            task = self.bot.loop.create_task(channel.send(f"```\n{msg}\n```"))  # type: ignore[attr-defined]
+            task = self.bot.loop.create_task(
+                channel.send(f"```\n{msg}\n```")  # type: ignore[attr-defined]
+            )
             _background_tasks.add(task)
             task.add_done_callback(self._log_task_done)
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+        except (
+            discord.NotFound,
+            discord.Forbidden,
+            discord.HTTPException,
+        ) as e:
             logging.getLogger(__name__).warning(
                 "Discord log handler failed to queue message: %s", e
             )
-        except Exception as e:
-            logging.getLogger(__name__).error(
-                "Unexpected error in Discord log handler: %s", e, exc_info=True
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Unexpected error in Discord log handler"
             )
 
 
-def setup_logging(bot: Optional[Client] = None) -> logging.Logger:
+def setup_logging(bot: Client | None = None) -> logging.Logger:
     """Configure application logging based on config.json settings.
 
     Args:
@@ -294,29 +313,38 @@ def setup_logging(bot: Optional[Client] = None) -> logging.Logger:
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(level)
-    console_formatter = logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s")
+    console_formatter = logging.Formatter(
+        "%(asctime)s:%(levelname)s:%(name)s: %(message)s"
+    )
     console_handler.setFormatter(console_formatter)
-    console_handler.addFilter(section_filter)
+    if section_filter:
+        console_handler.addFilter(section_filter)
     _our_handler_ids.add(id(console_handler))
     root_logger.addHandler(console_handler)
 
     # File handler with monthly rotation
     try:
-        file_handler = MonthlyRotatingFileHandler(log_file_path, months=log_file_max_months)
+        file_handler = MonthlyRotatingFileHandler(
+            log_file_path, months=log_file_max_months
+        )
         file_handler.setLevel(level)
-        file_formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        file_formatter = logging.Formatter(
+            "%(asctime)s %(levelname)s %(name)s: %(message)s"
+        )
         file_handler.setFormatter(file_formatter)
-        file_handler.addFilter(section_filter)
+        if section_filter:
+            file_handler.addFilter(section_filter)
         _our_handler_ids.add(id(file_handler))
         root_logger.addHandler(file_handler)
-    except Exception as e:
+    except (OSError, ValueError, PermissionError) as e:
         # Log to console if file handler fails
         root_logger.error(f"Failed to setup file logging: {e}")
 
     # Discord channel handler (optional)
     if log_include_discord and bot and log_channel_id:
         discord_handler = DiscordLogHandler(bot, log_channel_id, level)
-        discord_handler.addFilter(section_filter)
+        if section_filter:
+            discord_handler.addFilter(section_filter)
         _our_handler_ids.add(id(discord_handler))
         root_logger.addHandler(discord_handler)
 
@@ -343,7 +371,11 @@ async def send_log_message(bot: Client, message: str, level: str = "INFO"):
     if channel is None:
         try:
             channel = await bot.fetch_channel(log_channel_id)
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+        except (
+            discord.NotFound,
+            discord.Forbidden,
+            discord.HTTPException,
+        ) as e:
             logging.getLogger(__name__).warning(
                 "Failed to fetch log channel %s: %s", log_channel_id, e
             )
@@ -351,18 +383,24 @@ async def send_log_message(bot: Client, message: str, level: str = "INFO"):
 
     if channel and hasattr(channel, "send"):
         try:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             formatted = f"[{timestamp}] [{level}] {message}"
             if len(formatted) > 1900:
                 formatted = formatted[:1900] + "... [truncated]"
-            await channel.send(f"```\n{formatted}\n```")  # type: ignore[attr-defined]
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+            await channel.send(f"```\n{formatted}\n```")  # type: ignore[reportAttributeAccessIssue]
+        except (
+            discord.NotFound,
+            discord.Forbidden,
+            discord.HTTPException,
+        ) as e:
             logging.getLogger(__name__).warning(
-                "Failed to send log message to channel %s: %s", log_channel_id, e
+                "Failed to send log message to channel %s: %s",
+                log_channel_id,
+                e,
             )
-        except Exception as e:
-            logging.getLogger(__name__).error(
-                "Unexpected error sending log message: %s", e, exc_info=True
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Unexpected error sending log message"
             )
 
 
@@ -412,6 +450,7 @@ def set_log_config(**kwargs):
             config[key] = value
     # Save to config.json
     import json
+
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
     # Reconfigure logging using stored bot instance

@@ -1,14 +1,17 @@
 # utils/rss.py: RSS/Atom parsing and feed config helpers.
 from __future__ import annotations
 
+import html
+import logging
+import re
+import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
-import html
-import re
-import xml.etree.ElementTree as element_tree
 
 from utils.config import load_config, save_config
+
+logger = logging.getLogger(__name__)
 
 # RDF namespace constant
 RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -21,7 +24,9 @@ class _ImageURLExtractor(HTMLParser):
         super().__init__()
         self.image_url: str = ""
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
         if tag.lower() == "img" and not self.image_url:
             for name, value in attrs:
                 if name == "src" and value:
@@ -37,26 +42,30 @@ def extract_image_url_from_html(html_text: str) -> str:
     parser.feed(html_text)
     return parser.image_url
 
-RSS_FEEDS_KEY    = "rss_feeds"
-RSS_SEEN_KEY     = "rss_seen"       # set of seen article links, persisted in config.json
-RSS_DISABLED_KEY = "rss_disabled"   # built-in feeds the user has explicitly removed
+
+RSS_FEEDS_KEY = "rss_feeds"
+RSS_SEEN_KEY = (
+    "rss_seen"  # set of seen article links, persisted in config.json
+)
+# built-in feeds the user has explicitly removed
+RSS_DISABLED_KEY = "rss_disabled"
 
 DEFAULT_RSS_FEEDS: dict[str, str] = {
-    "bbc-world":  "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "bbc-tech":   "https://feeds.bbci.co.uk/news/technology/rss.xml",
-    "npr-news":   "https://feeds.npr.org/1001/rss.xml",
-    "aljazeera":  "https://www.aljazeera.com/xml/rss/all.xml",
-    "dw-world":   "https://rss.dw.com/rdf/rss-en-all",
+    "bbc-world": "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "bbc-tech": "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    "npr-news": "https://feeds.npr.org/1001/rss.xml",
+    "aljazeera": "https://www.aljazeera.com/xml/rss/all.xml",
+    "dw-world": "https://rss.dw.com/rdf/rss-en-all",
 }
 
 
 @dataclass
 class FeedItem:
-    title:     str
-    link:      str
+    title: str
+    link: str
     published: str = ""
-    summary:   str = ""
-    author:    str = ""
+    summary: str = ""
+    author: str = ""
     image_url: str = ""
 
 
@@ -64,11 +73,12 @@ class FeedItem:
 # Feed CRUD
 # ---------------------------------------------------------------------------
 
+
 def load_rss_feeds(config: dict | None = None) -> dict[str, str]:
-    config   = config or load_config()
+    config = config or load_config()
     disabled = set(config.get(RSS_DISABLED_KEY, []))
-    feeds    = {k: v for k, v in DEFAULT_RSS_FEEDS.items() if k not in disabled}
-    saved    = config.get(RSS_FEEDS_KEY, {})
+    feeds = {k: v for k, v in DEFAULT_RSS_FEEDS.items() if k not in disabled}
+    saved = config.get(RSS_FEEDS_KEY, {})
     if isinstance(saved, dict):
         for name, url in saved.items():
             if isinstance(name, str) and isinstance(url, str) and url.strip():
@@ -94,8 +104,8 @@ def delete_rss_feed(name: str) -> bool:
     truly deleted (since they live in code, not config). Custom feeds are
     removed from config entirely. Returns True if anything was removed.
     """
-    config  = load_config()
-    key     = name.lower().strip()
+    config = load_config()
+    key = name.lower().strip()
     changed = False
 
     # Remove from custom feeds if present
@@ -120,7 +130,7 @@ def delete_rss_feed(name: str) -> bool:
 # Seen-link tracking (deduplication for auto-posting)
 # ---------------------------------------------------------------------------
 
-SEEN_CAP = 500   # max links to remember; oldest are evicted
+SEEN_CAP = 500  # max links to remember; oldest are evicted
 
 
 def load_seen_links(config: dict | None = None) -> set[str]:
@@ -148,45 +158,48 @@ def mark_links_seen(links: list[str]) -> None:
 # XML helpers
 # ---------------------------------------------------------------------------
 
+
 def _deduplicate_short_urls(text: str) -> str:
     """Remove duplicate short URLs (like reut.rs/xxx) from text.
-    
+
     Nitter feeds often duplicate short URLs in titles and descriptions.
     """
     # Pattern to match short URLs with or without protocol
-    url_pattern = r'(?:https?://)?(?:reut\.rs|t\.co|bit\.ly|tinyurl\.com|goo\.gl|ow\.ly|is\.gd|buff\.ly|adf\.ly|bit\.do|short\.io|cutt\.ly|v\.gd|tr\.im|u\.nu|yourls\.org)/[a-zA-Z0-9]+'
+    url_pattern = r"(?:https?://)?(?:reut\.rs|t\.co|bit\.ly|tinyurl\.com|goo\.gl|ow\.ly|is\.gd|buff\.ly|adf\.ly|bit\.do|short\.io|cutt\.ly|v\.gd|tr\.im|u\.nu|yourls\.org)/[a-zA-Z0-9]+"
     matches = list(re.finditer(url_pattern, text))
     if len(matches) <= 1:
         return text
-    
-    # Keep only the first occurrence of each unique URL (normalized to include protocol)
+
+    # Keep only the first occurrence of each unique URL (normalized to include
+    # protocol)
     seen_urls = set()
     result = text
     for match in reversed(matches):
         url = match.group(0)
         # Normalize URL for comparison (add protocol if missing)
-        normalized = url if url.startswith('http') else 'http://' + url
+        normalized = url if url.startswith("http") else "http://" + url
         if normalized in seen_urls:
             # Remove this duplicate occurrence
             start, end = match.span()
             result = result[:start] + result[end:]
         else:
             seen_urls.add(normalized)
-    
+
     return result
 
 
 def _clean_title_and_summary(title: str, summary: str) -> tuple[str, str]:
     """Clean title and summary by removing duplicates.
-    
+
     Nitter feeds often have:
     - Duplicate short URLs in title
     - Title repeated at the start of summary (with or without "Link " prefix)
     """
     # Remove duplicate short URLs from title
     title = _deduplicate_short_urls(title)
-    
-    # If summary starts with title (or title without trailing punctuation), strip it
+
+    # If summary starts with title (or title without trailing punctuation),
+    # strip it
     if summary and title:
         title_stripped = title.rstrip(" .,;:!?")
         # Check if summary starts with title
@@ -196,13 +209,15 @@ def _clean_title_and_summary(title: str, summary: str) -> tuple[str, str]:
             summary = summary[len(title):].lstrip(" .,;:!?\n\t")
         # Check if summary starts with "Link " + title (Nitter format)
         elif summary.startswith("Link " + title_stripped):
-            summary = summary[len("Link " + title_stripped):].lstrip(" .,;:!?\n\t")
+            summary = summary[len("Link " + title_stripped):].lstrip(
+                " .,;:!?\n\t"
+            )
         elif summary.startswith("Link " + title):
             summary = summary[len("Link " + title):].lstrip(" .,;:!?\n\t")
-    
+
     # Also deduplicate URLs in summary
     summary = _deduplicate_short_urls(summary)
-    
+
     return title, summary
 
 
@@ -211,7 +226,7 @@ def strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(text)).strip()
 
 
-def child_text(node: element_tree.Element, names: tuple[str, ...]) -> str:
+def child_text(node: ElementTree.Element, names: tuple[str, ...]) -> str:
     for child in list(node):
         tag = child.tag.rsplit("}", 1)[-1].lower()
         if tag in names and child.text:
@@ -219,7 +234,7 @@ def child_text(node: element_tree.Element, names: tuple[str, ...]) -> str:
     return ""
 
 
-def child_attr(node: element_tree.Element, name: str, attr: str) -> str:
+def child_attr(node: ElementTree.Element, name: str, attr: str) -> str:
     for child in list(node):
         tag = child.tag.rsplit("}", 1)[-1].lower()
         if tag == name:
@@ -234,11 +249,13 @@ def normalize_date(value: str) -> str:
         return ""
     try:
         return parsedate_to_datetime(value).strftime("%Y-%m-%d %H:%M UTC")
-    except Exception:
+    except (ValueError, TypeError, OverflowError):
         return value
 
 
-def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem]:
+def _parse_rdf_feed(
+    root: ElementTree.Element, limit: int = 5
+) -> list[FeedItem]:
     """Parse RDF (RSS 1.0) format feeds."""
     # Find channel element to get item references
     channel = None
@@ -246,10 +263,10 @@ def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem
         if child.tag.rsplit("}", 1)[-1].lower() == "channel":
             channel = child
             break
-    
+
     if channel is None:
         return []
-    
+
     # Find items/Seq/li elements with rdf:resource attributes
     item_urls = []
     for child in channel:
@@ -264,47 +281,61 @@ def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem
                             resource = li.attrib.get(f"{{{RDF_NS}}}resource")
                             if resource:
                                 item_urls.append(resource)
-    
+
     # Now find item elements with matching rdf:about
     items: list[FeedItem] = []
     for child in root:
         tag = child.tag.rsplit("}", 1)[-1].lower()
         if tag == "item":
             about = child.attrib.get(f"{{{RDF_NS}}}about")
-            
+
             title = child_text(child, ("title",)) or "(untitled)"
             if title.lower().startswith(("r to @", "re:")):
                 continue
 
-            if about in item_urls:
-                if len(items) >= limit:
-                    break
-            
+            if about in item_urls and len(items) >= limit:
+                break
+
             link = child_text(child, ("link",)) or about or ""
-            published = child_text(child, ("date", "dc:date", "dc.date", "pubdate", "published", "updated"))
+            published = child_text(
+                child,
+                (
+                    "date",
+                    "dc:date",
+                    "dc.date",
+                    "pubdate",
+                    "published",
+                    "updated",
+                ),
+            )
             summary = child_text(child, ("description", "summary", "content"))
-            author = child_text(child, ("creator", "author", "dc:creator", "dc.creator"))
-            
+            author = child_text(
+                child, ("creator", "author", "dc:creator", "dc.creator")
+            )
+
             # Strip HTML from title and summary first
             title = strip_html(title)
             summary = strip_html(summary)
-            
+
             # Clean title and summary (deduplicate URLs and title repetition)
             title, summary = _clean_title_and_summary(title, summary)
-            
+
             # Extract Image
             image_url = ""
             max_width = 0
-            
+
             for subchild in list(child):
                 sub_tag = subchild.tag.rsplit("}", 1)[-1].lower()
-                if sub_tag in ("content", "thumbnail") and "url" in subchild.attrib:
+                if (
+                    sub_tag in ("content", "thumbnail")
+                    and "url" in subchild.attrib
+                ):
                     url = subchild.attrib["url"].strip()
                     try:
                         width = int(subchild.attrib.get("width", 0))
                     except ValueError:
-                        import logging
-                        logging.debug(f"Invalid width attribute for image: {subchild.attrib.get('width')}")
+                        logger.debug(f"Invalid width attribute for image: {
+                            subchild.attrib.get('width')}")
                         width = 0
                     if width >= max_width:
                         max_width = width
@@ -313,64 +344,78 @@ def _parse_rdf_feed(root: element_tree.Element, limit: int = 5) -> list[FeedItem
                     type_attr = subchild.attrib.get("type", "")
                     if not image_url or "image" in type_attr:
                         image_url = subchild.attrib["url"].strip()
-            
+
             if not image_url:
                 image_url = extract_image_url_from_html(summary)
-            
-            items.append(FeedItem(
-                title=strip_html(title),
-                link=link,
-                published=normalize_date(published),
-                summary=strip_html(summary),
-                author=strip_html(author),
-                image_url=image_url,
-            ))
-    
+
+            items.append(
+                FeedItem(
+                    title=strip_html(title),
+                    link=link,
+                    published=normalize_date(published),
+                    summary=strip_html(summary),
+                    author=strip_html(author),
+                    image_url=image_url,
+                )
+            )
+
     return items
 
 
 def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
-    root = element_tree.fromstring(xml_text)
+    root = ElementTree.fromstring(xml_text)
     root_tag = root.tag.rsplit("}", 1)[-1].lower()
-    
+
     # Handle RDF (RSS 1.0) feeds
     if root_tag == "rdf":
         return _parse_rdf_feed(root, limit)
-    
+
     if root_tag == "rss":
         channel = next(
-            (c for c in root.iter() if c.tag.rsplit("}", 1)[-1].lower() == "channel"),
+            (
+                c
+                for c in root.iter()
+                if c.tag.rsplit("}", 1)[-1].lower() == "channel"
+            ),
             root,
         )
-        nodes = [c for c in list(channel) if c.tag.rsplit("}", 1)[-1].lower() == "item"]
+        nodes = [
+            c
+            for c in list(channel)
+            if c.tag.rsplit("}", 1)[-1].lower() == "item"
+        ]
     else:
-        nodes = [c for c in list(root) if c.tag.rsplit("}", 1)[-1].lower() == "entry"]
+        nodes = [
+            c
+            for c in list(root)
+            if c.tag.rsplit("}", 1)[-1].lower() == "entry"
+        ]
 
     items: list[FeedItem] = []
     for node in nodes:
         if len(items) >= limit:
             break
-            
+
         title = child_text(node, ("title",)) or "(untitled)"
         if title.lower().startswith(("r to @", "re:")):
             continue
-            
+
         link = child_text(node, ("link",)) or child_attr(node, "link", "href")
         published = child_text(node, ("pubdate", "published", "updated"))
         summary = child_text(node, ("description", "summary", "content"))
         author = child_text(node, ("creator", "author"))
-        
+
         # Strip HTML from title and summary first
         title = strip_html(title)
         summary = strip_html(summary)
-        
+
         # Clean title and summary (deduplicate URLs and title repetition)
         title, summary = _clean_title_and_summary(title, summary)
-        
+
         # Extract Image
         image_url = ""
         max_width = 0
-        
+
         for child in list(node):
             tag = child.tag.rsplit("}", 1)[-1].lower()
             if tag in ("content", "thumbnail") and "url" in child.attrib:
@@ -378,8 +423,8 @@ def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
                 try:
                     width = int(child.attrib.get("width", 0))
                 except ValueError:
-                    import logging
-                    logging.debug(f"Invalid width attribute for image: {child.attrib.get('width')}")
+                    logger.debug(f"Invalid width attribute for image: {
+                        child.attrib.get('width')}")
                     width = 0
                 if width >= max_width:
                     max_width = width
@@ -392,13 +437,15 @@ def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
         if not image_url:
             image_url = extract_image_url_from_html(summary)
 
-        items.append(FeedItem(
-            title=strip_html(title),
-            link=link,
-            published=normalize_date(published),
-            summary=strip_html(summary),
-            author=strip_html(author),
-            image_url=image_url,
-        ))
-        
+        items.append(
+            FeedItem(
+                title=strip_html(title),
+                link=link,
+                published=normalize_date(published),
+                summary=strip_html(summary),
+                author=strip_html(author),
+                image_url=image_url,
+            )
+        )
+
     return items

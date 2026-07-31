@@ -3,7 +3,6 @@
 
 from utils.config import DEFAULT_CONFIG
 
-
 # Configuration categories for /config list command
 CONFIG_CATEGORIES = {
     "General": [
@@ -94,7 +93,8 @@ CONFIG_DESCRIPTIONS = {
     "log_section_webhook": "Log webhook events (default: false)",
 }
 
-# Configuration key order for /config view command (alphabetical within categories)
+# Configuration key order for /config view command (alphabetical within
+# categories)
 CONFIG_KEY_ORDER = [
     "prefix",
     "conversation_response_mode",

@@ -4,8 +4,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.config import load_config, save_config, get_provider_name
-from utils.config_schema import get_provider_choices, PROVIDER_CHOICES
+from utils.config import get_provider_name, load_config, save_config
+from utils.config_schema import PROVIDER_CHOICES
 
 
 async def provider_autocomplete(
@@ -26,24 +26,28 @@ class ProviderCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_group(name="provider", help="Show or change the active provider.")
+    @commands.hybrid_group(
+        name="provider", help="Show or change the active provider."
+    )
     @commands.is_owner()
     async def provider_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
             await ctx.send(
                 f"Current provider: `{get_provider_name()}`",
-                ephemeral=True if ctx.interaction else False,
+                ephemeral=bool(ctx.interaction),
             )
 
-    @provider_group.command(name="show", help="Show the active provider.")  # type: ignore[attr-defined]
+    # type: ignore[attr-defined]
+    @provider_group.command(name="show", help="Show the active provider.")
     @commands.is_owner()
     async def provider_show(self, ctx: commands.Context):
         await ctx.send(
             f"Current provider: `{get_provider_name()}`",
-            ephemeral=True if ctx.interaction else False,
+            ephemeral=bool(ctx.interaction),
         )
 
-    @provider_group.command(name="set", help="Set the active provider.")  # type: ignore[attr-defined]
+    # type: ignore[attr-defined]
+    @provider_group.command(name="set", help="Set the active provider.")
     @commands.is_owner()
     @app_commands.autocomplete(name=provider_autocomplete)
     async def provider_set(self, ctx: commands.Context, name: str):
@@ -51,7 +55,7 @@ class ProviderCog(commands.Cog):
         if normalized not in PROVIDER_CHOICES:
             await ctx.send(
                 f"Unknown provider `{name}`. Choose from: {', '.join(PROVIDER_CHOICES)}.",
-                ephemeral=True if ctx.interaction else False,
+                ephemeral=bool(ctx.interaction),
             )
             return
 
@@ -59,17 +63,23 @@ class ProviderCog(commands.Cog):
         config["provider"] = normalized
         save_config(config)
         await ctx.send(
-            f"Provider set to `{get_provider_name()}`.", ephemeral=True if ctx.interaction else False
+            f"Provider set to `{get_provider_name()}`.",
+            ephemeral=bool(ctx.interaction),
         )
 
-    @provider_group.command(name="reset", help="Reset the active provider to the environment/default value.")  # type: ignore[attr-defined]
+    # type: ignore[attr-defined]
+    @provider_group.command(
+        name="reset",
+        help="Reset the active provider to the environment/default value.",
+    )
     @commands.is_owner()
     async def provider_reset(self, ctx: commands.Context):
         config = load_config()
         config.pop("provider", None)
         save_config(config)
         await ctx.send(
-            f"Provider reset to `{get_provider_name()}`.", ephemeral=True if ctx.interaction else False
+            f"Provider reset to `{get_provider_name()}`.",
+            ephemeral=bool(ctx.interaction),
         )
 
 

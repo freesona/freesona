@@ -50,6 +50,7 @@ def _normalize_ipv4_shorthand(host: str) -> str | None:
     parts = host.split(".")
     if not (1 <= len(parts) <= 4):
         return None
+
     def _parse_part(p: str) -> int:
         # Legacy C-style octal: leading zero with no 0x/0o prefix, e.g.
         # "017700000001" — curl/getaddrinfo on many platforms still treat
@@ -184,6 +185,7 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
 # Prompt injection detection + sanitization
 # ---------------------------------------------------------------------------
 
+
 def _normalize_for_matching(text: str) -> str:
     """Collapse whitespace and strip zero-width/invisible chars so basic
     spacing/Unicode obfuscation doesn't trivially dodge substring checks."""
@@ -211,7 +213,9 @@ def sanitize_prompt(prompt: str) -> str:
 
     redacted = prompt
     for pattern in INJECTION_PATTERNS:
-        redacted = re.sub(re.escape(pattern), "[redacted]", redacted, flags=re.IGNORECASE)
+        redacted = re.sub(
+            re.escape(pattern), "[redacted]", redacted, flags=re.IGNORECASE
+        )
 
     return (
         "[NOTE: the user message below contained text resembling an "

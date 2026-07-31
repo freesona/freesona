@@ -17,11 +17,11 @@ logger = logging.getLogger("FreesonaBot")
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-PRIMARY_MODEL   = "gemini-2.5-flash-lite"
+PRIMARY_MODEL = "gemini-2.5-flash-lite"
 SECONDARY_MODEL = "gemini-flash-lite-latest"
 
-MAX_RETRIES_PER_MODEL = 2          # retries within a single model before moving on
-RETRY_BASE_DELAY_SEC  = 1.5        # backoff base; attempt N waits N * base seconds
+MAX_RETRIES_PER_MODEL = 2  # retries within a single model before moving on
+RETRY_BASE_DELAY_SEC = 1.5  # backoff base; attempt N waits N * base seconds
 
 TRANSIENT_MARKERS = ("503", "UNAVAILABLE", "OVERLOADED", "RESOURCE_EXHAUSTED")
 
@@ -29,11 +29,13 @@ TRANSIENT_MARKERS = ("503", "UNAVAILABLE", "OVERLOADED", "RESOURCE_EXHAUSTED")
 # Result type
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SearchResult:
-    text:    str = ""
-    sources: list[dict] = field(default_factory=list)  # [{"title": ..., "uri": ...}]
-    failed:  bool = False
+    text: str = ""
+    # [{"title": ..., "uri": ...}]
+    sources: list[dict] = field(default_factory=list)
+    failed: bool = False
     model_used: str | None = None
 
     @property
@@ -44,7 +46,7 @@ class SearchResult:
         lines = []
         for i, s in enumerate(self.sources[:max_items], 1):
             title = s.get("title", "Source")
-            uri   = s.get("uri", "")
+            uri = s.get("uri", "")
             lines.append(f"{i}. [{title}]({uri})" if uri else f"{i}. {title}")
         return "\n".join(lines)
 
@@ -58,7 +60,10 @@ def _is_transient(exc: Exception) -> bool:
 # Single grounded call against a given model, with retry/backoff
 # ---------------------------------------------------------------------------
 
-async def _grounded_call(query: str, model: str, max_retries: int) -> SearchResult:
+
+async def _grounded_call(
+    query: str, model: str, max_retries: int
+) -> SearchResult:
     client = genai.Client(api_key=GOOGLE_API_KEY)
     grounding_tool = types.Tool(google_search=types.GoogleSearch())
     config = types.GenerateContentConfig(
@@ -83,16 +88,22 @@ async def _grounded_call(query: str, model: str, max_retries: int) -> SearchResu
                 candidates = getattr(response, "candidates", None) or []
                 chunks = None
                 if candidates:
-                    grounding_metadata = getattr(candidates[0], "grounding_metadata", None)
-                    chunks = getattr(grounding_metadata, "grounding_chunks", None)
-                for chunk in (chunks or []):
+                    grounding_metadata = getattr(
+                        candidates[0], "grounding_metadata", None
+                    )
+                    chunks = getattr(
+                        grounding_metadata, "grounding_chunks", None
+                    )
+                for chunk in chunks or []:
                     web = getattr(chunk, "web", None)
                     if web:
-                        sources.append({
-                            "title": getattr(web, "title", ""),
-                            "uri":   getattr(web, "uri", ""),
-                        })
-            except Exception:
+                        sources.append(
+                            {
+                                "title": getattr(web, "title", ""),
+                                "uri": getattr(web, "uri", ""),
+                            }
+                        )
+            except (AttributeError, TypeError, ValueError):
                 sources = []
 
             if not text.strip():
@@ -103,7 +114,13 @@ async def _grounded_call(query: str, model: str, max_retries: int) -> SearchResu
 
             return SearchResult(text=text, sources=sources, model_used=model)
 
-        except Exception as e:
+        except (
+            ValueError,
+            RuntimeError,
+            OSError,
+            asyncio.TimeoutError,
+            Exception,
+        ) as e:
             last_exc = e
             if _is_transient(e) and attempt < max_retries:
                 delay = RETRY_BASE_DELAY_SEC * (attempt + 1)
@@ -117,12 +134,17 @@ async def _grounded_call(query: str, model: str, max_retries: int) -> SearchResu
             logger.warning(f"[{model}] search attempt failed: {e}")
             break
 
-    raise last_exc if last_exc else RuntimeError(f"Unknown failure for model {model}")
+    raise (
+        last_exc
+        if last_exc
+        else RuntimeError(f"Unknown failure for model {model}")
+    )
 
 
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
+
 
 async def web_search(query: str) -> SearchResult:
     """
@@ -145,7 +167,13 @@ async def web_search(query: str) -> SearchResult:
                 f"Search succeeded via {model} ({len(result.sources)} sources)"
             )
             return result
-        except Exception as e:
+        except (
+            ValueError,
+            RuntimeError,
+            OSError,
+            asyncio.TimeoutError,
+            Exception,
+        ) as e:
             logger.warning(f"Model {model} exhausted retries, escalating: {e}")
             continue
 

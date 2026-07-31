@@ -1,5 +1,7 @@
 # tests/test_persona.py: Unit tests for persona module
 
+import importlib
+from utils.persona import CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA
 import os
 import sys
 import tempfile
@@ -9,8 +11,6 @@ from unittest.mock import patch
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from utils.persona import reload_persona, init_persona, assemble_persona, default_persona_json, PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
 
 
 class TestReloadPersona(unittest.TestCase):
@@ -26,10 +26,11 @@ class TestReloadPersona(unittest.TestCase):
     def tearDown(self):
         # Restore original state
         import utils.persona as persona_module
+
         persona_module.PERSONA_DATA = self.original_persona_data
         persona_module.CURRENT_PERSONA = self.original_current_persona
         persona_module.LEGACY_DETECTED = self.original_legacy_detected
-        
+
         if self.original_env is None:
             os.environ.pop("AI_PERSONA_JSON_FILE", None)
         else:
@@ -40,14 +41,19 @@ class TestReloadPersona(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             persona_path = Path(tmpdir) / "persona.json"
             with open(persona_path, "w") as f:
-                f.write('{"core_personality": "Test persona", "background": "", "beliefs": "", "language": "", "system_instructions": "", "temperature": ""}')
-            
-            with patch.dict(os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}):
+                f.write(
+                    '{"core_personality": "Test persona", "background": "", "beliefs": "", "language": "", "system_instructions": "", "temperature": ""}'
+                )
+
+            with patch.dict(
+                os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}
+            ):
                 import utils.persona as persona_module
+
                 importlib.reload(persona_module)
-                
+
                 persona, legacy = persona_module.reload_persona()
-                
+
                 self.assertIn("Test persona", persona)
                 self.assertFalse(legacy)
 
@@ -57,21 +63,25 @@ class TestReloadPersona(unittest.TestCase):
             legacy_path = Path(tmpdir) / "persona.txt"
             with open(legacy_path, "w") as f:
                 f.write("Legacy persona content")
-            
+
             # Ensure persona.json doesn't exist
             json_path = Path(tmpdir) / "persona.json"
             if json_path.exists():
                 json_path.unlink()
-            
-            with patch.dict(os.environ, {
-                "AI_PERSONA_JSON_FILE": str(json_path),
-                "AI_PERSONA_FILE": str(legacy_path)
-            }):
+
+            with patch.dict(
+                os.environ,
+                {
+                    "AI_PERSONA_JSON_FILE": str(json_path),
+                    "AI_PERSONA_FILE": str(legacy_path),
+                },
+            ):
                 import utils.persona as persona_module
+
                 importlib.reload(persona_module)
-                
+
                 persona, legacy = persona_module.reload_persona()
-                
+
                 self.assertEqual(persona, "Legacy persona content")
                 self.assertTrue(legacy)
 
@@ -80,23 +90,27 @@ class TestReloadPersona(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             json_path = Path(tmpdir) / "persona.json"
             legacy_path = Path(tmpdir) / "persona.txt"
-            
+
             # Ensure neither file exists
             if json_path.exists():
                 json_path.unlink()
             if legacy_path.exists():
                 legacy_path.unlink()
-            
-            with patch.dict(os.environ, {
-                "AI_PERSONA_JSON_FILE": str(json_path),
-                "AI_PERSONA_FILE": str(legacy_path),
-                "AI_PERSONA": "Default from env"
-            }):
+
+            with patch.dict(
+                os.environ,
+                {
+                    "AI_PERSONA_JSON_FILE": str(json_path),
+                    "AI_PERSONA_FILE": str(legacy_path),
+                    "AI_PERSONA": "Default from env",
+                },
+            ):
                 import utils.persona as persona_module
+
                 importlib.reload(persona_module)
-                
+
                 persona, legacy = persona_module.reload_persona()
-                
+
                 self.assertEqual(persona, "Default from env")
                 self.assertFalse(legacy)
 
@@ -105,23 +119,29 @@ class TestReloadPersona(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             persona_path = Path(tmpdir) / "persona.json"
             with open(persona_path, "w") as f:
-                f.write('{"core_personality": "Updated persona", "background": "", "beliefs": "", "language": "", "system_instructions": "", "temperature": ""}')
-            
-            with patch.dict(os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}):
+                f.write(
+                    '{"core_personality": "Updated persona", "background": "", "beliefs": "", "language": "", "system_instructions": "", "temperature": ""}'
+                )
+
+            with patch.dict(
+                os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}
+            ):
                 import utils.persona as persona_module
+
                 importlib.reload(persona_module)
-                
+
                 persona, legacy = persona_module.reload_persona()
-                
+
                 # Check globals were updated
                 self.assertEqual(persona_module.CURRENT_PERSONA, persona)
                 self.assertEqual(persona_module.LEGACY_DETECTED, legacy)
-                self.assertEqual(persona_module.PERSONA_DATA["core_personality"], "Updated persona")
+                self.assertEqual(
+                    persona_module.PERSONA_DATA["core_personality"],
+                    "Updated persona",
+                )
 
 
 # Need to import importlib
-import importlib
-
 
 if __name__ == "__main__":
     unittest.main()

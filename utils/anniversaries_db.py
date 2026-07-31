@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import os
-import aiosqlite
+from datetime import date, datetime, timezone
 
-from datetime import datetime, date, timezone
+import aiosqlite
 
 DB_PATH = os.environ.get("ANNIVERSARIES_FILE_PATH", "anniversaries.db")
 
@@ -33,9 +33,13 @@ async def init_db() -> None:
 
 class DuplicateClaimError(Exception):
     """Raised when an anniversary is already claimed in a guild."""
+
     def __init__(self, existing_entry: dict | None = None):
         self.existing_entry = existing_entry
-        super().__init__("This anniversary has already been claimed in this server.")
+        super().__init__(
+            "This anniversary has already been claimed in this server."
+        )
+
 
 async def get_entry_by_id(entry_id: str) -> dict | None:
     """Retrieve a single anniversary entry by its ID."""
@@ -47,6 +51,7 @@ async def get_entry_by_id(entry_id: str) -> dict | None:
             row = await cur.fetchone()
         return dict(row) if row else None
 
+
 async def insert_entry(data: dict) -> None:
     """
     Insert a new anniversary entry.
@@ -55,22 +60,32 @@ async def insert_entry(data: dict) -> None:
                    reference_url, calendar_event_id
     """
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
+        await db.execute(
+            """
             INSERT INTO anniversaries
                 (id, guild_id, user_id, title, subtitle, anniversary_date,
                  thumbnail_url, reference_url, calendar_event_id, claimed_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            data["id"], data["guild_id"], data["user_id"],
-            data["title"], data["subtitle"], data["anniversary_date"],
-            data.get("thumbnail_url"), data.get("reference_url"),
-            data.get("calendar_event_id"),
-            datetime.now(timezone.utc).isoformat(),
-        ))
+        """,
+            (
+                data["id"],
+                data["guild_id"],
+                data["user_id"],
+                data["title"],
+                data["subtitle"],
+                data["anniversary_date"],
+                data.get("thumbnail_url"),
+                data.get("reference_url"),
+                data.get("calendar_event_id"),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
         await db.commit()
 
 
-async def update_calendar_event_id(entry_id: str, calendar_event_id: str) -> None:
+async def update_calendar_event_id(
+    entry_id: str, calendar_event_id: str
+) -> None:
     """Update the calendar_event_id for an entry after successful calendar sync."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -80,7 +95,9 @@ async def update_calendar_event_id(entry_id: str, calendar_event_id: str) -> Non
         await db.commit()
 
 
-async def update_thumbnail(entry_id: str, thumbnail_url: str, reference_url: str | None) -> None:
+async def update_thumbnail(
+    entry_id: str, thumbnail_url: str, reference_url: str | None
+) -> None:
     """Update thumbnail and reference URL for an entry."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -151,7 +168,9 @@ async def get_entries_on_date(guild_id: int, month_day: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def check_duplicate(guild_id: int, title: str, subtitle: str) -> dict | None:
+async def check_duplicate(
+    guild_id: int, title: str, subtitle: str
+) -> dict | None:
     """
     Check if a title+subtitle combination is already claimed in a guild.
     Case-insensitive.
@@ -169,7 +188,9 @@ async def check_duplicate(guild_id: int, title: str, subtitle: str) -> dict | No
     return dict(row) if row else None
 
 
-async def get_entries_missing_calendar(guild_id: int | None = None) -> list[dict]:
+async def get_entries_missing_calendar(
+    guild_id: int | None = None,
+) -> list[dict]:
     """Get all entries with no calendar_event_id (for sync operations)."""
     sql = "SELECT * FROM anniversaries WHERE calendar_event_id IS NULL"
     params: list = []
@@ -183,7 +204,9 @@ async def get_entries_missing_calendar(guild_id: int | None = None) -> list[dict
     return [dict(r) for r in rows]
 
 
-async def get_entries_missing_thumbnail(guild_id: int | None = None) -> list[dict]:
+async def get_entries_missing_thumbnail(
+    guild_id: int | None = None,
+) -> list[dict]:
     """Get all entries with no thumbnail_url (for cover sync operations)."""
     sql = "SELECT * FROM anniversaries WHERE thumbnail_url IS NULL OR thumbnail_url = ''"
     params: list = []
@@ -197,7 +220,9 @@ async def get_entries_missing_thumbnail(guild_id: int | None = None) -> list[dic
     return [dict(r) for r in rows]
 
 
-async def search_entries(guild_id: int, query: str | None, user_id: int | None) -> list[dict]:
+async def search_entries(
+    guild_id: int, query: str | None, user_id: int | None
+) -> list[dict]:
     """Search entries by title/subtitle and/or user."""
     sql = "SELECT * FROM anniversaries WHERE guild_id = ?"
     params: list = [guild_id]

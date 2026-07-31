@@ -1,13 +1,13 @@
 # utils/conversation.py: Provider-agnostic Conversation Manager (Short-Term Memory)
 # Freesona owns recent messages, summaries, token budgets, expiration, and context assembly.
-# Replaces Gemini-specific continuity while preserving identical behavior across every provider.
+# Replaces Gemini-specific continuity while preserving identical behavior
+# across every provider.
 
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Optional
 from collections import deque
+from dataclasses import dataclass, field
 
 from utils.config import load_config
 
@@ -18,41 +18,51 @@ logger = logging.getLogger("FreesonaBot")
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ConversationMessage:
     """A single message in the conversation history."""
-    role: str              # "user" or "assistant"
+
+    role: str  # "user" or "assistant"
     content: str
-    timestamp: float       # Unix timestamp
-    message_id: Optional[int] = None
-    user_id: Optional[int] = None
-    username: Optional[str] = None
-    mentions: Optional[list[dict]] = None
-    reply: Optional[dict] = None
-    interaction_id: Optional[str] = None  # For Gemini Interactions API multi-turn support
-    embeds: Optional[list[str]] = None  # Text representation of message embeds
+    timestamp: float  # Unix timestamp
+    message_id: int | None = None
+    user_id: int | None = None
+    username: str | None = None
+    mentions: list[dict] | None = None
+    reply: dict | None = None
+    # For Gemini Interactions API multi-turn support
+    interaction_id: str | None = None
+    embeds: list[str] | None = None  # Text representation of message embeds
 
 
 @dataclass
 class ConversationState:
     """Conversation state for a single (guild, channel, user) scope."""
+
     messages: deque[ConversationMessage] = field(default_factory=deque)
     last_accessed: float = field(default_factory=time.time)
-    last_interaction_id: Optional[str] = None  # Store latest Gemini interaction ID for multi-turn
+    # Store latest Gemini interaction ID for multi-turn
+    last_interaction_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 def _get_conversation_max_messages() -> int:
     return int(load_config().get("conversation_max_messages", 20))
+
 
 def _get_conversation_token_budget() -> int:
     return int(load_config().get("conversation_token_budget", 4000))
 
+
 def _get_conversation_ttl_seconds() -> int:
-    return int(load_config().get("conversation_ttl_seconds", 3600))  # 1 hour default
+    return int(
+        load_config().get("conversation_ttl_seconds", 3600)
+    )  # 1 hour default
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +73,9 @@ _conversation_store: dict[tuple[int, int, int], ConversationState] = {}
 _store_lock = asyncio.Lock()
 
 
-def _conversation_key(guild_id: int, channel_id: int, user_id: int) -> tuple[int, int, int]:
+def _conversation_key(
+    guild_id: int, channel_id: int, user_id: int
+) -> tuple[int, int, int]:
     return guild_id, channel_id, user_id
 
 
@@ -71,7 +83,10 @@ def _conversation_key(guild_id: int, channel_id: int, user_id: int) -> tuple[int
 # Core operations
 # ---------------------------------------------------------------------------
 
-async def get_conversation(guild_id: int, channel_id: int, user_id: int) -> ConversationState:
+
+async def get_conversation(
+    guild_id: int, channel_id: int, user_id: int
+) -> ConversationState:
     """Get or create conversation state for the given scope."""
     key = _conversation_key(guild_id, channel_id, user_id)
     async with _store_lock:
@@ -88,16 +103,16 @@ async def add_message(
     user_id: int,
     role: str,
     content: str,
-    message_id: Optional[int] = None,
-    username: Optional[str] = None,
-    mentions: Optional[list[dict]] = None,
-    reply: Optional[dict] = None,
-    embeds: Optional[list[str]] = None,
+    message_id: int | None = None,
+    username: str | None = None,
+    mentions: list[dict] | None = None,
+    reply: dict | None = None,
+    embeds: list[str] | None = None,
 ) -> None:
     """Add a message to the conversation history."""
     if not content or not content.strip():
         return
-    
+
     state = await get_conversation(guild_id, channel_id, user_id)
     msg = ConversationMessage(
         role=role,
@@ -119,14 +134,25 @@ async def add_user_message(
     channel_id: int,
     user_id: int,
     content: str,
-    message_id: Optional[int] = None,
-    username: Optional[str] = None,
-    mentions: Optional[list[dict]] = None,
-    reply: Optional[dict] = None,
-    embeds: Optional[list[str]] = None,
+    message_id: int | None = None,
+    username: str | None = None,
+    mentions: list[dict] | None = None,
+    reply: dict | None = None,
+    embeds: list[str] | None = None,
 ) -> None:
     """Add a user message to the conversation history."""
-    await add_message(guild_id, channel_id, user_id, "user", content, message_id, username, mentions, reply, embeds)
+    await add_message(
+        guild_id,
+        channel_id,
+        user_id,
+        "user",
+        content,
+        message_id,
+        username,
+        mentions,
+        reply,
+        embeds,
+    )
 
 
 async def add_assistant_message(
@@ -159,7 +185,7 @@ async def get_last_interaction_id(
     guild_id: int,
     channel_id: int,
     user_id: int,
-) -> Optional[str]:
+) -> str | None:
     """Get the latest Gemini interaction ID for multi-turn conversations."""
     state = await get_conversation(guild_id, channel_id, user_id)
     return state.last_interaction_id
@@ -169,7 +195,7 @@ async def get_recent_messages(
     guild_id: int,
     channel_id: int,
     user_id: int,
-    limit: Optional[int] = None,
+    limit: int | None = None,
 ) -> list[ConversationMessage]:
     """Get recent messages for the conversation scope."""
     state = await get_conversation(guild_id, channel_id, user_id)
@@ -186,33 +212,33 @@ async def build_conversation_context(
 ) -> str:
     """
     Build conversation context string for prompt injection.
-    
+
     Format:
     [Conversation History]
     User (name, @mention):
-    
+
     mentions:
     - name (@mention, ID)
     ...
-    
+
     Message:
     content
-    
+
     Reply to:
     role (name, @mention): content
     ...
-    
+
     Assistant:
     content
     ...
     """
     state = await get_conversation(guild_id, channel_id, user_id)
-    
+
     if not state.messages:
         return ""
-    
+
     parts = ["[Conversation History]"]
-    
+
     for msg in state.messages:
         if msg.role == "user":
             # Build user header with name and mention
@@ -222,9 +248,9 @@ async def build_conversation_context(
             if msg.user_id:
                 name_parts.append(f"ID: {msg.user_id}")
             name_part = f" ({', '.join(name_parts)})" if name_parts else ""
-            
+
             parts.append(f"User{name_part}:")
-            
+
             # Add mentions if present
             if msg.mentions:
                 parts.append("mentions:")
@@ -234,7 +260,7 @@ async def build_conversation_context(
                         m_id = mention.get("id", "Unknown")
                         m_mention = mention.get("mention", f"<@{m_id}>")
                         parts.append(f"  - {m_name} ({m_mention}, ID: {m_id})")
-            
+
             # Add reply context if present
             if msg.reply:
                 parts.append("Reply to:")
@@ -244,31 +270,33 @@ async def build_conversation_context(
                     r_author = reply.get("author", "Unknown")
                     r_author_id = reply.get("author_id", "Unknown")
                     r_content = reply.get("content", "")
-                    parts.append(f"  {r_role.capitalize()} ({r_author}, ID: {r_author_id}): {r_content}")
+                    parts.append(
+                        f"  {
+                            r_role.capitalize()} ({r_author}, ID: {r_author_id}): {r_content}")
                     # Add reply embeds if present
                     if reply.get("embeds"):
                         parts.append("  Embeds:")
                         for embed_text in reply["embeds"]:
                             parts.append(f"    {embed_text}")
-            
+
             parts.append(f"Message:\n{msg.content}")
-            
+
             # Add embeds if present
             if msg.embeds:
                 parts.append("Embeds:")
                 for embed_text in msg.embeds:
                     parts.append(f"  {embed_text}")
-            
+
         else:
             parts.append(f"Assistant: {msg.content}")
-    
+
     return "\n".join(parts)
 
 
 async def clear_conversation(
     guild_id: int,
     channel_id: int,
-    user_id: Optional[int] = None,
+    user_id: int | None = None,
 ) -> None:
     """Clear conversation history for a channel or specific user."""
     async with _store_lock:
@@ -278,7 +306,8 @@ async def clear_conversation(
         else:
             # Clear all users in this channel
             keys_to_remove = [
-                k for k in _conversation_store.keys()
+                k
+                for k in _conversation_store
                 if k[0] == guild_id and k[1] == channel_id
             ]
             for key in keys_to_remove:
@@ -309,10 +338,13 @@ def _estimate_tokens(state: ConversationState) -> int:
             for embed_text in msg.embeds:
                 total_chars += len(embed_text)
         # Include reply embeds in token estimation
-        if msg.reply and isinstance(msg.reply, dict):
-            if msg.reply.get("embeds"):
-                for embed_text in msg.reply["embeds"]:
-                    total_chars += len(embed_text)
+        if (
+            msg.reply
+            and isinstance(msg.reply, dict)
+            and msg.reply.get("embeds")
+        ):
+            for embed_text in msg.reply["embeds"]:
+                total_chars += len(embed_text)
     # Rough estimate: 4 chars per token
     return total_chars // 4
 
@@ -321,11 +353,11 @@ async def _enforce_limits(state: ConversationState) -> None:
     """Enforce message count and token budget limits."""
     max_messages = _get_conversation_max_messages()
     token_budget = _get_conversation_token_budget()
-    
+
     # Enforce message count limit
     while len(state.messages) > max_messages:
         state.messages.popleft()
-    
+
     # Enforce token budget (rough estimation)
     while _estimate_tokens(state) > token_budget and len(state.messages) > 2:
         # Keep at least 2 messages (1 exchange)
@@ -337,16 +369,17 @@ async def cleanup_expired_conversations() -> int:
     ttl = _get_conversation_ttl_seconds()
     now = time.time()
     removed = 0
-    
+
     async with _store_lock:
         keys_to_remove = [
-            key for key, state in _conversation_store.items()
+            key
+            for key, state in _conversation_store.items()
             if now - state.last_accessed > ttl
         ]
         for key in keys_to_remove:
             _conversation_store.pop(key, None)
             removed += 1
-    
+
     if removed:
         logger.info(f"Cleaned up {removed} expired conversations")
     return removed
@@ -356,7 +389,7 @@ async def cleanup_expired_conversations() -> int:
 # Periodic cleanup task
 # ---------------------------------------------------------------------------
 
-_cleanup_task: Optional[asyncio.Task] = None
+_cleanup_task: asyncio.Task | None = None
 
 
 async def start_cleanup_task(interval_seconds: int = 300) -> None:
@@ -364,7 +397,7 @@ async def start_cleanup_task(interval_seconds: int = 300) -> None:
     global _cleanup_task
     if _cleanup_task and not _cleanup_task.done():
         return
-    
+
     async def cleanup_loop():
         while True:
             try:
@@ -372,9 +405,9 @@ async def start_cleanup_task(interval_seconds: int = 300) -> None:
                 await cleanup_expired_conversations()
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 logger.warning(f"Conversation cleanup error: {e}")
-    
+
     _cleanup_task = asyncio.create_task(cleanup_loop())
 
 
@@ -387,20 +420,21 @@ async def stop_cleanup_task() -> None:
             await _cleanup_task
         except asyncio.CancelledError:
             pass
+        _cleanup_task = None
 
 
 __all__ = [
     "ConversationMessage",
     "ConversationState",
-    "get_conversation",
+    "add_assistant_message",
     "add_message",
     "add_user_message",
-    "add_assistant_message",
-    "get_recent_messages",
     "build_conversation_context",
+    "cleanup_expired_conversations",
     "clear_conversation",
+    "get_conversation",
     "get_conversation_stats",
+    "get_recent_messages",
     "start_cleanup_task",
     "stop_cleanup_task",
-    "cleanup_expired_conversations",
 ]

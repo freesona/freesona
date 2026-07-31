@@ -6,27 +6,29 @@ CORE_EXTENSIONS = [
     "cogs.system.help",
     "cogs.tools.ping",
     "cogs.system.status",
-    "cogs.system.system",  # Aggregate extension that loads split system command cogs.
+    # Aggregate extension that loads split system command cogs.
+    "cogs.system.system",
 ]
 
 OPTIONAL_MODULES = {
-    "hello":      "cogs.fun.hello",
-    "random":     "cogs.fun.random",
+    "hello": "cogs.fun.hello",
+    "random": "cogs.fun.random",
     "moderation": "cogs.moderation.core",
-    "genai":      "cogs.ai.genai",  # Aggregate extension that loads split AI command cogs.
-    "math":       "cogs.tools.math",
-    "news":       "cogs.system.news",
-    "ytdlp":      "cogs.media.ytdlp",
-    "mvsep":      "cogs.media.mvsep",
-    "warns":      "cogs.moderation.warns",
-    "chroma":     "cogs.ai.chroma",
+    # Aggregate extension that loads split AI command cogs.
+    "genai": "cogs.ai.genai",
+    "math": "cogs.tools.math",
+    "news": "cogs.system.news",
+    "ytdlp": "cogs.media.ytdlp",
+    "mvsep": "cogs.media.mvsep",
+    "warns": "cogs.moderation.warns",
+    "chroma": "cogs.ai.chroma",
     # Granular system modules (can be enabled/disabled independently)
-    "module":     "cogs.system.module",
-    "model":      "cogs.system.model",
-    "provider":   "cogs.system.provider",
-    "config":     "cogs.system.config",
-    "logging":    "cogs.system.logging",
-    "core":       "cogs.system.core",
+    "module": "cogs.system.module",
+    "model": "cogs.system.model",
+    "provider": "cogs.system.provider",
+    "config": "cogs.system.config",
+    "logging": "cogs.system.logging",
+    "core": "cogs.system.core",
 }
 
 DEFAULT_ENABLED_MODULES = {name: True for name in OPTIONAL_MODULES}

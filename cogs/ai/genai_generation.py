@@ -6,7 +6,11 @@ import discord
 from discord.ext import commands
 
 from utils.config import embed_footer
-from utils.generation import ConversationResponse, extract_attachments, safe_generate
+from utils.generation import (
+    ConversationResponse,
+    extract_attachments,
+    safe_generate,
+)
 from utils.persona import CURRENT_PERSONA, CURRENT_PERSONA_ID
 
 from .genai_common import BOT_NAME, clean_sources_block, logger
@@ -19,14 +23,20 @@ class GenAIGenerationCog(commands.Cog):
     # -------------------------------------------------------------------
     # ~write
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name="write", aliases=["w"], help="Ask the AI to write or create something.")
+    @commands.hybrid_command(
+        name="write",
+        aliases=["w"],
+        help="Ask the AI to write or create something.",
+    )
     async def write_cmd(self, ctx: commands.Context, *, query: str):
         guild = ctx.guild
         if guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
 
-        attachments = await extract_attachments(ctx.message) if ctx.message else []
+        attachments = (
+            await extract_attachments(ctx.message) if ctx.message else []
+        )
         response: ConversationResponse | None = None
 
         if ctx.interaction:
@@ -71,12 +81,16 @@ class GenAIGenerationCog(commands.Cog):
                 )
 
         if response is None:
-            logger.error("Write command completed without a generation response.")
+            logger.error(
+                "Write command completed without a generation response."
+            )
             await ctx.send("The response could not be generated.")
             return
 
         embed = discord.Embed(
-            title=f"{BOT_NAME} says...", description=response.first_text(), color=discord.Color.green()
+            title=f"{BOT_NAME} says...",
+            description=response.first_text(),
+            color=discord.Color.green(),
         )
         embed.set_footer(text=embed_footer(ctx.author.display_name, query))
         await ctx.send(embed=embed)
@@ -84,14 +98,18 @@ class GenAIGenerationCog(commands.Cog):
     # -------------------------------------------------------------------
     # ~ask
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name="ask", aliases=["a"], help="Ask the AI a question.")
+    @commands.hybrid_command(
+        name="ask", aliases=["a"], help="Ask the AI a question."
+    )
     async def ask_cmd(self, ctx: commands.Context, *, query: str):
         guild = ctx.guild
         if guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
 
-        attachments = await extract_attachments(ctx.message) if ctx.message else []
+        attachments = (
+            await extract_attachments(ctx.message) if ctx.message else []
+        )
         response: ConversationResponse | None = None
 
         if ctx.interaction:
@@ -132,12 +150,16 @@ class GenAIGenerationCog(commands.Cog):
                 )
 
         if response is None:
-            logger.error("Ask command completed without a generation response.")
+            logger.error(
+                "Ask command completed without a generation response."
+            )
             await ctx.send("The response could not be generated.")
             return
 
         embed = discord.Embed(
-            title=f"{BOT_NAME} answers...", description=response.first_text(), color=discord.Color.blue()
+            title=f"{BOT_NAME} answers...",
+            description=response.first_text(),
+            color=discord.Color.blue(),
         )
         embed.set_footer(text=embed_footer(ctx.author.display_name, query))
         await ctx.send(embed=embed)
@@ -145,7 +167,11 @@ class GenAIGenerationCog(commands.Cog):
     # -------------------------------------------------------------------
     # ~search
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name="search", aliases=["s"], help="Search the web and summarize with AI.")
+    @commands.hybrid_command(
+        name="search",
+        aliases=["s"],
+        help="Search the web and summarize with AI.",
+    )
     async def search_cmd(self, ctx: commands.Context, *, query: str):
         if ctx.guild is None:
             await ctx.send("AI commands are not available in DMs.")
@@ -170,7 +196,8 @@ class GenAIGenerationCog(commands.Cog):
                 ),
                 color=discord.Color.red(),
             )
-            url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            url = f"https://www.google.com/search?q={
+                urllib.parse.quote(query)}"
             embed.add_field(name="Full results", value=url, inline=False)
             embed.set_footer(text=embed_footer(ctx.author.display_name, query))
             await ctx.send(embed=embed)
@@ -208,20 +235,27 @@ class GenAIGenerationCog(commands.Cog):
                         ),
                     )
             if response is None:
-                logger.error("Search command completed without a generation response.")
+                logger.error(
+                    "Search command completed without a generation response."
+                )
                 text = "Search results could not be summarized."
             else:
                 text = response.first_text()[:4096]
 
         embed = discord.Embed(
-            title=f"Search: {query}", description=text or "No results found.", color=discord.Color.blue()
+            title=f"Search: {query}",
+            description=text or "No results found.",
+            color=discord.Color.blue(),
         )
 
         if result.has_sources:
-            sources_text = clean_sources_block(result.sources_block(max_items=5))
+            sources_text = clean_sources_block(
+                result.sources_block(max_items=5)
+            )
             embed.add_field(name="Sources", value=sources_text, inline=False)
         else:
-            url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            url = f"https://www.google.com/search?q={
+                urllib.parse.quote(query)}"
             embed.add_field(name="Full results", value=url, inline=False)
 
         embed.set_footer(text=embed_footer(ctx.author.display_name, query))

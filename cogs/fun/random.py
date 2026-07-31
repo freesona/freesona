@@ -1,4 +1,5 @@
-# cogs/fun/random.py: Fun commands involving randomness — random member, coin flip, dice roll, and picking from choices.
+# cogs/fun/random.py: Fun commands involving randomness — random member,
+# coin flip, dice roll, and picking from choices.
 
 import secrets
 
@@ -10,9 +11,9 @@ class RandomCog(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(
-        name='randommember',
-        aliases=['randomuser', 'randmember', 'randuser', 'rm'],
-        help='Randomly selects a server member.'
+        name="randommember",
+        aliases=["randomuser", "randmember", "randuser", "rm"],
+        help="Randomly selects a server member.",
     )
     @commands.has_permissions(mention_everyone=True)
     @commands.cooldown(1, 60, commands.BucketType.guild)
@@ -25,24 +26,20 @@ class RandomCog(commands.Cog):
 
         selected = secrets.choice(members)
 
-        await ctx.send(
-            f"Randomly selected member: {selected.mention}"
-        )
+        await ctx.send(f"Randomly selected member: {selected.mention}")
 
     @commands.hybrid_command(
-        name='coinflip',
-        aliases=['flipcoin', 'cf'],
-        help='Flips a coin.'
+        name="coinflip", aliases=["flipcoin", "cf"], help="Flips a coin."
     )
     async def coinflip_cmd(self, ctx):
-        result = secrets.choice(['Heads', 'Tails'])
+        result = secrets.choice(["Heads", "Tails"])
 
         await ctx.send(f"🪙 {result}")
 
     @commands.hybrid_command(
-        name='roll',
-        aliases=['dice', 'diceroll', 'die', 'r'],
-        help='Rolls a die.'
+        name="roll",
+        aliases=["dice", "diceroll", "die", "r"],
+        help="Rolls a die.",
     )
     async def roll_cmd(self, ctx, sides: int = 6):
         if sides < 2:
@@ -54,26 +51,21 @@ class RandomCog(commands.Cog):
         await ctx.send(f"🎲 Rolled: {result}")
 
     @commands.hybrid_command(
-        name='pick',
-        aliases=['choose', 'select', 'p'],
-        help='Randomly picks from choices separated by commas.'
+        name="pick",
+        aliases=["choose", "select", "p"],
+        help="Randomly picks from choices separated by commas.",
     )
     async def pick_cmd(self, ctx, *, choices: str):
-        items = [
-            item.strip()
-            for item in choices.split(',')
-            if item.strip()
-        ]
+        items = [item.strip() for item in choices.split(",") if item.strip()]
 
         if len(items) < 2:
-            await ctx.send(
-                "Provide at least 2 choices separated by commas."
-            )
+            await ctx.send("Provide at least 2 choices separated by commas.")
             return
 
         selected = secrets.choice(items)
 
         await ctx.send(f"Selected: **{selected}**")
+
 
 async def setup(bot):
     await bot.add_cog(RandomCog(bot))

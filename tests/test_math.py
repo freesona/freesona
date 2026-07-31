@@ -1,15 +1,16 @@
 # tests/test_math.py: Python module.
-import unittest
+from cogs.tools.math import MathCog, generate_plot, is_safe_expression
 import sys
+import unittest
 from pathlib import Path
 
 # Add workspace directory to path to allow importing cogs
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from cogs.tools.math import is_safe_expression, generate_plot, MathCog
 
 class MockBot:
     pass
+
 
 class MathCogTests(unittest.TestCase):
     def setUp(self):
@@ -27,7 +28,7 @@ class MathCogTests(unittest.TestCase):
             "x",
             "1/2",
             "cos(0)",
-            "expand((x + y)**2)"
+            "expand((x + y)**2)",
         ]
         for expr in valid_expressions:
             with self.subTest(expr=expr):
@@ -47,7 +48,7 @@ class MathCogTests(unittest.TestCase):
             "[x for x in [1, 2, 3]]",
             "open('file.txt')",
             "__builtins__",
-            "compile('1', '', 'eval')"
+            "compile('1', '', 'eval')",
         ]
         for expr in invalid_expressions:
             with self.subTest(expr=expr):
@@ -61,7 +62,7 @@ class MathCogTests(unittest.TestCase):
             ("solve(x**2 - 1, x)", "[-1, 1]"),
             ("cos(0)", "1"),
             ("1/2", "0.5"),
-            ("pi", "3.141592654")
+            ("pi", "3.141592654"),
         ]
         for query, expected in test_cases:
             with self.subTest(query=query):
@@ -75,7 +76,7 @@ class MathCogTests(unittest.TestCase):
             "x",
             "x + y",
             "sin(x)",
-            "__import__('os').system('whoami')"
+            "__import__('os').system('whoami')",
         ]
         for query in ignored_cases:
             with self.subTest(query=query):
@@ -83,8 +84,15 @@ class MathCogTests(unittest.TestCase):
 
     def test_generate_plot_explicit(self):
         import io
+
         # Test generating plot for explicit functions (regression)
-        for expr in ["x**2", "sin(x)", "x**3 - 2*x + 1", "y = x**2", "f(x)=x**2"]:
+        for expr in [
+            "x**2",
+            "sin(x)",
+            "x**3 - 2*x + 1",
+            "y = x**2",
+            "f(x)=x**2",
+        ]:
             with self.subTest(expr=expr):
                 buf = generate_plot(expr)
                 self.assertIsInstance(buf, io.BytesIO)
@@ -93,6 +101,7 @@ class MathCogTests(unittest.TestCase):
 
     def test_generate_plot_implicit(self):
         import io
+
         # Test generating plot for implicit functions
         for expr in [
             "x**2 + y**2 = 1",  # circle
@@ -106,10 +115,12 @@ class MathCogTests(unittest.TestCase):
 
     def test_generate_plot_parametric(self):
         import io
+
         # Test generating plot for parametric equations
         for expr in [
             "x = cos(t), y = sin(t)",  # circle
-            "x = 16*sin(t)**3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",  # heart
+            # heart
+            "x = 16*sin(t)**3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",
         ]:
             with self.subTest(expr=expr):
                 buf = generate_plot(expr)
@@ -119,13 +130,23 @@ class MathCogTests(unittest.TestCase):
 
     def test_format_wolfram_text(self):
         # Test basic filtering
-        self.assertEqual(self.cog.format_wolfram_text("Input interpretation: 2+2\nResult:\n4"), "4")
+        self.assertEqual(
+            self.cog.format_wolfram_text(
+                "Input interpretation: 2+2\nResult:\n4"
+            ),
+            "4",
+        )
         # Test table formatting (piped output)
-        self.assertEqual(self.cog.format_wolfram_text("Name | Value\nApple | Red"), "**Name ** | Value\n**Apple ** | Red")
+        self.assertEqual(
+            self.cog.format_wolfram_text("Name | Value\nApple | Red"),
+            "**Name ** | Value\n**Apple ** | Red",
+        )
         # Test stripping links and Wolfram ads
         self.assertEqual(
-            self.cog.format_wolfram_text("Wolfram Language code: foo\nResult:\n4\nplot: https://example.com/plot.png"),
-            "4"
+            self.cog.format_wolfram_text(
+                "Wolfram Language code: foo\nResult:\n4\nplot: https://example.com/plot.png"
+            ),
+            "4",
         )
         self.assertEqual(self.cog.format_wolfram_text(""), "No result found.")
 
@@ -134,10 +155,12 @@ class MathCogTests(unittest.TestCase):
         # These expressions used to fail with "Unsafe characters or expressions detected"
         # They should now generate valid plots
         import io
+
         for expr in [
             "f(x)=x**2",  # function notation
             "(x^2 + y^2 - 1)^3 - x^2*y^3 = 0",  # heart curve (with ^)
-            "x = 16*sin(t)^3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",  # parametric heart
+            # parametric heart
+            "x = 16*sin(t)^3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",
         ]:
             with self.subTest(expr=expr):
                 buf = generate_plot(expr)
@@ -157,7 +180,9 @@ class MathCogTests(unittest.TestCase):
         for expr in dangerous:
             with self.subTest(expr=expr):
                 result = self.cog.solve_locally(expr)
-                self.assertIsNone(result, f"solve_locally should reject: {expr}")
+                self.assertIsNone(
+                    result, f"solve_locally should reject: {expr}"
+                )
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 # cogs/ai/genai_memory.py: Python module.
-from typing import Optional
 
 import aiosqlite
 import discord
@@ -26,21 +25,24 @@ class GenAIMemoryCog(commands.Cog):
     )
     @commands.has_permissions(administrator=True)
     @app_commands.describe(
-        clear_facts="Also clear long-term memory facts for all users in this channel (default: False)."
-    )
-    async def clear_memory(self, ctx: commands.Context, clear_facts: bool = False):
+        clear_facts="Also clear long-term memory facts for all users in this channel (default: False).")
+    async def clear_memory(
+        self, ctx: commands.Context, clear_facts: bool = False
+    ):
         guild = ctx.guild
         if guild is None:
             await ctx.send("Conversation commands are server-only.")
             return
-        
+
         # Clear short-term conversation memory for all users in this channel
         await clear_conversation(guild.id, ctx.channel.id)
-        
+
         if clear_facts:
             # Clear long-term facts for all users in this guild
             await clear_user_facts(guild.id)
-            await ctx.send("Conversation memory and long-term facts cleared for this channel.")
+            await ctx.send(
+                "Conversation memory and long-term facts cleared for this channel."
+            )
         else:
             await ctx.send("Conversation memory cleared for this channel.")
 
@@ -48,10 +50,16 @@ class GenAIMemoryCog(commands.Cog):
     # /memorylist (long-term SQLite)
     # -------------------------------------------------------------------
     @commands.hybrid_command(
-        name="memorylist", aliases=["meml"], help="List long-term memory facts for a user."
+        name="memorylist",
+        aliases=["meml"],
+        help="List long-term memory facts for a user.",
     )
-    @app_commands.describe(user="The user whose memory to list (defaults to you).")
-    async def memory_list(self, ctx: commands.Context, user: Optional[discord.User] = None):
+    @app_commands.describe(
+        user="The user whose memory to list (defaults to you)."
+    )
+    async def memory_list(
+        self, ctx: commands.Context, user: discord.User | None = None
+    ):
         guild = ctx.guild
         if guild is None:
             await ctx.send("Memory commands are server-only.")
@@ -60,11 +68,17 @@ class GenAIMemoryCog(commands.Cog):
         target_user = user or ctx.author
         member = guild.get_member(ctx.author.id)
         is_admin = bool(
-            member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
+            member
+            and (
+                member.guild_permissions.administrator
+                or member.guild_permissions.manage_guild
+            )
         )
 
         if target_user.id != ctx.author.id and not is_admin:
-            await ctx.send("❌ You can only view your own memory.", ephemeral=True)
+            await ctx.send(
+                "❌ You can only view your own memory.", ephemeral=True
+            )
             return
 
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
@@ -76,10 +90,15 @@ class GenAIMemoryCog(commands.Cog):
                 rows = await cursor.fetchall()
 
         if not rows:
-            await ctx.send(f"No long-term memory facts stored for {target_user.mention}.", ephemeral=True)
+            await ctx.send(
+                f"No long-term memory facts stored for {target_user.mention}.",
+                ephemeral=True,
+            )
             return
 
-        lines = [f"{i}. [{r['importance']:.2f}] {r['content']}" for i, r in enumerate(rows, 1)]
+        lines = [f"{i}. [{
+            r['importance']:.2f}] {
+            r['content']}" for i, r in enumerate(rows, 1)]
         embed = discord.Embed(
             title=f"Memory: {target_user.display_name}",
             description="\n".join(lines)[:4096],
@@ -95,8 +114,12 @@ class GenAIMemoryCog(commands.Cog):
         aliases=["memcl"],
         help="Clear long-term facts. Users can clear their own; Admins can clear anyone.",
     )
-    @app_commands.describe(user="The user whose memory to clear (defaults to you).")
-    async def memory_clear_user(self, ctx: commands.Context, user: Optional[discord.User] = None):
+    @app_commands.describe(
+        user="The user whose memory to clear (defaults to you)."
+    )
+    async def memory_clear_user(
+        self, ctx: commands.Context, user: discord.User | None = None
+    ):
         guild = ctx.guild
         if guild is None:
             await ctx.send("Memory commands are server-only.")
@@ -105,11 +128,17 @@ class GenAIMemoryCog(commands.Cog):
         target_user = user or ctx.author
         member = guild.get_member(ctx.author.id)
         is_admin = bool(
-            member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
+            member
+            and (
+                member.guild_permissions.administrator
+                or member.guild_permissions.manage_guild
+            )
         )
 
         if target_user.id != ctx.author.id and not is_admin:
-            await ctx.send("❌ You can only clear your own memory.", ephemeral=True)
+            await ctx.send(
+                "❌ You can only clear your own memory.", ephemeral=True
+            )
             return
 
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
@@ -134,7 +163,10 @@ class GenAIMemoryCog(commands.Cog):
                 await ctx.send(msg, ephemeral=True)
                 return
             else:
-                await ctx.send(f"No facts found for {target_user.display_name}.", ephemeral=True)
+                await ctx.send(
+                    f"No facts found for {target_user.display_name}.",
+                    ephemeral=True,
+                )
                 return
 
     # -------------------------------------------------------------------
@@ -150,7 +182,10 @@ class GenAIMemoryCog(commands.Cog):
         user="The user whose memory to delete (defaults to you).",
     )
     async def memory_delete_index(
-        self, ctx: commands.Context, index: int, user: Optional[discord.User] = None
+        self,
+        ctx: commands.Context,
+        index: int,
+        user: discord.User | None = None,
     ):
         guild = ctx.guild
         if guild is None:
@@ -159,11 +194,17 @@ class GenAIMemoryCog(commands.Cog):
         target_user = user or ctx.author
         member = guild.get_member(ctx.author.id)
         is_admin = bool(
-            member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
+            member
+            and (
+                member.guild_permissions.administrator
+                or member.guild_permissions.manage_guild
+            )
         )
 
         if target_user.id != ctx.author.id and not is_admin:
-            await ctx.send("❌ You can only delete your own memory facts.", ephemeral=True)
+            await ctx.send(
+                "❌ You can only delete your own memory facts.", ephemeral=True
+            )
             return
 
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
@@ -176,12 +217,16 @@ class GenAIMemoryCog(commands.Cog):
 
             if not rows or index < 1 or index > len(rows):
                 await ctx.send(
-                    f"Invalid number. Use `/memorylist` to see the {len(rows)} stored facts.", ephemeral=True
+                    f"Invalid number. Use `/memorylist` to see the {len(rows)} stored facts.",
+                    ephemeral=True,
                 )
                 return
 
             target_fact = rows[index - 1]
-            await db.execute("DELETE FROM user_facts WHERE message_id = ?", (target_fact["message_id"],))
+            await db.execute(
+                "DELETE FROM user_facts WHERE message_id = ?",
+                (target_fact["message_id"],),
+            )
             await db.commit()
 
         await ctx.send(
@@ -192,11 +237,15 @@ class GenAIMemoryCog(commands.Cog):
     # -------------------------------------------------------------------
     # /migrate
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name="migrate", help="Migrate JSON memory to SQLite (Admin only).")
+    @commands.hybrid_command(
+        name="migrate", help="Migrate JSON memory to SQLite (Admin only)."
+    )
     @commands.has_permissions(administrator=True)
     async def migrate_memory(self, ctx: commands.Context):
         await ctx.defer(ephemeral=True)
         from utils.memory import run_migration
 
         success, message = await run_migration()
-        await ctx.send(f"{'✅' if success else '❌'} {message}", ephemeral=True)
+        await ctx.send(
+            f"{'✅' if success else '❌'} {message}", ephemeral=True
+        )

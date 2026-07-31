@@ -2,17 +2,21 @@
 
 import asyncio
 import logging
-import re
+from urllib.parse import urlparse
+
 import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
-from urllib.parse import urlparse
 
 from utils.config import load_config, save_config
 from utils.rss import (
-    load_rss_feeds, save_rss_feed, delete_rss_feed,
-    parse_feed, load_seen_links, mark_links_seen,
+    delete_rss_feed,
+    load_rss_feeds,
+    load_seen_links,
+    mark_links_seen,
+    parse_feed,
+    save_rss_feed,
 )
 from utils.security import is_public_http_url
 
@@ -20,6 +24,7 @@ logger = logging.getLogger("FreesonaBot")
 
 POLL_INTERVAL_MINUTES = 5
 RSS_CHANNELS_KEY = "rss_channels"  # Dict of {guild_id: channel_id}
+
 
 async def feed_autocomplete(
     interaction: discord.Interaction, current: str
@@ -43,20 +48,27 @@ class NewsCog(commands.Cog):
     @staticmethod
     def _build_news_embed(item, name: str):
         """Standardized embed builder for news articles."""
-        # Deduplicate title and summary (Nitter feeds often put tweet text in both)
+        # Deduplicate title and summary (Nitter feeds often put tweet text in
+        # both)
         title = item.title[:256]
         summary = item.summary[:400] if item.summary else ""
-        
-        # If summary starts with title (or title + whitespace/punctuation), strip the duplicate
+
+        # If summary starts with title (or title + whitespace/punctuation),
+        # strip the duplicate
         if summary and title:
-            # Normalize for comparison: strip trailing punctuation/whitespace from title
+            # Normalize for comparison: strip trailing punctuation/whitespace
+            # from title
             title_stripped = title.rstrip(" .,;:!?")
             if summary.startswith(title_stripped):
                 # Remove the duplicate portion from summary
-                summary = summary[len(title_stripped):].lstrip(" .,;:!? \n\t")
+                summary = (
+                    summary[len(title_stripped):]
+                    .lstrip()
+                    .lstrip(".,;:!?\n\t")
+                )
             elif summary.startswith(title):
-                summary = summary[len(title):].lstrip(" .,;:!? \n\t")
-        
+                summary = summary[len(title):].lstrip().lstrip(".,;:!?\n\t")
+
         embed = discord.Embed(
             title=title,
             url=item.link,
@@ -72,7 +84,7 @@ class NewsCog(commands.Cog):
         footer_text = name
         if item.published:
             footer_text += f"  •  {item.published}"
-        
+
         embed.set_footer(text=footer_text)
         return embed
 
@@ -98,7 +110,8 @@ class NewsCog(commands.Cog):
                         url, headers={"User-Agent": "FreesonaBot/1.0"}
                     ) as resp:
                         if resp.status >= 400:
-                            logger.warning(f"RSS poll: {name} returned HTTP {resp.status}")
+                            logger.warning(f"RSS poll: {name} returned HTTP {
+                                resp.status}")
                             continue
                         xml_text = await resp.text()
 
@@ -107,10 +120,11 @@ class NewsCog(commands.Cog):
                     for item in items:
                         if not item.link:
                             continue
-                            
+
                         # Resolve relative links using the feed's base URL
                         if not urlparse(item.link).netloc:
                             from urllib.parse import urljoin
+
                             item.link = urljoin(url, item.link)
 
                         if item.link in seen:
@@ -127,17 +141,23 @@ class NewsCog(commands.Cog):
                             try:
                                 await channel.send(embed=embed)
                             except discord.Forbidden:
-                                logger.error(f"RSS: Permission denied in guild {guild_id_str}")
+                                logger.error(
+                                    f"RSS: Permission denied in guild {guild_id_str}")
                                 continue
                             except discord.HTTPException as e:
-                                logger.warning(f"RSS: Failed to send item from {name}: {e}")
+                                logger.warning(
+                                    f"RSS: Failed to send item from {name}: {e}")
                                 continue
 
                         new_links.append(item.link)
                         seen.add(item.link)
                         await asyncio.sleep(0.5)
 
-                except Exception as e:
+                except (
+                    aiohttp.ClientError,
+                    asyncio.TimeoutError,
+                    ValueError,
+                ) as e:
                     logger.warning(f"RSS poll error for {name}: {e}")
                     continue
 
@@ -157,19 +177,25 @@ class NewsCog(commands.Cog):
         await ctx.send(
             "Use `/rss list`, `/rss latest`, `/rss add`, `/rss remove`, "
             "`/rss setchannel`, or `/rss clearchannel`.",
-            ephemeral=True if ctx.interaction else False,
+            ephemeral=bool(ctx.interaction),
         )
 
-    @rss_group.command(name="setchannel", help="Set the channel for auto-posts (Admin only).")
+    @rss_group.command(
+        name="setchannel", help="Set the channel for auto-posts (Admin only)."
+    )
     @commands.has_permissions(administrator=True)
     async def rss_setchannel(self, ctx, channel: discord.TextChannel):
         config = load_config()
         channels = config.setdefault(RSS_CHANNELS_KEY, {})
         channels[str(ctx.guild.id)] = channel.id
         save_config(config)
-        await ctx.send(f"RSS articles will post to {channel.mention}.", ephemeral=True)
+        await ctx.send(
+            f"RSS articles will post to {channel.mention}.", ephemeral=True
+        )
 
-    @rss_group.command(name="clearchannel", help="Stop auto-posting RSS (Admin only).")
+    @rss_group.command(
+        name="clearchannel", help="Stop auto-posting RSS (Admin only)."
+    )
     @commands.has_permissions(administrator=True)
     async def rss_clearchannel(self, ctx):
         config = load_config()
@@ -198,7 +224,9 @@ class NewsCog(commands.Cog):
         embed.set_footer(text=f"Auto-post channel: {channel_mention}")
         await ctx.send(embed=embed, ephemeral=True)
 
-    @rss_group.command(name="latest", help="Show latest items from an RSS feed.")
+    @rss_group.command(
+        name="latest", help="Show latest items from an RSS feed."
+    )
     @app_commands.autocomplete(name=feed_autocomplete)
     async def rss_latest(self, ctx, name: str, limit: int = 5):
         feeds = load_rss_feeds()
@@ -212,33 +240,38 @@ class NewsCog(commands.Cog):
         await ctx.defer(ephemeral=False)
 
         try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=12)
-            ) as session:
-                async with session.get(
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=12)
+                ) as session,
+                session.get(
                     url, headers={"User-Agent": "FreesonaBot/1.0"}
-                ) as resp:
-                    if resp.status >= 400:
-                        await ctx.send(f"Feed returned HTTP {resp.status}.")
-                        return
-                    xml_text = await resp.text()
+                ) as resp,
+            ):
+                if resp.status >= 400:
+                    await ctx.send(f"Feed returned HTTP {resp.status}.")
+                    return
+                xml_text = await resp.text()
             items = parse_feed(xml_text, limit=limit)
             for item in items:
                 if item.link and not urlparse(item.link).netloc:
                     from urllib.parse import urljoin
+
                     item.link = urljoin(url, item.link)
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as e:
             await ctx.send(f"Could not read feed `{key}`: {e}")
             return
 
         if not items:
-            await ctx.send(f"No items found.")
+            await ctx.send("No items found.")
             return
 
         embeds = [self._build_news_embed(item, key) for item in items]
         await ctx.send(embeds=embeds)
 
-    @rss_group.command(name="add", help="Add or update an RSS feed (Admin only).")
+    @rss_group.command(
+        name="add", help="Add or update an RSS feed (Admin only)."
+    )
     @commands.has_permissions(administrator=True)
     async def rss_add(self, ctx, name: str, url: str):
         key = name.lower().strip()
@@ -260,6 +293,7 @@ class NewsCog(commands.Cog):
             await ctx.send(f"RSS feed `{key}` removed.", ephemeral=True)
         else:
             await ctx.send(f"Feed `{key}` not found.", ephemeral=True)
+
 
 async def setup(bot):
     await bot.add_cog(NewsCog(bot))

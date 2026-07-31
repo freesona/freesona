@@ -1,4 +1,5 @@
-# cogs/ai/genai_channel.py: Conversation channel and response mode configuration.
+# cogs/ai/genai_channel.py: Conversation channel and response mode
+# configuration.
 
 import discord
 from discord import app_commands
@@ -17,18 +18,24 @@ class GenAIChannelCog(commands.Cog):
     # /setchannel + /clearchannel
     # -------------------------------------------------------------------
     @commands.hybrid_command(
-        name="setchannel", aliases=["sc"], help="Set the AI conversation channel (Admin only)."
+        name="setchannel",
+        aliases=["sc"],
+        help="Set the AI conversation channel (Admin only).",
     )
     @app_commands.describe(channel="The channel to set for AI conversations.")
     @commands.has_permissions(administrator=True)
-    async def set_channel(self, ctx: commands.Context, channel: discord.TextChannel):
+    async def set_channel(
+        self, ctx: commands.Context, channel: discord.TextChannel
+    ):
         config = load_config()
         config["chat_channel_id"] = channel.id
         save_config(config)
         await ctx.send(f"Conversation channel set to {channel.mention}.")
 
     @commands.hybrid_command(
-        name="clearchannel", aliases=["cc"], help="Remove the AI conversation channel (Admin only)."
+        name="clearchannel",
+        aliases=["cc"],
+        help="Remove the AI conversation channel (Admin only).",
     )
     @commands.has_permissions(administrator=True)
     async def clear_channel(self, ctx: commands.Context):
@@ -40,14 +47,18 @@ class GenAIChannelCog(commands.Cog):
     # -------------------------------------------------------------------
     # /chatmode
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name="chatmode", help="Set conversation channel response mode (Admin only).")
+    @commands.hybrid_command(
+        name="chatmode",
+        help="Set conversation channel response mode (Admin only).",
+    )
     @app_commands.describe(mode="Mode can be `all`, `mentions`, or `smart`.")
     @commands.has_permissions(administrator=True)
     async def chat_mode(self, ctx: commands.Context, mode: str):
         mode = mode.lower().strip()
         if mode not in CHAT_RESPONSE_MODES:
             await ctx.send(
-                "Mode must be `all`, `mentions`, or `smart`.", ephemeral=True if ctx.interaction else False
+                "Mode must be `all`, `mentions`, or `smart`.",
+                ephemeral=bool(ctx.interaction),
             )
             return
         config = load_config()
@@ -59,6 +70,7 @@ class GenAIChannelCog(commands.Cog):
             "smart": "respond to bot mentions, replies, or attachments",
         }
         await ctx.send(
-            f"Conversation response mode set to `{mode}`: {descriptions[mode]}.",
-            ephemeral=True if ctx.interaction else False,
+            f"Conversation response mode set to `{mode}`: "
+            f"{descriptions[mode]}.",
+            ephemeral=bool(ctx.interaction),
         )

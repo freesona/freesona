@@ -1,29 +1,31 @@
-# cogs/media/mvsep.py: MVSEP audio source separation (vocals/instrumental via BS Roformer).
+# cogs/media/mvsep.py: MVSEP audio source separation (vocals/instrumental
+# via BS Roformer).
 
-import os
 import asyncio
 import logging
+import os
 import tempfile
-import aiohttp
-import discord
-
-from discord.ext import commands
-from typing import Optional
+from pathlib import Path
 from urllib.parse import urlparse
 
+import aiofiles
+import aiohttp
+import discord
+from discord.ext import commands
 from dotenv import load_dotenv
 
-from pathlib import Path
 from fastapi_server import register_mvsep_job, unregister_mvsep_job
-from utils.security import is_public_http_url
 from utils.config import load_config
+from utils.security import is_public_http_url
 
 load_dotenv()
 
 MVSEP_API_KEY = os.getenv("MVSEP_API_KEY")
-BOT_NAME      = os.getenv("BOT_NAME", "Bot")
+BOT_NAME = os.getenv("BOT_NAME", "Bot")
 MVSEP_WEBHOOK_URL = os.getenv("MVSEP_WEBHOOK_URL")
-MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR = os.getenv("MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR", "false").lower() in {
+MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR = os.getenv(
+    "MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR", "false"
+).lower() in {
     "1",
     "true",
     "yes",
@@ -31,16 +33,21 @@ MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR = os.getenv("MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR",
 }
 
 # BS Roformer ver 2025.07 — SDR vocals: 11.89, SDR instrum: 18.20
-SEP_TYPE  = 40
-ADD_OPT1  = 81
-OUT_FMT   = 0   # mp3 320kbps
+SEP_TYPE = 40
+ADD_OPT1 = 81
+OUT_FMT = 0  # mp3 320kbps
 
-# Polling values are loaded from config (configurable via /config slash commands)
+# Polling values are loaded from config (configurable via /config slash
+# commands)
+
+
 def _get_poll_interval() -> int:
     return int(load_config().get("mvsep_poll_interval", 10))
 
+
 def _get_poll_timeout() -> int:
     return int(load_config().get("mvsep_poll_timeout", 600))
+
 
 # Statuses that mean the job is still running
 IN_PROGRESS = {"waiting", "processing", "distributing", "merging"}
@@ -74,18 +81,48 @@ def is_direct_audio_url(url: str) -> bool:
 
 def should_download_with_ytdlp(url: str) -> bool:
     host = (urlparse(url).hostname or "").lower().rstrip(".")
-    return any(host == domain or host.endswith(f".{domain}") for domain in YTDLP_DOMAINS)
+    return any(
+        host == domain or host.endswith(f".{domain}")
+        for domain in YTDLP_DOMAINS
+    )
 
 
 def stem_label(file_info: dict, index: int) -> str:
-    raw = " ".join(str(file_info.get(key, "")) for key in ("name", "type", "stem", "instrument"))
+    raw = " ".join(
+        str(file_info.get(key, ""))
+        for key in ("name", "type", "stem", "instrument")
+    )
     lower = raw.lower()
-    link = str(file_info.get("download_link") or file_info.get("link") or file_info.get("url", "")).lower()
+    link = str(
+        file_info.get("download_link")
+        or file_info.get("link")
+        or file_info.get("url", "")
+    ).lower()
     probe = f"{lower} {link}"
 
-    if any(term in probe for term in ("vocal", "vocals", "voice", "singer", "acapella", "accompaniment")):
+    if any(
+        term in probe
+        for term in (
+            "vocal",
+            "vocals",
+            "voice",
+            "singer",
+            "acapella",
+            "accompaniment",
+        )
+    ):
         return "Vocals"
-    if any(term in probe for term in ("instrumental", "instrum", "karaoke", "no_vocals", "novocals", "music")):
+    if any(
+        term in probe
+        for term in (
+            "instrumental",
+            "instrum",
+            "karaoke",
+            "no_vocals",
+            "novocals",
+            "music",
+        )
+    ):
         return "Instrumental"
 
     if index == 0:
@@ -112,7 +149,7 @@ def mvsep_status_text(status: str, queue_pos: object, job_hash: str) -> str:
 
 class MVSepCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
-        self.bot   = bot
+        self.bot = bot
         self._busy = False
 
     # ------------------------------------------------------------------
@@ -123,14 +160,14 @@ class MVSepCog(commands.Cog):
         self,
         session: aiohttp.ClientSession,
         *,
-        file_path: Optional[str] = None,
-        url: Optional[str] = None,
+        file_path: str | None = None,
+        url: str | None = None,
     ) -> dict:
         endpoint = "https://mvsep.com/api/separation/create"
         data = aiohttp.FormData()
-        data.add_field("api_token",     MVSEP_API_KEY)
-        data.add_field("sep_type",      str(SEP_TYPE))
-        data.add_field("add_opt1",      str(ADD_OPT1))
+        data.add_field("api_token", MVSEP_API_KEY)
+        data.add_field("sep_type", str(SEP_TYPE))
+        data.add_field("add_opt1", str(ADD_OPT1))
         data.add_field("output_format", str(OUT_FMT))
 
         if MVSEP_WEBHOOK_URL:
@@ -140,10 +177,10 @@ class MVSepCog(commands.Cog):
 
         if file_path:
             assert file_path is not None
-            with open(file_path, "rb") as audio_file:
+            async with aiofiles.open(file_path, "rb") as audio_file:
                 data.add_field(
                     "audiofile",
-                    audio_file.read(),
+                    await audio_file.read(),
                     filename=os.path.basename(file_path),
                     content_type="audio/mpeg",
                 )
@@ -163,12 +200,14 @@ class MVSepCog(commands.Cog):
     #           distributing | merging
     # ------------------------------------------------------------------
 
-    async def _poll(self, session: aiohttp.ClientSession, job_hash: str, status_msg=None) -> dict:
+    async def _poll(
+        self, session: aiohttp.ClientSession, job_hash: str, status_msg=None
+    ) -> dict:
         endpoint = f"https://mvsep.com/api/separation/get?hash={job_hash}"
-        elapsed  = 0
+        elapsed = 0
         last_status_text = None
         poll_interval = _get_poll_interval()
-        poll_timeout  = _get_poll_timeout()
+        poll_timeout = _get_poll_timeout()
 
         while elapsed < poll_timeout:
             await asyncio.sleep(poll_interval)
@@ -184,7 +223,9 @@ class MVSepCog(commands.Cog):
                 return payload
 
             if status == "failed":
-                reason = payload.get("data", {}).get("message", "No reason given.")
+                reason = payload.get("data", {}).get(
+                    "message", "No reason given."
+                )
                 raise RuntimeError(f"Separation failed: {reason}")
 
             if status == "not_found":
@@ -194,10 +235,13 @@ class MVSepCog(commands.Cog):
                 # Log queue position if available
                 queue_pos = payload.get("data", {}).get("current_order")
                 if queue_pos not in (None, ""):
-                    logger.info(f"MVSEP job {job_hash} — status: {status}, queue position: {queue_pos}")
+                    logger.info(
+                        f"MVSEP job {job_hash} — status: {status}, queue position: {queue_pos}")
 
                 if status_msg is not None:
-                    status_text = mvsep_status_text(status, queue_pos, job_hash)
+                    status_text = mvsep_status_text(
+                        status, queue_pos, job_hash
+                    )
                     if status_text != last_status_text:
                         await status_msg.edit(content=status_text)
                         last_status_text = status_text
@@ -208,19 +252,23 @@ class MVSepCog(commands.Cog):
 
         raise TimeoutError("Job timed out after 10 minutes.")
 
-    async def _wait_for_webhook(self, session: aiohttp.ClientSession, job_hash: str, status_msg=None) -> dict:
+    async def _wait_for_webhook(
+        self, session: aiohttp.ClientSession, job_hash: str, status_msg=None
+    ) -> dict:
         endpoint = f"https://mvsep.com/api/separation/get?hash={job_hash}"
         future = asyncio.get_running_loop().create_future()
         register_mvsep_job(job_hash, future)
         elapsed = 0
         last_status_text = None
         poll_interval = _get_poll_interval()
-        poll_timeout  = _get_poll_timeout()
+        poll_timeout = _get_poll_timeout()
 
         try:
             while elapsed < poll_timeout:
                 try:
-                    return await asyncio.wait_for(asyncio.shield(future), timeout=poll_interval)
+                    return await asyncio.wait_for(
+                        asyncio.shield(future), timeout=poll_interval
+                    )
                 except asyncio.TimeoutError:
                     elapsed += poll_interval
 
@@ -236,16 +284,21 @@ class MVSepCog(commands.Cog):
                 if status in IN_PROGRESS:
                     queue_pos = payload.get("data", {}).get("current_order")
                     if queue_pos not in (None, ""):
-                        logger.info(f"MVSEP job {job_hash} — status: {status}, queue position: {queue_pos}")
+                        logger.info(
+                            f"MVSEP job {job_hash} — status: {status}, queue position: {queue_pos}")
 
                     if status_msg is not None:
-                        status_text = mvsep_status_text(status, queue_pos, job_hash)
+                        status_text = mvsep_status_text(
+                            status, queue_pos, job_hash
+                        )
                         if status_text != last_status_text:
                             await status_msg.edit(content=status_text)
                             last_status_text = status_text
                     continue
 
-                logger.warning(f"MVSEP unknown status while waiting for webhook: {status}")
+                logger.warning(
+                    f"MVSEP unknown status while waiting for webhook: {status}"
+                )
 
             raise TimeoutError("Job timed out after 10 minutes.")
         finally:
@@ -268,10 +321,10 @@ class MVSepCog(commands.Cog):
     async def _resolve_input(
         self,
         ctx,
-        source: Optional[str],
+        source: str | None,
         tmp_dir: str,
-        slash_attachment: Optional[discord.Attachment] = None,
-    ) -> tuple[Optional[str], Optional[str]]:
+        slash_attachment: discord.Attachment | None = None,
+    ) -> tuple[str | None, str | None]:
         """
         Returns (file_path, pass_url).
         file_path: local path to upload binary (or None)
@@ -293,7 +346,7 @@ class MVSepCog(commands.Cog):
 
         # 1b. Prefix command attachment via ctx.message
         if ctx.message is not None and ctx.message.attachments:
-            att  = ctx.message.attachments[0]
+            att = ctx.message.attachments[0]
             dest = os.path.join(tmp_dir, att.filename)
             await att.save(dest)
             return dest, None
@@ -309,18 +362,23 @@ class MVSepCog(commands.Cog):
 
         # 3. Platform/social URL — yt-dlp download then upload to MVSEP.
         from cogs.media.ytdlp import YtDlp
+
         ytdlp_cog = self.bot.get_cog("YtDlp")
         if ytdlp_cog is None or not isinstance(ytdlp_cog, YtDlp):
             raise RuntimeError("yt-dlp cog not loaded.")
 
         if should_download_with_ytdlp(source):
-            local = await ytdlp_cog.fetch_ytdlp(ctx, source, is_audio=True, tmp_dir=tmp_dir)
+            local = await ytdlp_cog.fetch_ytdlp(
+                ctx, source, is_audio=True, tmp_dir=tmp_dir
+            )
             if not local:
                 raise RuntimeError("yt-dlp failed to download audio.")
             return local, None
 
         # 4. Any other public URL — try yt-dlp as a fallback.
-        local = await ytdlp_cog.fetch_ytdlp(ctx, source, is_audio=True, tmp_dir=tmp_dir)
+        local = await ytdlp_cog.fetch_ytdlp(
+            ctx, source, is_audio=True, tmp_dir=tmp_dir
+        )
         if not local:
             raise RuntimeError("yt-dlp failed to download audio.")
         return local, None
@@ -331,11 +389,18 @@ class MVSepCog(commands.Cog):
 
     @commands.hybrid_command(
         name="separate",
-        aliases=["sep", "stems"],
-        help="Separate vocals and instrumental from audio. Attach a file or pass a URL."
+        aliases=[
+            "sep",
+            "stems"],
+        help="Separate vocals and instrumental from audio. Attach a file or pass a URL.",
     )
     @commands.cooldown(1, 60, commands.BucketType.guild)
-    async def separate(self, ctx, url: Optional[str] = None, attachment: Optional[discord.Attachment] = None):
+    async def separate(
+        self,
+        ctx,
+        url: str | None = None,
+        attachment: discord.Attachment | None = None,
+    ):
         if ctx.guild is None:
             await ctx.send("This command is server-only.")
             return
@@ -348,7 +413,7 @@ class MVSepCog(commands.Cog):
             await ctx.send(
                 "⏳ A separation job is already running. "
                 "Free tier only allows one at a time — try again when it finishes.",
-                ephemeral=True if ctx.interaction else False,
+                ephemeral=bool(ctx.interaction),
             )
             return
 
@@ -357,8 +422,8 @@ class MVSepCog(commands.Cog):
             return
 
         await ctx.defer()
-        self._busy    = True
-        status_msg    = await ctx.send("⏳ Submitting to MVSEP...")
+        self._busy = True
+        status_msg = await ctx.send("⏳ Submitting to MVSEP...")
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -366,25 +431,37 @@ class MVSepCog(commands.Cog):
 
                     # Resolve input
                     try:
-                        file_path, pass_url = await self._resolve_input(ctx, url, tmp_dir, slash_attachment=attachment)
+                        file_path, pass_url = await self._resolve_input(
+                            ctx, url, tmp_dir, slash_attachment=attachment
+                        )
                     except RuntimeError as e:
                         await status_msg.edit(content=f"❌ {e}")
                         return
 
                     if not file_path and not pass_url:
-                        await status_msg.edit(content="❌ No valid input found.")
+                        await status_msg.edit(
+                            content="❌ No valid input found."
+                        )
                         return
 
                     # Submit
                     try:
-                        result = await self._submit(session, file_path=file_path, url=pass_url)
-                    except Exception as e:
-                        await status_msg.edit(content=f"❌ Submission error: {e}")
+                        result = await self._submit(
+                            session, file_path=file_path, url=pass_url
+                        )
+                    except aiohttp.ClientError as e:
+                        await status_msg.edit(
+                            content=f"❌ Submission error: {e}"
+                        )
                         return
 
                     if not result.get("success"):
-                        msg = result.get("data", {}).get("message", "Unknown error.")
-                        await status_msg.edit(content=f"❌ MVSEP rejected the job: {msg}")
+                        msg = result.get("data", {}).get(
+                            "message", "Unknown error."
+                        )
+                        await status_msg.edit(
+                            content=f"❌ MVSEP rejected the job: {msg}"
+                        )
                         return
 
                     job_hash = result["data"]["hash"]
@@ -402,13 +479,16 @@ class MVSepCog(commands.Cog):
 
                     if MVSEP_WEBHOOK_URL:
                         try:
-                            webhook_payload = await self._wait_for_webhook(session, job_hash, status_msg)
+                            webhook_payload = await self._wait_for_webhook(
+                                session, job_hash, status_msg
+                            )
                             self._raise_for_terminal_status(webhook_payload)
                             if webhook_payload.get("status") == "done":
                                 done = webhook_payload
                             else:
                                 status = webhook_payload.get("status")
-                                logger.warning(f"MVSEP webhook returned non-terminal status: {status}")
+                                logger.warning(
+                                    f"MVSEP webhook returned non-terminal status: {status}")
                         except asyncio.TimeoutError:
                             poll_interval = _get_poll_interval()
                             await status_msg.edit(
@@ -420,7 +500,9 @@ class MVSepCog(commands.Cog):
 
                     if done is None:
                         try:
-                            done = await self._poll(session, job_hash, status_msg)
+                            done = await self._poll(
+                                session, job_hash, status_msg
+                            )
                         except (RuntimeError, TimeoutError) as e:
                             await status_msg.edit(content=f"❌ {e}")
                             return
@@ -428,7 +510,9 @@ class MVSepCog(commands.Cog):
             # Build result embed
             data_block = done.get("data", {})
             files_data = data_block.get("files", [])
-            algo_desc  = data_block.get("algorithm_description", "BS Roformer ver 2025.07")
+            algo_desc = data_block.get(
+                "algorithm_description", "BS Roformer ver 2025.07"
+            )
 
             embed = discord.Embed(
                 title="Separation Complete",
@@ -438,11 +522,17 @@ class MVSepCog(commands.Cog):
 
             for idx, f in enumerate(files_data):
                 name = stem_label(f, idx)
-                link = f.get("download_link") or f.get("link") or f.get("url", "")
+                link = (
+                    f.get("download_link") or f.get("link") or f.get("url", "")
+                )
                 if link:
-                    embed.add_field(name=name, value=f"[Download]({link})", inline=True)
+                    embed.add_field(
+                        name=name, value=f"[Download]({link})", inline=True
+                    )
 
-            embed.set_footer(text="Links are hosted by MVSEP and expire after some time.")
+            embed.set_footer(
+                text="Links are hosted by MVSEP and expire after some time."
+            )
             await status_msg.edit(content=None, embed=embed)
 
         finally:
@@ -452,11 +542,16 @@ class MVSepCog(commands.Cog):
     async def separate_error(self, ctx, error):
         self._busy = False
         if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"⏳ Wait **{error.retry_after:.1f}s**.", delete_after=10)
+            await ctx.send(
+                f"⏳ Wait **{error.retry_after:.1f}s**.", delete_after=10
+            )
         else:
             logger.error(f"Separate error: {error}")
             await ctx.send(f"❌ Unexpected error: {error}")
 
+
 # That was unintuitive...
+
+
 async def setup(bot):
     await bot.add_cog(MVSepCog(bot))

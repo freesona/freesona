@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 INTENT_IMAGE_ANALYSIS = "image_analysis"
-INTENT_CODE_HELP      = "code_help"
-INTENT_GENERAL_CHAT   = "general_chat"
-INTENT_IGNORE         = "ignore"
+INTENT_CODE_HELP = "code_help"
+INTENT_GENERAL_CHAT = "general_chat"
+INTENT_IGNORE = "ignore"
 
 # ---------------------------------------------------------------------------
 # Confidence thresholds per frequency setting
@@ -24,9 +24,9 @@ INTENT_IGNORE         = "ignore"
 # ---------------------------------------------------------------------------
 
 FREQUENCY_THRESHOLD = {
-    "low":     0.70,
+    "low": 0.70,
     "default": 0.50,
-    "high":    0.35,
+    "high": 0.35,
 }
 
 # ---------------------------------------------------------------------------
@@ -54,6 +54,7 @@ CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]+?```|`[^`]+`")
 # Result type
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class IntentResult:
     intent: str
@@ -69,9 +70,11 @@ class IntentResult:
             f"targets={self.targets})"
         )
 
+
 # ---------------------------------------------------------------------------
 # Evaluator
 # ---------------------------------------------------------------------------
+
 
 def evaluate_intent(
     message: "discord.Message",
@@ -92,10 +95,10 @@ def evaluate_intent(
 
     Confidence is clamped to [0.0, 1.0].
     """
-    content  = message.content or ""
-    targets  = []
-    score    = 0.0
-    intent   = INTENT_GENERAL_CHAT
+    content = message.content or ""
+    targets = []
+    score = 0.0
+    intent = INTENT_GENERAL_CHAT
 
     # --- Hard ignore: empty message with no attachments ---
     if not content.strip() and not message.attachments:
@@ -108,7 +111,7 @@ def evaluate_intent(
 
     # --- Signal: direct mention or reply to bot ---
     is_mention = bot_user is not None and bot_user in message.mentions
-    is_reply   = (
+    is_reply = (
         bot_user is not None
         and message.reference is not None
         and getattr(message.reference.resolved, "author", None) == bot_user
@@ -126,8 +129,10 @@ def evaluate_intent(
             mime = (att.content_type or "").split(";")[0].strip()
             if mime.startswith("image/"):
                 intent = INTENT_IMAGE_ANALYSIS
-            elif mime.startswith("video/") or mime.startswith("audio/"):
-                intent = INTENT_IMAGE_ANALYSIS  # same pipeline, different media
+            elif mime.startswith(("video/", "audio/")):
+                intent = (
+                    INTENT_IMAGE_ANALYSIS  # same pipeline, different media
+                )
             elif mime in ("application/pdf", "text/plain", "text/markdown"):
                 intent = INTENT_GENERAL_CHAT
 
@@ -158,12 +163,18 @@ def evaluate_intent(
         targets.append("short_filler")
 
     # --- Penalty: long monologue with no question and no mention ---
-    if len(content) > 400 and "?" not in content and not is_mention and not is_reply:
+    if (
+        len(content) > 400
+        and "?" not in content
+        and not is_mention
+        and not is_reply
+    ):
         score -= 0.20
         targets.append("long_monologue")
 
-    confidence        = max(0.0, min(1.0, score))
-    requires_response = confidence >= 0.50  # default threshold; caller may override
+    confidence = max(0.0, min(1.0, score))
+    # default threshold; caller may override
+    requires_response = confidence >= 0.50
 
     # Downgrade intent to ignore if confidence is very low
     if confidence < 0.15:

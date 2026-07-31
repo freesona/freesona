@@ -1,18 +1,15 @@
 # utils/views/config_views.py: Shared UI components for config commands.
 # Moved from cogs/system/admin.py to be shared across config-related cogs.
 
+
 import discord
 from discord import ui
-from typing import Optional
 
-from utils.config import load_config, save_config, DEFAULT_CONFIG
+from utils.config import DEFAULT_CONFIG, load_config, save_config
 from utils.config_schema import (
     CONFIG_CATEGORIES,
     CONFIG_DESCRIPTIONS,
-    CONFIG_KEY_ORDER,
     get_config_default,
-    is_valid_config_key,
-    get_config_category,
     get_config_description,
 )
 
@@ -20,7 +17,39 @@ from utils.config_schema import (
 CONFIG_ALLOWED_VALUES = {
     "conversation_response_mode": ["all", "mentions", "reply", "dm"],
     "log_level": ["DEBUG", "INFO", "WARNING", "ERROR"],
-    "provider": ["gemini", "openai", "anthropic", "openrouter", "nvidia", "ollama", "deepinfra", "together", "groq", "fireworks", "perplexity", "cerebras", "sambanova", "xai", "deepseek", "moonshot", "zhipu", "baichuan", "minimax", "stepfun", "volcengine", "siliconflow", "modelslab", "infermatic", "hyperbolic", "novita", "runpod", "vast", "lambda", "together-legacy", "openai-compatible"],
+    "provider": [
+        "gemini",
+        "openai",
+        "anthropic",
+        "openrouter",
+        "nvidia",
+        "ollama",
+        "deepinfra",
+        "together",
+        "groq",
+        "fireworks",
+        "perplexity",
+        "cerebras",
+        "sambanova",
+        "xai",
+        "deepseek",
+        "moonshot",
+        "zhipu",
+        "baichuan",
+        "minimax",
+        "stepfun",
+        "volcengine",
+        "siliconflow",
+        "modelslab",
+        "infermatic",
+        "hyperbolic",
+        "novita",
+        "runpod",
+        "vast",
+        "lambda",
+        "together-legacy",
+        "openai-compatible",
+    ],
 }
 
 
@@ -34,7 +63,11 @@ class ConfigModal(ui.Modal, title="Edit Config Value"):
 
         self.value_input = ui.TextInput(
             label=key,
-            placeholder=f"Current: {current_value}" if current_value else "Enter value...",
+            placeholder=(
+                f"Current: {current_value}"
+                if current_value
+                else "Enter value..."
+            ),
             default=current_value,
             required=False,
             max_length=2000,
@@ -104,16 +137,25 @@ class ConfigModal(ui.Modal, title="Edit Config Value"):
 class ConfigKeySelect(ui.Select):
     """Select menu for choosing a config key to edit."""
 
-    def __init__(self, keys: list[str], placeholder: str = "Select a config key..."):
+    def __init__(
+        self, keys: list[str], placeholder: str = "Select a config key..."
+    ):
         options = [
             discord.SelectOption(
                 label=key,
-                description=CONFIG_DESCRIPTIONS.get(key, "No description")[:100],
+                description=CONFIG_DESCRIPTIONS.get(key, "No description")[
+                    :100
+                ],
                 value=key,
             )
             for key in keys[:25]  # Discord limit
         ]
-        super().__init__(placeholder=placeholder, options=options, min_values=1, max_values=1)
+        super().__init__(
+            placeholder=placeholder,
+            options=options,
+            min_values=1,
+            max_values=1,
+        )
 
     async def callback(self, interaction: discord.Interaction):
         key = self.values[0]
@@ -121,7 +163,11 @@ class ConfigKeySelect(ui.Select):
         current_value = config.get(key, get_config_default(key))
         description = get_config_description(key)
 
-        modal = ConfigModal(key, str(current_value) if current_value is not None else "", description)
+        modal = ConfigModal(
+            key,
+            str(current_value) if current_value is not None else "",
+            description,
+        )
         await interaction.response.send_modal(modal)
 
 
@@ -141,8 +187,8 @@ class ConfigPanelView(ui.View):
         self.bot = bot
         self.mode = mode
         self.author_id = bot.owner_id
-        self.current_category: Optional[str] = None
-        self.message: Optional[discord.Message] = None
+        self.current_category: str | None = None
+        self.message: discord.Message | None = None
 
         # Add category select
         self.add_item(ConfigCategorySelect())
@@ -171,7 +217,9 @@ class ConfigPanelView(ui.View):
         embed.set_footer(text="Use the dropdown to select a category")
         return embed
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self, interaction: discord.Interaction
+    ) -> bool:
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
                 "You cannot interact with this panel.", ephemeral=True
@@ -202,7 +250,7 @@ class ConfigPanelView(ui.View):
 
         embed = discord.Embed(
             title=f"⚙️ {category} Settings",
-            description=f"Select a key to edit its value. Current values shown.",
+            description="Select a key to edit its value. Current values shown.",
             color=discord.Color.green(),
         )
 
@@ -240,12 +288,17 @@ class ConfigCategorySelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         from typing import cast
+
         view = cast(ConfigPanelView, self.view)
         view.current_category = self.values[0]
         view.clear_items()
         view.add_item(ConfigCategorySelect())
-        view.add_item(ConfigKeySelect(CONFIG_CATEGORIES[view.current_category]))
-        await interaction.response.edit_message(embed=view.create_key_embed(view.current_category), view=view)
+        view.add_item(
+            ConfigKeySelect(CONFIG_CATEGORIES[view.current_category])
+        )
+        await interaction.response.edit_message(
+            embed=view.create_key_embed(view.current_category), view=view
+        )
 
 
 class ConfigResetConfirmView(ui.View):
@@ -255,9 +308,11 @@ class ConfigResetConfirmView(ui.View):
         super().__init__(timeout=30)
         self.author_id = author_id
         self.keys = keys
-        self.message: Optional[discord.Message] = None
+        self.message: discord.Message | None = None
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self, interaction: discord.Interaction
+    ) -> bool:
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
                 "You cannot interact with this panel.", ephemeral=True
@@ -266,7 +321,9 @@ class ConfigResetConfirmView(ui.View):
         return True
 
     @ui.button(label="Confirm Reset", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction: discord.Interaction, button: ui.Button):
+    async def confirm(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
         config = load_config()
         if self.keys:
             for key in self.keys:
@@ -285,7 +342,9 @@ class ConfigResetConfirmView(ui.View):
         self.stop()
 
     @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+    async def cancel(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
         await interaction.response.edit_message(
             content="❌ Reset cancelled.", embed=None, view=None
         )
@@ -302,7 +361,9 @@ class ConfigSelectView(ui.View):
         self.author_id = bot.owner_id
         self.add_item(ConfigKeySelectForMode(mode))
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self, interaction: discord.Interaction
+    ) -> bool:
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
                 "You cannot interact with this panel.", ephemeral=True
@@ -323,13 +384,24 @@ class ConfigKeySelectForMode(ui.Select):
         options = [
             discord.SelectOption(
                 label=key,
-                description=CONFIG_DESCRIPTIONS.get(key, "No description")[:100],
+                description=CONFIG_DESCRIPTIONS.get(key, "No description")[
+                    :100
+                ],
                 value=key,
             )
             for key in sorted(all_keys)[:25]  # Discord limit
         ]
-        placeholder = "Select a key to view..." if mode == "view" else "Select a key to reset..."
-        super().__init__(placeholder=placeholder, options=options, min_values=1, max_values=1)
+        placeholder = (
+            "Select a key to view..."
+            if mode == "view"
+            else "Select a key to reset..."
+        )
+        super().__init__(
+            placeholder=placeholder,
+            options=options,
+            min_values=1,
+            max_values=1,
+        )
 
     async def callback(self, interaction: discord.Interaction):
         key = self.values[0]

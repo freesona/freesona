@@ -1,6 +1,6 @@
-# cogs/ai/genai_autonomy.py: Autonomy mode configuration and bot whitelist management.
+# cogs/ai/genai_autonomy.py: Autonomy mode configuration and bot whitelist
+# management.
 
-from typing import Optional
 
 import discord
 from discord import app_commands
@@ -16,17 +16,22 @@ class GenAIAutonomyCog(commands.Cog):
     # -------------------------------------------------------------------
     # /autonomy
     # -------------------------------------------------------------------
-    @app_commands.command(name="autonomy", description="Configure autonomy mode settings (Admin only).")
+    @app_commands.command(
+        name="autonomy",
+        description="Configure autonomy mode settings (Admin only).",
+    )
     @app_commands.describe(
         action="on / off / frequency",
-        frequency="low / default / high — only used when action is 'frequency'",
+        frequency=(
+            "low / default / high — only used when action " "is 'frequency'"
+        ),
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def autonomy_cmd(
         self,
         interaction: discord.Interaction,
         action: str,
-        frequency: Optional[str] = None,
+        frequency: str | None = None,
     ):
         config = load_config()
         action = action.lower().strip()
@@ -34,15 +39,20 @@ class GenAIAutonomyCog(commands.Cog):
         if action == "on":
             config["autonomy"] = True
             save_config(config)
-            await interaction.response.send_message("Autonomy mode enabled.", ephemeral=True)
+            await interaction.response.send_message(
+                "Autonomy mode enabled.", ephemeral=True
+            )
         elif action == "off":
             config["autonomy"] = False
             save_config(config)
-            await interaction.response.send_message("Autonomy mode disabled.", ephemeral=True)
+            await interaction.response.send_message(
+                "Autonomy mode disabled.", ephemeral=True
+            )
         elif action == "frequency":
             if frequency not in ("low", "default", "high"):
                 await interaction.response.send_message(
-                    "Frequency must be `low`, `default`, or `high`.", ephemeral=True
+                    "Frequency must be `low`, `default`, or `high`.",
+                    ephemeral=True,
                 )
                 return
             config["autonomy_frequency"] = frequency
@@ -52,43 +62,58 @@ class GenAIAutonomyCog(commands.Cog):
             )
         else:
             await interaction.response.send_message(
-                "Unknown action. Use `on`, `off`, or `frequency`.", ephemeral=True
+                "Unknown action. Use `on`, `off`, or `frequency`.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
     # /botwhitelist add / remove / list
     # -------------------------------------------------------------------
-    @commands.hybrid_group(name="botwhitelist", aliases=["bw"], help="Manage whitelisted bot IDs (Admin only).")
+    @commands.hybrid_group(
+        name="botwhitelist",
+        aliases=["bw"],
+        help="Manage whitelisted bot IDs (Admin only).",
+    )
     @commands.has_permissions(administrator=True)
     async def whitelist_group(self, ctx: commands.Context):
-        """Root group command displaying whitelisted bots if no subcommand is invoked."""
+        """Root group command displaying whitelisted bots if
+        no subcommand is invoked."""
         if ctx.invoked_subcommand is not None:
             return
 
         config = load_config()
         whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
         if not whitelist:
-            await ctx.send("No bots are whitelisted.", ephemeral=True if ctx.interaction else False)
+            await ctx.send(
+                "No bots are whitelisted.", ephemeral=bool(ctx.interaction)
+            )
             return
         lines = "\n".join(f"- `{bot_id}`" for bot_id in whitelist)
-        await ctx.send(f"Whitelisted bots:\n{lines}", ephemeral=True if ctx.interaction else False)
+        await ctx.send(
+            f"Whitelisted bots:\n{lines}", ephemeral=bool(ctx.interaction)
+        )
 
-    @whitelist_group.command(name="add", help="Add a bot ID to the whitelist.")  # type: ignore[attr-defined]
-    @app_commands.describe(bot_id="The Discord bot ID (integer snowflake) to whitelist.")
+    # type: ignore[attr-defined]
+    @whitelist_group.command(name="add", help="Add a bot ID to the whitelist.")
+    @app_commands.describe(
+        bot_id="The Discord bot ID (integer snowflake) to whitelist."
+    )
     async def whitelist_add(self, ctx: commands.Context, bot_id: str):
         try:
             bid = int(bot_id)
         except ValueError:
             await ctx.send(
-                f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.",
-                ephemeral=True if ctx.interaction else False,
+                f"Invalid bot ID `{bot_id}` — must be a numeric "
+                f"Discord snowflake.",
+                ephemeral=bool(ctx.interaction),
             )
             return
         config = load_config()
         whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
         if bid in whitelist:
             await ctx.send(
-                f"Bot `{bid}` is already whitelisted.", ephemeral=True if ctx.interaction else False
+                f"Bot `{bid}` is already whitelisted.",
+                ephemeral=bool(ctx.interaction),
             )
             return
         whitelist.append(bid)
@@ -96,25 +121,32 @@ class GenAIAutonomyCog(commands.Cog):
         save_config(config)
         await ctx.send(
             f"Successfully added bot `{bid}` to the whitelist.",
-            ephemeral=True if ctx.interaction else False,
+            ephemeral=bool(ctx.interaction),
         )
 
-    @whitelist_group.command(name="remove", help="Remove a bot ID from the whitelist.")  # type: ignore[attr-defined]
-    @app_commands.describe(bot_id="The Discord bot ID (integer snowflake) to remove.")
+    # type: ignore[attr-defined]
+    @whitelist_group.command(
+        name="remove", help="Remove a bot ID from the whitelist."
+    )
+    @app_commands.describe(
+        bot_id="The Discord bot ID (integer snowflake) to remove."
+    )
     async def whitelist_remove(self, ctx: commands.Context, bot_id: str):
         try:
             bid = int(bot_id)
         except ValueError:
             await ctx.send(
-                f"Invalid bot ID `{bot_id}` — must be a numeric Discord snowflake.",
-                ephemeral=True if ctx.interaction else False,
+                f"Invalid bot ID `{bot_id}` — must be a numeric "
+                f"Discord snowflake.",
+                ephemeral=bool(ctx.interaction),
             )
             return
         config = load_config()
         whitelist = [int(x) for x in config.get("whitelist_bot_ids", [])]
         if bid not in whitelist:
             await ctx.send(
-                f"Bot `{bid}` is not in the whitelist.", ephemeral=True if ctx.interaction else False
+                f"Bot `{bid}` is not in the whitelist.",
+                ephemeral=bool(ctx.interaction),
             )
             return
         whitelist.remove(bid)
@@ -122,5 +154,5 @@ class GenAIAutonomyCog(commands.Cog):
         save_config(config)
         await ctx.send(
             f"Successfully removed bot `{bid}` from the whitelist.",
-            ephemeral=True if ctx.interaction else False,
+            ephemeral=bool(ctx.interaction),
         )

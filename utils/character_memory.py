@@ -16,16 +16,17 @@
 
 from __future__ import annotations
 
-import os
-import json
-import uuid
 import asyncio
+import json
 import logging
-import aiosqlite
-from datetime import datetime, timezone
+import os
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Any
+
+import aiosqlite
 
 from utils.config import load_config
 
@@ -34,6 +35,8 @@ logger = logging.getLogger("FreesonaBot")
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
+
+
 def _get_character_memory_file_path() -> str:
     """Get the character memory database file path (reads env each call for testability)."""
     return os.getenv("CHARACTER_MEMORY_FILE_PATH", "./character_memory.db")
@@ -65,6 +68,7 @@ EXTRACTION_BATCH_SIZE = _get_extraction_batch_size()
 
 class MemoryType(Enum):
     """Types of character memories."""
+
     PROMISE = "promise"
     SHARED_EXPERIENCE = "shared_experience"
     RECURRING_JOKE = "recurring_joke"
@@ -76,6 +80,7 @@ class MemoryType(Enum):
 @dataclass
 class CharacterMemory:
     """A single character memory entry."""
+
     memory_id: str
     guild_id: int
     user_id: int
@@ -84,10 +89,10 @@ class CharacterMemory:
     content: str
     importance: float
     timestamp: str
-    source_message_ids: List[int] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    source_message_ids: list[int] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "memory_id": self.memory_id,
             "guild_id": self.guild_id,
@@ -121,6 +126,7 @@ class CharacterMemory:
 # Database Initialization
 # ---------------------------------------------------------------------------
 
+
 async def init_db():
     """Initialize the character memory database."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
@@ -153,46 +159,53 @@ async def init_db():
 # Storage Operations
 # ---------------------------------------------------------------------------
 
+
 async def store_memory(memory: CharacterMemory) -> None:
     """Store a new character memory."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
-        await db.execute("""
+        await db.execute(
+            """
             INSERT INTO character_memories (
                 memory_id, guild_id, user_id, persona_id,
                 memory_type, content, importance, timestamp,
                 source_message_ids, metadata
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            memory.memory_id,
-            str(memory.guild_id),
-            str(memory.user_id),
-            memory.persona_id,
-            memory.memory_type.value,
-            memory.content,
-            memory.importance,
-            memory.timestamp,
-            json.dumps(memory.source_message_ids),
-            json.dumps(memory.metadata),
-        ))
+        """,
+            (
+                memory.memory_id,
+                str(memory.guild_id),
+                str(memory.user_id),
+                memory.persona_id,
+                memory.memory_type.value,
+                memory.content,
+                memory.importance,
+                memory.timestamp,
+                json.dumps(memory.source_message_ids),
+                json.dumps(memory.metadata),
+            ),
+        )
         await db.commit()
 
 
 async def update_memory(memory: CharacterMemory) -> None:
     """Update an existing character memory."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
-        await db.execute("""
+        await db.execute(
+            """
             UPDATE character_memories
             SET content = ?, importance = ?, timestamp = ?,
                 source_message_ids = ?, metadata = ?
             WHERE memory_id = ?
-        """, (
-            memory.content,
-            memory.importance,
-            memory.timestamp,
-            json.dumps(memory.source_message_ids),
-            json.dumps(memory.metadata),
-            memory.memory_id,
-        ))
+        """,
+            (
+                memory.content,
+                memory.importance,
+                memory.timestamp,
+                json.dumps(memory.source_message_ids),
+                json.dumps(memory.metadata),
+                memory.memory_id,
+            ),
+        )
         await db.commit()
 
 
@@ -200,8 +213,7 @@ async def delete_memory(memory_id: str) -> None:
     """Delete a character memory by ID."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
         await db.execute(
-            "DELETE FROM character_memories WHERE memory_id = ?",
-            (memory_id,)
+            "DELETE FROM character_memories WHERE memory_id = ?", (memory_id,)
         )
         await db.commit()
 
@@ -212,41 +224,49 @@ async def get_memories(
     persona_id: str,
     limit: int = MAX_MEMORIES_PER_SCOPE,
     min_importance: float = MIN_IMPORTANCE,
-) -> List[CharacterMemory]:
+) -> list[CharacterMemory]:
     """Retrieve character memories for a scope, ordered by importance."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("""
+        async with db.execute(
+            """
             SELECT * FROM character_memories
             WHERE guild_id = ? AND user_id = ? AND persona_id = ?
               AND importance >= ?
             ORDER BY importance DESC, timestamp DESC
             LIMIT ?
-        """, (str(guild_id), str(user_id), persona_id, min_importance, limit)) as cursor:
+        """,
+            (str(guild_id), str(user_id), persona_id, min_importance, limit),
+        ) as cursor:
             rows = await cursor.fetchall()
             return [CharacterMemory.from_row(row) for row in rows]
 
 
-async def get_memory_by_id(memory_id: str) -> Optional[CharacterMemory]:
+async def get_memory_by_id(memory_id: str) -> CharacterMemory | None:
     """Retrieve a single memory by ID."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT * FROM character_memories WHERE memory_id = ?",
-            (memory_id,)
+            (memory_id,),
         ) as cursor:
             row = await cursor.fetchone()
             return CharacterMemory.from_row(row) if row else None
 
 
-async def get_memory_count(guild_id: int, user_id: int, persona_id: str) -> int:
+async def get_memory_count(
+    guild_id: int, user_id: int, persona_id: str
+) -> int:
     """Get total memory count for a scope."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("""
+        async with db.execute(
+            """
             SELECT COUNT(*) as count FROM character_memories
             WHERE guild_id = ? AND user_id = ? AND persona_id = ?
-        """, (str(guild_id), str(user_id), persona_id)) as cursor:
+        """,
+            (str(guild_id), str(user_id), persona_id),
+        ) as cursor:
             row = await cursor.fetchone()
             return row["count"] if row else 0
 
@@ -254,10 +274,13 @@ async def get_memory_count(guild_id: int, user_id: int, persona_id: str) -> int:
 async def clear_memories(guild_id: int, user_id: int, persona_id: str) -> int:
     """Clear all memories for a scope. Returns count deleted."""
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
-        cursor = await db.execute("""
+        cursor = await db.execute(
+            """
             DELETE FROM character_memories
             WHERE guild_id = ? AND user_id = ? AND persona_id = ?
-        """, (str(guild_id), str(user_id), persona_id))
+        """,
+            (str(guild_id), str(user_id), persona_id),
+        )
         await db.commit()
         return cursor.rowcount
 
@@ -265,6 +288,7 @@ async def clear_memories(guild_id: int, user_id: int, persona_id: str) -> int:
 # ---------------------------------------------------------------------------
 # Context Assembly for PromptBuilder
 # ---------------------------------------------------------------------------
+
 
 async def build_character_memory_context(
     guild_id: int,
@@ -275,7 +299,7 @@ async def build_character_memory_context(
 ) -> str:
     """
     Build the character memory context block for PromptBuilder.
-    
+
     Returns formatted string matching the expected output format:
     [Character Memory with {username}]
     - [PROMISE] We promised to play chess next week. (importance: 0.9)
@@ -314,12 +338,12 @@ EXTRACTION_PROMPT = (
     "Given a conversation history between a user and a character, identify "
     "memorable shared moments that define their relationship.\n\n"
     "Extract memories of these types ONLY:\n"
-    "- PROMISE: Explicit commitments made between them (\"I'll help you with...\")\n"
-    "- SHARED_EXPERIENCE: Events they experienced together (\"We fought the boss...\")\n"
-    "- RECURRING_JOKE: Running gags or inside jokes (\"Every time you mention cats...\")\n"
-    "- UNFINISHED_ACTIVITY: Activities started but not completed (\"We were building a house...\")\n"
-    "- RELATIONSHIP_PROGRESSION: Notable shifts in their dynamic (\"You've become more open...\")\n"
-    "- PERSISTENT_DECISION: Choices they made together that persist (\"We agreed to use code names...\")\n\n"
+    '- PROMISE: Explicit commitments made between them ("I\'ll help you with...")\n'
+    '- SHARED_EXPERIENCE: Events they experienced together ("We fought the boss...")\n'
+    '- RECURRING_JOKE: Running gags or inside jokes ("Every time you mention cats...")\n'
+    '- UNFINISHED_ACTIVITY: Activities started but not completed ("We were building a house...")\n'
+    '- RELATIONSHIP_PROGRESSION: Notable shifts in their dynamic ("You\'ve become more open...")\n'
+    '- PERSISTENT_DECISION: Choices they made together that persist ("We agreed to use code names...")\n\n'
     "DO NOT extract:\n"
     "- Facts about the user alone (preferences, background) → User Memory\n"
     "- Facts about the character's canon/lore → PKB/Canon\n"
@@ -329,8 +353,7 @@ EXTRACTION_PROMPT = (
     '{"type": "PROMISE|SHARED_EXPERIENCE|RECURRING_JOKE|UNFINISHED_ACTIVITY|RELATIONSHIP_PROGRESSION|PERSISTENT_DECISION", '
     '"content": "concise description", "importance": 0.0-1.0, "source_message_ids": [ids]}\n'
     "Return empty array [] if no qualifying memories found.\n"
-    "Be selective — only extract genuinely memorable relationship moments."
-)
+    "Be selective — only extract genuinely memorable relationship moments.")
 
 
 async def extract_memories_from_conversation(
@@ -341,10 +364,10 @@ async def extract_memories_from_conversation(
     provider_name: str,
     model_name: str,
     client: Any = None,
-) -> List[CharacterMemory]:
+) -> list[CharacterMemory]:
     """
     Extract character memories from recent conversation history.
-    
+
     This consumes ConversationManager as the source (per ADR-0003 boundaries).
     """
     from utils.conversation import build_conversation_context
@@ -385,11 +408,16 @@ async def extract_memories_from_conversation(
         except json.JSONDecodeError:
             # Try to extract JSON from Markdown code block
             import re
-            match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", raw, re.DOTALL)
+
+            match = re.search(
+                r"```(?:json)?\s*(\[.*?\])\s*```", raw, re.DOTALL
+            )
             if match:
                 extracted = json.loads(match.group(1))
             else:
-                logger.warning(f"Character memory extraction returned invalid JSON: {raw[:200]}")
+                logger.warning(
+                    f"Character memory extraction returned invalid JSON: {raw[:200]}"
+                )
                 return []
 
         if not isinstance(extracted, list):
@@ -404,7 +432,7 @@ async def extract_memories_from_conversation(
                 importance = float(item["importance"])
                 if importance < MIN_IMPORTANCE:
                     continue
-                
+
                 memory = CharacterMemory(
                     memory_id=str(uuid.uuid4()),
                     guild_id=guild_id,
@@ -423,12 +451,12 @@ async def extract_memories_from_conversation(
 
         return memories
 
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         logger.warning(f"Character memory extraction failed: {e}")
         return []
 
 
-async def store_extracted_memories(memories: List[CharacterMemory]) -> int:
+async def store_extracted_memories(memories: list[CharacterMemory]) -> int:
     """Store a batch of extracted memories, enforcing budget."""
     if not memories:
         return 0
@@ -438,12 +466,16 @@ async def store_extracted_memories(memories: List[CharacterMemory]) -> int:
         try:
             await store_memory(memory)
             stored += 1
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, aiosqlite.Error) as e:
             logger.warning(f"Failed to store character memory: {e}")
 
     # Enforce budget after storing
     if stored > 0 and memories:
-        scope = (memories[0].guild_id, memories[0].user_id, memories[0].persona_id)
+        scope = (
+            memories[0].guild_id,
+            memories[0].user_id,
+            memories[0].persona_id,
+        )
         await enforce_memory_budget(*scope)
 
     return stored
@@ -462,13 +494,17 @@ async def enforce_memory_budget(
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
         db.row_factory = aiosqlite.Row
         # Get all memories for scope ordered by importance ASC (lowest first)
-        async with db.execute("""
+        async with db.execute(
+            """
             SELECT memory_id FROM character_memories
             WHERE guild_id = ? AND user_id = ? AND persona_id = ?
             ORDER BY importance ASC, timestamp ASC
-        """, (str(guild_id), str(user_id), persona_id)) as cursor:
+        """,
+            (str(guild_id), str(user_id), persona_id),
+        ) as cursor:
             rows = await cursor.fetchall()
-            rows = list(rows)  # Convert Iterable to list for len() and indexing
+            # Convert Iterable to list for len() and indexing
+            rows = list(rows)
 
         if len(rows) <= max_memories:
             return 0
@@ -478,7 +514,7 @@ async def enforce_memory_budget(
         for row in rows[:to_remove]:
             await db.execute(
                 "DELETE FROM character_memories WHERE memory_id = ?",
-                (row["memory_id"],)
+                (row["memory_id"],),
             )
             removed += 1
 
@@ -490,7 +526,7 @@ async def enforce_memory_budget(
 # Periodic Extraction Task
 # ---------------------------------------------------------------------------
 
-_extraction_task: Optional[asyncio.Task] = None
+_extraction_task: asyncio.Task | None = None
 
 
 async def start_extraction_task(
@@ -498,7 +534,7 @@ async def start_extraction_task(
 ) -> None:
     """
     Start the periodic extraction task.
-    
+
     Note: This is a framework-level task. Actual extraction requires
     knowing which (guild, channel, user, persona) scopes are active.
     The genai cog should call run_extraction_cycle for active conversations.
@@ -512,10 +548,11 @@ async def start_extraction_task(
             try:
                 await asyncio.sleep(interval_seconds)
                 # Note: Actual extraction requires knowing active scopes
-                # The genai cog should call run_extraction_cycle for active conversations
+                # The genai cog should call run_extraction_cycle for active
+                # conversations
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 logger.warning(f"Character memory extraction error: {e}")
 
     _extraction_task = asyncio.create_task(extraction_loop())
@@ -557,31 +594,33 @@ async def run_extraction_cycle(
     )
     if memories:
         stored = await store_extracted_memories(memories)
-        logger.info(f"Character memory extraction: stored {stored} new memories for "
-                    f"guild={guild_id}, user={user_id}, persona={persona_id}")
+        logger.info(
+            f"Character memory extraction: stored {stored}  new memories for "
+            f"guild={guild_id}, user={user_id}, persona={persona_id} "
+        )
         return stored
     return 0
 
 
 __all__ = [
-    "CharacterMemory",
-    "MemoryType",
-    "init_db",
-    "store_memory",
-    "update_memory",
-    "delete_memory",
-    "get_memories",
-    "get_memory_by_id",
-    "get_memory_count",
-    "clear_memories",
-    "build_character_memory_context",
-    "extract_memories_from_conversation",
-    "store_extracted_memories",
-    "enforce_memory_budget",
-    "run_extraction_cycle",
-    "start_extraction_task",
-    "stop_extraction_task",
     "CHARACTER_MEMORY_FILE_PATH",
     "MAX_MEMORIES_PER_SCOPE",
     "MIN_IMPORTANCE",
+    "CharacterMemory",
+    "MemoryType",
+    "build_character_memory_context",
+    "clear_memories",
+    "delete_memory",
+    "enforce_memory_budget",
+    "extract_memories_from_conversation",
+    "get_memories",
+    "get_memory_by_id",
+    "get_memory_count",
+    "init_db",
+    "run_extraction_cycle",
+    "start_extraction_task",
+    "stop_extraction_task",
+    "store_extracted_memories",
+    "store_memory",
+    "update_memory",
 ]

@@ -1,8 +1,8 @@
 # ADR-0003: Context Semantics — Formal Definition of PromptBuilder Context Providers
 
-**Status**: Complete  
-**Date**: 2026-07-18  
-**Supersedes**: N/A  
+**Status**: Complete
+**Date**: 2026-07-18
+**Supersedes**: N/A
 
 ---
 
@@ -219,11 +219,11 @@ class ContextBlock:
 
 ### Fields Required for Planned Providers
 
-| Field                               | Type            | Provider   | Status                                                                          |
-|:------------------------------------|:----------------|:-----------|:--------------------------------------------------------------------------------|
-| `guild_id`                          | `Optional[int]` | GuildWorld | ✅ Exists                                                                        |
-| `channel_id`                        | `Optional[int]` | GuildWorld | ✅ Exists                                                                        |
-| (Discord `guild`/`channel` objects) | —               | GuildWorld | **Not in context** — provider must fetch via bot reference or separate accessor |
+| Field | Type | Provider | Status |
+|:---|:---|:---|:---|
+| `guild_id` | `Optional[int]` | GuildWorld | ✅ Exists |
+| `channel_id` | `Optional[int]` | GuildWorld | ✅ Exists |
+| (Discord `guild`/`channel` objects) | — | GuildWorld | **Not in context** — provider must fetch via bot reference or separate accessor |
 
 > **Design Decision**: `GuildWorldContextProvider` will need access to Discord guild/channel metadata. Since `PromptBuildContext` is framework-agnostic, the provider will receive a `GuildWorldAccessor` protocol (injected at build time) rather than raw Discord objects.
 
@@ -246,12 +246,12 @@ class ContextBlock:
 
 ## 8. Implementation Sequence (Enforced by This ADR)
 
-| Step    | Deliverable                                             | Status       |
-|:--------|:--------------------------------------------------------|:-------------|
-| **3.1** | `CanonContextProvider` + `utils/canon.py`               | ✅ Completed |
+| Step | Deliverable | Status |
+|:---|:---|:---|
+| **3.1** | `CanonContextProvider` + `utils/canon.py` | ✅ Completed |
 | **3.2** | `CharacterMemoryProvider` + `utils/character_memory.py` | ✅ Completed |
-| **3.3** | `GuildWorldContextProvider` + `utils/guild_world.py`    | ✅ Completed |
-| **3.4** | Token budget integration in `PromptBuilder.build()`     | ✅ Completed |
+| **3.3** | `GuildWorldContextProvider` + `utils/guild_world.py` | ✅ Completed |
+| **3.4** | Token budget integration in `PromptBuilder.build()` | ✅ Completed |
 
 > **All provider implementations complete.** This ADR documents the final architecture.
 
@@ -286,7 +286,7 @@ Freesona's logging system supports granular log sections to control verbosity pe
 ### Section Definitions
 
 | Section | Config Key | Logger Prefixes | Default | Description |
-|:--------|:-----------|:----------------|:--------|:------------|
+|:---|:---|:---|:---|:---|
 | General | `log_section_general` | `main`, `cogs`, `utils` | ✅ Enabled | Bot lifecycle, cog loading, general events |
 | Config | `log_section_config` | `utils.config`, `cogs.system.config` | ❌ Disabled | Configuration changes |
 | AI | `log_section_ai` | `utils.providers`, `utils.generation`, `utils.prompt_builder*`, `cogs.ai` | ✅ Enabled | AI provider calls, generation, prompt assembly |
@@ -344,7 +344,7 @@ The `GuildWorldAccessor` protocol includes a `get_guild_channels(guild_id)` meth
 ### GuildChannelInfo Fields
 
 | Field | Type | Description |
-|:------|:-----|:------------|
+|:---|:---|:---|
 | `id` | `int` | Channel snowflake ID |
 | `name` | `str` | Channel name |
 | `type` | `str` | Channel type (`text`, `voice`, `category`, `stage`, `forum`, `thread`) |

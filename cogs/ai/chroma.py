@@ -1,23 +1,39 @@
-# cogs/ai/chroma.py: ChromaDB Cog for Discord bot to manage a local knowledge base.
+# cogs/ai/chroma.py: ChromaDB Cog for Discord bot to manage a local
+# knowledge base.
 
 import asyncio
+
 import discord
-from discord import ui, app_commands
+from discord import app_commands, ui
 from discord.ext import commands
 
 from utils.chroma import (
+    VALID_CANON_LEVELS,
     add_knowledge,
     delete_knowledge,
     extract_text_from_bytes,
     get_knowledge_by_persona,
     list_knowledge,
     query_knowledge,
-    VALID_CANON_LEVELS,
 )
 
-
-VALID_SOURCE_TYPES = {"anime", "novel", "manga", "game", "guidebook", "interview", "website", "other"}
-VALID_ENTRY_TYPES = {"dialogue", "narration", "event", "relationship", "description"}
+VALID_SOURCE_TYPES = {
+    "anime",
+    "novel",
+    "manga",
+    "game",
+    "guidebook",
+    "interview",
+    "website",
+    "other",
+}
+VALID_ENTRY_TYPES = {
+    "dialogue",
+    "narration",
+    "event",
+    "relationship",
+    "description",
+}
 
 
 class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
@@ -40,14 +56,19 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=True,
         max_length=20,
-        placeholder="anime, novel, manga, game, guidebook, interview, website, other",
+        placeholder=(
+            "anime, novel, manga, game, guidebook, "
+            "interview, website, other"
+        ),
     )
     entry_type = ui.TextInput(
         label="Entry Type",
         style=discord.TextStyle.short,
         required=True,
         max_length=20,
-        placeholder="dialogue, narration, event, relationship, description",
+        placeholder=(
+            "dialogue, narration, event, relationship, " "description"
+        ),
     )
     topics = ui.TextInput(
         label="Topics (comma-separated)",
@@ -97,7 +118,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=False,
         max_length=20,
-        placeholder="canon, semi-canon, non-canon, headcanon, alternate",
+        placeholder=("canon, semi-canon, non-canon, headcanon, " "alternate"),
     )
     tags = ui.TextInput(
         label="Tags (comma-separated, optional)",
@@ -107,7 +128,9 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         placeholder="e.g., canon, emotional, key_moment",
     )
 
-    def __init__(self, document: str, title: str | None, attachment_filename: str | None):
+    def __init__(
+        self, document: str, title: str | None, attachment_filename: str | None
+    ):
         super().__init__()
         self.document = document
         self.document_title = title or ""
@@ -120,7 +143,8 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         source_type = self.source_type.value.strip().lower()
         if source_type not in VALID_SOURCE_TYPES:
             await interaction.followup.send(
-                f"Invalid source_type. Must be one of: {', '.join(sorted(VALID_SOURCE_TYPES))}",
+                f"Invalid source_type. Must be one of: "
+                f"{', '.join(sorted(VALID_SOURCE_TYPES))}",
                 ephemeral=True,
             )
             return
@@ -129,16 +153,22 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         entry_type = self.entry_type.value.strip().lower()
         if entry_type not in VALID_ENTRY_TYPES:
             await interaction.followup.send(
-                f"Invalid entry_type. Must be one of: {', '.join(sorted(VALID_ENTRY_TYPES))}",
+                f"Invalid entry_type. Must be one of: "
+                f"{', '.join(sorted(VALID_ENTRY_TYPES))}",
                 ephemeral=True,
             )
             return
 
         # Validate canon_level if provided
-        canon_level = self.canon_level.value.strip().lower() if self.canon_level.value.strip() else None
+        canon_level = (
+            self.canon_level.value.strip().lower()
+            if self.canon_level.value.strip()
+            else None
+        )
         if canon_level and canon_level not in VALID_CANON_LEVELS:
             await interaction.followup.send(
-                f"Invalid canon_level. Must be one of: {', '.join(sorted(VALID_CANON_LEVELS))}",
+                f"Invalid canon_level. Must be one of: "
+                f"{', '.join(sorted(VALID_CANON_LEVELS))}",
                 ephemeral=True,
             )
             return
@@ -146,7 +176,9 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         # Parse topics
         topics = [t.strip() for t in self.topics.value.split(",") if t.strip()]
         if not topics:
-            await interaction.followup.send("At least one topic is required.", ephemeral=True)
+            await interaction.followup.send(
+                "At least one topic is required.", ephemeral=True
+            )
             return
 
         # Build metadata
@@ -172,7 +204,9 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         if canon_level:
             metadata["canon_level"] = canon_level
         if self.tags.value.strip():
-            metadata["tags"] = [t.strip() for t in self.tags.value.split(",") if t.strip()]
+            metadata["tags"] = [
+                t.strip() for t in self.tags.value.split(",") if t.strip()
+            ]
 
         # Add to knowledge base
         doc_id = await asyncio.to_thread(
@@ -184,18 +218,32 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         )
 
         if not doc_id:
-            await interaction.followup.send("ChromaDB is not available or could not initialize the collection.", ephemeral=True)
+            await interaction.followup.send(
+                "ChromaDB is not available or could not "
+                "initialize the collection.",
+                ephemeral=True,
+            )
             return
 
-        await interaction.followup.send(f"Added knowledge entry with ID `{doc_id}` for persona `{metadata['persona']}`.", ephemeral=True)
+        await interaction.followup.send(
+            f"Added knowledge entry with ID `{doc_id}` "
+            f"for persona `{metadata['persona']}`.",
+            ephemeral=True,
+        )
 
 
 class ChromaCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="kbsearch", help="Search the local knowledge base.")
-    @app_commands.describe(query="Search query", persona="Optional persona to filter by", limit="Maximum results (default 5)")
+    @commands.hybrid_command(
+        name="kbsearch", help="Search the local knowledge base."
+    )
+    @app_commands.describe(
+        query="Search query",
+        persona="Optional persona to filter by",
+        limit="Maximum results (default 5)",
+    )
     @commands.has_permissions(administrator=True)
     async def kbsearch(
         self,
@@ -208,7 +256,9 @@ class ChromaCog(commands.Cog):
         await ctx.defer(ephemeral=True)
 
         # Run ChromaDB query off-thread to prevent event loop blocking
-        matches = await asyncio.to_thread(query_knowledge, query, limit=limit, persona=persona)
+        matches = await asyncio.to_thread(
+            query_knowledge, query, limit=limit, persona=persona
+        )
         if not matches:
             await ctx.send("No knowledge base matches found.", ephemeral=True)
             return
@@ -222,7 +272,9 @@ class ChromaCog(commands.Cog):
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 150:
                 snippet = snippet[:147] + "..."
-            lines.append(f"- **{persona_name}** ({entry_type}, {source}): {snippet}")
+            lines.append(
+                f"- **{persona_name}** ({entry_type}, {source}): {snippet}"
+            )
 
         response_text = "\n".join(lines)
 
@@ -234,7 +286,10 @@ class ChromaCog(commands.Cog):
 
     @commands.hybrid_command(
         name="kbadd",
-        help="Add a note or attached PDF, EPUB, TXT, or JSON file to the local knowledge base with metadata.",
+        help=(
+            "Add a note or attached PDF, EPUB, TXT, or JSON file "
+            "to the local knowledge base with metadata."
+        ),
     )
     @app_commands.describe(
         title="Title for the knowledge entry",
@@ -264,48 +319,83 @@ class ChromaCog(commands.Cog):
         if attachment is not None:
             try:
                 raw_bytes = await attachment.read()
-            except Exception as exc:
-                await ctx.send(f"Failed to read attachment: {exc}", ephemeral=True)
+            except discord.HTTPException as exc:
+                await ctx.send(
+                    f"Failed to read attachment: {exc}", ephemeral=True
+                )
+                return
+            except OSError as exc:
+                await ctx.send(
+                    f"Failed to read attachment: {exc}", ephemeral=True
+                )
                 return
 
             # Extract text off-thread for CPU-heavy parsing (PDFs, EPUBs, JSON)
             extracted = await asyncio.to_thread(
-                extract_text_from_bytes, attachment.filename or "attachment.bin", raw_bytes
+                extract_text_from_bytes,
+                attachment.filename or "attachment.bin",
+                raw_bytes,
             )
 
             if not extracted.strip():
                 await ctx.send(
-                    "Could not extract readable text from that file. Supported input includes PDF, EPUB, TXT, JSON, and MD files.",
+                    "Could not extract readable text from that file. "
+                    "Supported input includes PDF, EPUB, TXT, JSON, "
+                    "and MD files.",
                     ephemeral=True,
                 )
                 return
             text_parts.append(extracted)
 
         if not text_parts:
-            await ctx.send("Provide text or attach a supported file (PDF, EPUB, TXT, JSON, MD).", ephemeral=True)
+            await ctx.send(
+                "Provide text or attach a supported file "
+                "(PDF, EPUB, TXT, JSON, MD).",
+                ephemeral=True,
+            )
             return
 
         document = "\n\n".join(text_parts)
 
         # Show modal to collect metadata
-        modal = MetadataModal(document, title, attachment.filename if attachment else None)
-        await ctx.send("Please provide metadata for this knowledge entry:", ephemeral=True)
+        modal = MetadataModal(
+            document, title, attachment.filename if attachment else None
+        )
+        await ctx.send(
+            "Please provide metadata for this knowledge entry:", ephemeral=True
+        )
         interaction = ctx.interaction
         if interaction is not None:
             await interaction.response.send_modal(modal)
         else:
-            # For prefix commands, we might need a different way to send modal or just fail
-            await ctx.send("Modals can only be sent in response to slash commands.", ephemeral=True)
+            # For prefix commands, we might need a different way to send modal
+            # or just fail
+            await ctx.send(
+                "Modals can only be sent in response to slash commands.",
+                ephemeral=True,
+            )
 
-    @commands.hybrid_command(name="kblist", help="List the newest knowledge base entries.")
-    @app_commands.describe(persona="Optional persona to filter by", limit="Maximum entries to show (default 15)")
+    @commands.hybrid_command(
+        name="kblist", help="List the newest knowledge base entries."
+    )
+    @app_commands.describe(
+        persona="Optional persona to filter by",
+        limit="Maximum entries to show (default 15)",
+    )
     @commands.has_permissions(administrator=True)
-    async def kblist(self, ctx: commands.Context, persona: str | None = None, limit: int = 15):
+    async def kblist(
+        self,
+        ctx: commands.Context,
+        persona: str | None = None,
+        limit: int = 15,
+    ):
         await ctx.defer(ephemeral=True)
 
         if persona:
             # Run disk lookup off-thread
-            entries = await asyncio.to_thread(get_knowledge_by_persona, persona, limit=limit)
+            entries = await asyncio.to_thread(
+                get_knowledge_by_persona, persona, limit=limit
+            )
         else:
             entries = await asyncio.to_thread(list_knowledge, limit=limit)
 
@@ -329,7 +419,8 @@ class ChromaCog(commands.Cog):
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 80:
                 snippet = snippet[:77] + "..."
-            lines.append(f"**{index}.** [{persona_name}] {title} (`{item['id']}`)\n└ {entry_type} · {source} · *{snippet}*")
+            lines.append(f"**{index}.** [{persona_name}] {title} (`{
+                item['id']}`)\n└ {entry_type} · {source} · *{snippet}*")
 
         full_message = "\n".join(lines)
 
@@ -339,27 +430,46 @@ class ChromaCog(commands.Cog):
 
         await ctx.send(full_message, ephemeral=True)
 
-    @commands.hybrid_command(name="kbdelete", help="Delete a knowledge base entry by id.")
+    @commands.hybrid_command(
+        name="kbdelete", help="Delete a knowledge base entry by id."
+    )
     @commands.has_permissions(administrator=True)
     async def kbdelete(self, ctx: commands.Context, entry_id: str):
         await ctx.defer(ephemeral=True)
 
         success = await asyncio.to_thread(delete_knowledge, entry_id)
         if success:
-            await ctx.send(f"Deleted knowledge entry `{entry_id}`.", ephemeral=True)
+            await ctx.send(
+                f"Deleted knowledge entry `{entry_id}`.", ephemeral=True
+            )
             return
 
-        await ctx.send("Could not delete that knowledge entry.", ephemeral=True)
+        await ctx.send(
+            "Could not delete that knowledge entry.", ephemeral=True
+        )
 
-    @commands.hybrid_command(name="kbpersona", help="List all knowledge entries for a specific persona.")
-    @app_commands.describe(persona="Persona ID to list entries for", limit="Maximum entries to show (default 50)")
+    @commands.hybrid_command(
+        name="kbpersona",
+        help="List all knowledge entries for a specific persona.",
+    )
+    @app_commands.describe(
+        persona="Persona ID to list entries for",
+        limit="Maximum entries to show (default 50)",
+    )
     @commands.has_permissions(administrator=True)
-    async def kbpersona(self, ctx: commands.Context, persona: str, limit: int = 50):
+    async def kbpersona(
+        self, ctx: commands.Context, persona: str, limit: int = 50
+    ):
         await ctx.defer(ephemeral=True)
 
-        entries = await asyncio.to_thread(get_knowledge_by_persona, persona, limit=limit)
+        entries = await asyncio.to_thread(
+            get_knowledge_by_persona, persona, limit=limit
+        )
         if not entries:
-            await ctx.send(f"No knowledge base entries found for persona `{persona}`.", ephemeral=True)
+            await ctx.send(
+                f"No knowledge base entries found for persona `{persona}`.",
+                ephemeral=True,
+            )
             return
 
         lines = []
@@ -372,7 +482,10 @@ class ChromaCog(commands.Cog):
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 100:
                 snippet = snippet[:97] + "..."
-            lines.append(f"**{index}.** `{item['id']}` [{entry_type}] {source}{scene_str}\n└ *{snippet}*")
+            lines.append(
+                f"**{index}.** `{item['id']}` [{entry_type}] "
+                f"{source}{scene_str}\n└ *{snippet}*"
+            )
 
         full_message = "\n".join(lines)
 

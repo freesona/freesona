@@ -1,5 +1,5 @@
-# scripts/check_project.py: Python module.
 #!/usr/bin/env python3
+# scripts/check_project.py: Python module.
 """Project checks that can run before pushing without editor tooling."""
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import sys
 import tempfile
 from types import ModuleType
 from urllib.parse import urlparse
-
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKIP_DIRS = {".git", "__pycache__", "venv", ".venv"}
@@ -62,12 +61,14 @@ def check_config_round_trip() -> None:
     try:
         os.environ["CONFIG_FILE_PATH"] = path
         config = reload_local_module("utils.config")
-        config.save_config({
-            "prefix": "!",
-            "chat_channel_id": 123,
-            "autonomy": True,
-            "model_name": "test-model",
-        })
+        config.save_config(
+            {
+                "prefix": "!",
+                "chat_channel_id": 123,
+                "autonomy": True,
+                "model_name": "test-model",
+            }
+        )
         loaded = config.load_config()
         model_name = config.get_model_name()
     finally:
@@ -98,7 +99,15 @@ def check_public_url_guard() -> None:
 def check_provider_helpers() -> None:
     providers = reload_local_module("utils.providers")
     provider_name = providers.get_provider_name()
-    assert provider_name in {"gemini", "openai", "ollama", "nim", "azure", "groq", "openrouter"}
+    assert provider_name in {
+        "gemini",
+        "openai",
+        "ollama",
+        "nim",
+        "azure",
+        "groq",
+        "openrouter",
+    }
     assert providers.get_provider_model() is not None
     assert providers.build_messages("system", "user")
     assert providers.normalize_provider_name("open-router") == "openrouter"
@@ -117,19 +126,23 @@ def check_openai_compatible_providers() -> None:
             return {"choices": [{"message": {"content": "ok"}}]}
 
     def fake_post(url, *, headers=None, json=None, timeout=None):
-        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        calls.append(
+            {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        )
         return Response()
 
     old_post = providers.requests.post
     old_env = os.environ.copy()
     try:
         providers.requests.post = fake_post
-        os.environ.update({
-            "GROQ_API_KEY": "groq-key",
-            "OPENROUTER_API_KEY": "openrouter-key",
-            "OPENROUTER_SITE_URL": "https://example.com",
-            "OPENROUTER_SITE_NAME": "Freesona",
-        })
+        os.environ.update(
+            {
+                "GROQ_API_KEY": "groq-key",
+                "OPENROUTER_API_KEY": "openrouter-key",
+                "OPENROUTER_SITE_URL": "https://example.com",
+                "OPENROUTER_SITE_NAME": "Freesona",
+            }
+        )
 
         result = providers.generate_text(
             "hello",
@@ -139,7 +152,10 @@ def check_openai_compatible_providers() -> None:
             max_output_tokens=32,
         )
         assert result[0] == "ok"
-        assert calls[-1]["url"] == "https://api.groq.com/openai/v1/chat/completions"
+        assert (
+            calls[-1]["url"]
+            == "https://api.groq.com/openai/v1/chat/completions"
+        )
         assert calls[-1]["headers"]["Authorization"] == "Bearer groq-key"
         assert calls[-1]["json"]["max_completion_tokens"] == 32
         assert "max_tokens" not in calls[-1]["json"]
@@ -151,7 +167,9 @@ def check_openai_compatible_providers() -> None:
             max_output_tokens=64,
         )
         assert result[0] == "ok"
-        assert calls[-1]["url"] == "https://openrouter.ai/api/v1/chat/completions"
+        assert (
+            calls[-1]["url"] == "https://openrouter.ai/api/v1/chat/completions"
+        )
         assert calls[-1]["headers"]["Authorization"] == "Bearer openrouter-key"
         assert calls[-1]["headers"]["HTTP-Referer"] == "https://example.com"
         assert calls[-1]["headers"]["X-Title"] == "Freesona"
@@ -170,7 +188,11 @@ def load_mvsep_helpers() -> dict:
 
     for node in module.body:
         if isinstance(node, ast.Assign):
-            names = {target.id for target in node.targets if isinstance(target, ast.Name)}
+            names = {
+                target.id
+                for target in node.targets
+                if isinstance(target, ast.Name)
+            }
             if names & {"DIRECT_AUDIO_EXTS", "YTDLP_DOMAINS"}:
                 keep.append(node)
         elif isinstance(node, ast.FunctionDef) and node.name in {
@@ -181,7 +203,12 @@ def load_mvsep_helpers() -> dict:
             keep.append(node)
 
     namespace = {"urlparse": urlparse}
-    exec(compile(ast.Module(body=keep, type_ignores=[]), "cogs/mvsep.py", "exec"), namespace)
+    exec(
+        compile(
+            ast.Module(body=keep, type_ignores=[]), "cogs/mvsep.py", "exec"
+        ),
+        namespace,
+    )  # noqa: S102
     return namespace
 
 
@@ -203,13 +230,15 @@ def check_mvsep_url_routing() -> None:
 
 def check_module_registry() -> None:
     modules = reload_local_module("utils.modules")
-    enabled = modules.load_enabled_modules({
-        "enabled_modules": {
-            "genai": False,
-            "mvsep": True,
-            "unknown": False,
+    enabled = modules.load_enabled_modules(
+        {
+            "enabled_modules": {
+                "genai": False,
+                "mvsep": True,
+                "unknown": False,
+            }
         }
-    })
+    )
     assert enabled["genai"] is False
     assert enabled["mvsep"] is True
     assert "unknown" not in enabled
@@ -236,7 +265,9 @@ def check_json_files() -> None:
         try:
             json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise CheckFailure(f"{rel} is invalid JSON: line {exc.lineno}, column {exc.colno}")
+            raise CheckFailure(f"{rel} is invalid JSON: line {
+                exc.lineno}, column {
+                exc.colno}")
 
 
 def check_env_sample() -> None:
@@ -261,17 +292,22 @@ def check_env_sample() -> None:
     }
     missing = sorted(required - keys)
     if missing:
-        raise CheckFailure(".env.sample is missing keys: " + ", ".join(missing))
+        raise CheckFailure(
+            ".env.sample is missing keys: " + ", ".join(missing)
+        )
 
 
 def check_secret_files_not_tracked() -> None:
     try:
         result = subprocess.run(
             [
-                "git", "ls-files",
+                "git",
+                "ls-files",
                 ".env",
-                "persona.txt", "persona.json",
-                "memory.json", "kb.json",
+                "persona.txt",
+                "persona.json",
+                "memory.json",
+                "kb.json",
             ],
             cwd=ROOT,
             text=True,
@@ -283,15 +319,25 @@ def check_secret_files_not_tracked() -> None:
 
     tracked = [line for line in result.stdout.splitlines() if line.strip()]
     if tracked:
-        raise CheckFailure("Secret/runtime files are tracked: " + ", ".join(tracked))
+        raise CheckFailure(
+            "Secret/runtime files are tracked: " + ", ".join(tracked)
+        )
 
 
 def check_unit_tests() -> None:
     res = subprocess.run(
-        [sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "tests")],
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            str(ROOT / "tests"),
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,
+        check=False,
     )
     if res.returncode != 0:
         raise CheckFailure(f"Unit tests failed:\n{res.stderr}\n{res.stdout}")

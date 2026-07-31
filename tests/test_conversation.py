@@ -1,31 +1,31 @@
 # tests/test_conversation.py: Unit tests for ConversationManager
 
+from utils.conversation import (
+    ConversationMessage,
+    ConversationState,
+    _estimate_tokens,
+    add_assistant_message,
+    add_user_message,
+    build_conversation_context,
+    cleanup_expired_conversations,
+    clear_conversation,
+    get_conversation,
+    get_conversation_stats,
+)
+import utils.conversation as conversation_module
 import sys
-import unittest
 import time
+import unittest
 from collections import deque
 from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import utils.conversation as conversation_module
-from utils.conversation import (
-    ConversationMessage,
-    ConversationState,
-    add_user_message,
-    add_assistant_message,
-    get_conversation,
-    build_conversation_context,
-    clear_conversation,
-    get_conversation_stats,
-    cleanup_expired_conversations,
-    _estimate_tokens,
-)
 
-_conversation_store = getattr(conversation_module, "_conversation_store")
-_store_lock = getattr(conversation_module, "_store_lock")
-_conversation_key = getattr(conversation_module, "_conversation_key")
+_conversation_store = conversation_module._conversation_store
+_store_lock = conversation_module._store_lock
+_conversation_key = conversation_module._conversation_key
 
 
 class TestConversationMessage(unittest.TestCase):
@@ -215,7 +215,8 @@ class TestBuildConversationContext(unittest.IsolatedAsyncioTestCase):
         # Add a message first to create the conversation state
         await add_user_message(1, 2, 3, "New message", 100, "user")
         # Manually inject a summary (but summary field is removed, so this tests nothing now)
-        # We'll just verify the function still works without the summary parameter
+        # We'll just verify the function still works without the summary
+        # parameter
         result = await build_conversation_context(1, 2, 3)
         self.assertIn("[Conversation History]", result)
         self.assertIn("User (user, ID: 3):", result)
@@ -280,7 +281,8 @@ class TestBudgetEnforcement(unittest.IsolatedAsyncioTestCase):
         for i in range(25):
             await add_user_message(1, 2, 3, f"Message {i}", i, "user")
         state = await get_conversation(1, 2, 3)
-        self.assertEqual(len(state.messages), 20)  # Should be trimmed to max_messages
+        # Should be trimmed to max_messages
+        self.assertEqual(len(state.messages), 20)
 
     async def test_token_budget_enforced(self):
         # Create a conversation with long messages to trigger token budget
@@ -340,7 +342,7 @@ class TestCleanupExpiredConversations(unittest.IsolatedAsyncioTestCase):
         async with _store_lock:
             state = _conversation_store[(1, 2, 3)]
             state.last_accessed = time.time() - 7200  # 2 hours ago
-        
+
         removed = await cleanup_expired_conversations()
         self.assertEqual(removed, 1)
         state = await get_conversation(1, 2, 3)
@@ -405,9 +407,9 @@ class TestConversationFormat(unittest.IsolatedAsyncioTestCase):
         await add_user_message(1, 2, 3, "Hello", 100, "Alice")
         await add_assistant_message(1, 2, 3, "Hi Alice!")
         await add_user_message(1, 2, 3, "How are you?", 102, "Alice")
-        
+
         result = await build_conversation_context(1, 2, 3)
-        
+
         expected_parts = [
             "[Conversation History]",
             "User (Alice, ID: 3):",
@@ -416,10 +418,10 @@ class TestConversationFormat(unittest.IsolatedAsyncioTestCase):
             "User (Alice, ID: 3):",
             "Message:\nHow are you?",
         ]
-        
+
         for part in expected_parts:
             self.assertIn(part, result)
-        
+
         # Verify order
         idx_user1 = result.index("User (Alice, ID: 3):")
         idx_msg1 = result.index("Message:\nHello")
@@ -535,7 +537,7 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
     async def test_token_estimation_includes_embeds(self):
         """Test that token estimation includes embeds content."""
         state = await get_conversation(1, 2, 3)
-        
+
         # Add message with embeds
         msg = conversation_module.ConversationMessage(
             role="user",
@@ -544,7 +546,7 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
             embeds=["Embed content here"],
         )
         state.messages.append(msg)
-        
+
         # Add message with reply embeds
         msg2 = conversation_module.ConversationMessage(
             role="user",
@@ -555,7 +557,7 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
         state.messages.append(msg2)
 
         tokens = _estimate_tokens(state)
-        
+
         # "Hello" (5) + "Reply" (5) + "Embed content here" (18) + "Reply embed content" (19) = 47 chars
         # 47 // 4 = 11 tokens
         self.assertGreaterEqual(tokens, 11)
@@ -563,7 +565,7 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
     async def test_token_estimation_includes_reply_embeds(self):
         """Test that token estimation includes reply embeds."""
         state = await get_conversation(1, 2, 3)
-        
+
         msg = conversation_module.ConversationMessage(
             role="user",
             content="Hi",
@@ -573,7 +575,7 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
         state.messages.append(msg)
 
         tokens = _estimate_tokens(state)
-        
+
         # "Hi" (2) + "Reply embed here" (16) = 18 chars
         # 18 // 4 = 4 tokens (minimum)
         self.assertGreaterEqual(tokens, 4)

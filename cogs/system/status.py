@@ -1,7 +1,9 @@
-# cogs/system/status.py: Discord status modifier that changes text status every 5 minutes to the servers it has joined (if multiple).
+# cogs/system/status.py: Discord status modifier that changes text status
+# every 5 minutes to the servers it has joined (if multiple).
 
 import discord
 from discord.ext import commands, tasks
+
 
 class StatusCog(commands.Cog):
     def __init__(self, bot):
@@ -15,7 +17,7 @@ class StatusCog(commands.Cog):
     @tasks.loop(minutes=5)
     async def update_status(self):
         await self.bot.wait_until_ready()
-        
+
         guilds = self.bot.guilds
         if not guilds:
             return
@@ -25,13 +27,12 @@ class StatusCog(commands.Cog):
             self.index = 0
 
         server_name = guilds[self.index].name
-        
+
         await self.bot.change_presence(
             status=discord.Status.idle,
             activity=discord.Activity(
-                type=discord.ActivityType.watching,
-                name=server_name
-            )
+                type=discord.ActivityType.watching, name=server_name
+            ),
         )
 
         # Move to the next server for the next 5-minute update
@@ -40,6 +41,7 @@ class StatusCog(commands.Cog):
     @update_status.before_loop
     async def before_update_status(self):
         await self.bot.wait_until_ready()
+
 
 async def setup(bot):
     await bot.add_cog(StatusCog(bot))

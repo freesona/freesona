@@ -1,22 +1,21 @@
 # tests/test_generation.py: Unit tests for generation module
 
-import sys
-import unittest
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import discord
 from utils.generation import (
-    ConversationResponse, 
-    MessageSegment, 
-    send_response, 
+    ConversationResponse,
+    MessageSegment,
     _send_first_segment_with_reply,
     _strip_reasoning_tags,
     clean_text,
+    send_response,
 )
+import discord
+import sys
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 class TestSendResponse(unittest.IsolatedAsyncioTestCase):
@@ -25,60 +24,62 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
     async def test_send_response_basic(self):
         """send_response should send segments to channel."""
         channel = AsyncMock()
-        
+
         typing_cm = AsyncMock()
         typing_cm.__aenter__ = AsyncMock(return_value=None)
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
-        
+
         response = ConversationResponse(
-            segments=[MessageSegment(text="Hello world", typing=False, delay=0)]
+            segments=[
+                MessageSegment(text="Hello world", typing=False, delay=0)
+            ]
         )
-        
+
         await send_response(response, channel)
-        
+
         channel.send.assert_called_once_with("Hello world")
 
     async def test_send_response_with_typing(self):
         """send_response should trigger typing indicator when segment has typing=True."""
         channel = AsyncMock()
-        
+
         # Mock the async context manager for channel.typing()
         typing_cm = AsyncMock()
         typing_cm.__aenter__ = AsyncMock(return_value=None)
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
-        
+
         response = ConversationResponse(
             segments=[MessageSegment(text="Hello", typing=True, delay=1)]
         )
-        
+
         await send_response(response, channel)
-        
+
         channel.typing.assert_called_once()
         channel.send.assert_called_once_with("Hello")
 
     async def test_send_response_reply_to_message(self):
         """send_response should use reply for first segment when reply_to is provided."""
         channel = AsyncMock()
-        
+
         typing_cm = AsyncMock()
         typing_cm.__aenter__ = AsyncMock(return_value=None)
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
-        
+
         reply_to = MagicMock(spec=discord.Message)
         reply_to.reply = AsyncMock()
-        
+
         response = ConversationResponse(
             segments=[
                 MessageSegment(text="First reply", typing=False, delay=0),
                 MessageSegment(text="Second message", typing=False, delay=0),
             ]
         )
-        
+
         await send_response(response, channel, reply_to=reply_to)
-        
+
         # First segment should use reply
         reply_to.reply.assert_called_once_with("First reply")
         # Second segment should use regular send
@@ -87,23 +88,25 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
     async def test_send_response_reply_not_found_fallback(self):
         """send_response should fall back to channel.send when reply_to raises NotFound."""
         channel = AsyncMock()
-        
+
         typing_cm = AsyncMock()
         typing_cm.__aenter__ = AsyncMock(return_value=None)
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
-        
+
         reply_to = MagicMock(spec=discord.Message)
-        reply_to.reply = AsyncMock(side_effect=discord.NotFound(MagicMock(), "Not found"))
-        
+        reply_to.reply = AsyncMock(
+            side_effect=discord.NotFound(MagicMock(), "Not found")
+        )
+
         response = ConversationResponse(
             segments=[
                 MessageSegment(text="Reply fallback", typing=False, delay=0)
             ]
         )
-        
+
         await send_response(response, channel, reply_to=reply_to)
-        
+
         # Should fall back to channel.send
         reply_to.reply.assert_called_once()
         channel.send.assert_called_once_with("Reply fallback")
@@ -111,45 +114,47 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
     async def test_send_response_forbidden_stops_sending(self):
         """send_response should stop sending when Forbidden error occurs."""
         channel = AsyncMock()
-        
+
         typing_cm = AsyncMock()
         typing_cm.__aenter__ = AsyncMock(return_value=None)
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
-        
-        channel.send = AsyncMock(side_effect=discord.Forbidden(MagicMock(), "Forbidden"))
-        
+
+        channel.send = AsyncMock(
+            side_effect=discord.Forbidden(MagicMock(), "Forbidden")
+        )
+
         response = ConversationResponse(
             segments=[
                 MessageSegment(text="First", typing=False, delay=0),
                 MessageSegment(text="Second", typing=False, delay=0),
             ]
         )
-        
+
         await send_response(response, channel)
-        
+
         # Should only try to send the first segment
         self.assertEqual(channel.send.call_count, 1)
 
     async def test_send_response_empty_segments(self):
         """send_response should handle empty segments list."""
         channel = AsyncMock()
-        
+
         response = ConversationResponse(segments=[])
-        
+
         await send_response(response, channel)
-        
+
         channel.send.assert_not_called()
 
     async def test_send_response_whitespace_only_segments(self):
         """send_response should skip whitespace-only segments."""
         channel = AsyncMock()
-        
+
         typing_cm = AsyncMock()
         typing_cm.__aenter__ = AsyncMock(return_value=None)
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
-        
+
         response = ConversationResponse(
             segments=[
                 MessageSegment(text="   ", typing=False, delay=0),
@@ -157,9 +162,9 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
                 MessageSegment(text="Valid message", typing=False, delay=0),
             ]
         )
-        
+
         await send_response(response, channel)
-        
+
         # Only the valid message should be sent
         channel.send.assert_called_once_with("Valid message")
 
@@ -172,9 +177,9 @@ class TestSendFirstSegmentWithReply(unittest.IsolatedAsyncioTestCase):
         channel = AsyncMock()
         reply_to = MagicMock(spec=discord.Message)
         reply_to.reply = AsyncMock()
-        
+
         await _send_first_segment_with_reply(channel, "Test message", reply_to)
-        
+
         reply_to.reply.assert_called_once_with("Test message")
         channel.send.assert_not_called()
 
@@ -182,10 +187,12 @@ class TestSendFirstSegmentWithReply(unittest.IsolatedAsyncioTestCase):
         """Should fall back to channel.send when reply raises NotFound."""
         channel = AsyncMock()
         reply_to = MagicMock(spec=discord.Message)
-        reply_to.reply = AsyncMock(side_effect=discord.NotFound(MagicMock(), "Not found"))
-        
+        reply_to.reply = AsyncMock(
+            side_effect=discord.NotFound(MagicMock(), "Not found")
+        )
+
         await _send_first_segment_with_reply(channel, "Test message", reply_to)
-        
+
         reply_to.reply.assert_called_once_with("Test message")
         channel.send.assert_called_once_with("Test message")
 

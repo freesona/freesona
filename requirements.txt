@@ -57,3 +57,10 @@ chromadb
 
 # onnxruntime: Inference engine for running ONNX models, used in AI cogs.
 onnxruntime
+protobuf
+protobuf
+aiofiles
+protobuf
+protobuf
+protobuf
+protobuf

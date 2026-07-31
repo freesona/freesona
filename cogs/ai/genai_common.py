@@ -30,9 +30,9 @@ def should_respond_in_chat_channel(
 
     is_mention = bot_user is not None and bot_user in message.mentions
     is_reply = (
-        bot_user is not None
-        and message.reference is not None
-        and getattr(message.reference.resolved, "author", None) == bot_user
+        bot_user is not None and
+        message.reference is not None and
+        getattr(message.reference.resolved, "author", None) == bot_user
     )
 
     if mode == "mentions":
@@ -58,12 +58,17 @@ def get_reply_target(
     is_mention = bot_user in message.mentions
 
     # Check if this message is a reply to another message
-    if not is_mention or not message.reference or not isinstance(message.reference.resolved, discord.Message):
+    if (
+        not is_mention or
+        not message.reference or
+        not isinstance(message.reference.resolved, discord.Message)
+    ):
         return message
 
     ref = message.reference.resolved
 
-    # If the referenced message author is the bot, reply to the current message (normal flow)
+    # If the referenced message author is the bot, reply to the current
+    # message (normal flow)
     if ref.author == bot_user:
         return message
 
@@ -88,7 +93,12 @@ def clean_sources_block(sources_text: str, max_length: int = 1024) -> str:
         if line.startswith("-"):
             markdown_link = line[1:].strip()
 
-        if markdown_link and markdown_link.startswith("[") and "](" in markdown_link and markdown_link.endswith(")"):
+        if (
+            markdown_link and
+            markdown_link.startswith("[") and
+            "](" in markdown_link and
+            markdown_link.endswith(")")
+        ):
             text = markdown_link[1: markdown_link.index("](")]
             url = markdown_link[markdown_link.index("](") + 2: -1]
             links.append((text, url))

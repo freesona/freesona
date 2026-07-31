@@ -78,7 +78,9 @@ async def mvsep_webhook(request: Request):
     if not _is_valid_mvsep_payload(payload):
         client = request.client
         client_host = client.host if client is not None else "unknown"
-        logger.warning("MVSEP webhook rejected invalid payload from %s", client_host)
+        logger.warning(
+            "MVSEP webhook rejected invalid payload from %s", client_host
+        )
         return Response(status_code=400)
 
     job_hash = _mvsep_hash(payload)

@@ -11,17 +11,21 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.security import is_public_http_url
 from utils.config import load_config
+from utils.security import is_public_http_url
 
 log = logging.getLogger(__name__)
 
 # Resolutions attempted in order from highest to lowest quality
 _VIDEO_RESOLUTIONS = [1080, 720, 480]
 
-# Configurable values loaded from config.json (settable via /config slash commands)
+# Configurable values loaded from config.json (settable via /config slash
+# commands)
+
+
 def _get_subprocess_timeout() -> int:
     return int(load_config().get("ytdlp_subprocess_timeout", 300))
+
 
 def _get_compress_target_mb() -> float:
     return float(load_config().get("ytdlp_compress_target_mb", 9.5))
@@ -65,7 +69,9 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
     return return_code
 
 
-async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]:
+async def _run_capture(
+    *cmd: str, timeout: int | None = None
+) -> tuple[int, str]:
     """Run a subprocess, capture stdout, and return (exit_code, stdout_text)."""
     if timeout is None:
         timeout = _get_subprocess_timeout()
@@ -116,6 +122,7 @@ class YtDlp(commands.Cog):
         """
         import re
         from urllib.parse import urlparse
+
         try:
             hostname = urlparse(url).hostname or ""
         except (TypeError, ValueError):
@@ -129,7 +136,9 @@ class YtDlp(commands.Cog):
             if platform not in hostname:
                 continue
             if not os.path.isfile(path):
-                log.warning("Cookies file for %s not found at %s", platform, path)
+                log.warning(
+                    "Cookies file for %s not found at %s", platform, path
+                )
                 continue
             log.debug("Using cookies file %s for %s", path, url)
             return ["--cookies", path]
@@ -144,9 +153,13 @@ class YtDlp(commands.Cog):
     async def _get_duration(path: str) -> float | None:
         """Return the duration of a media file in seconds, or None on failure."""
         _, output = await _run_capture(
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
             path,
         )
         try:
@@ -159,10 +172,15 @@ class YtDlp(commands.Cog):
     async def _has_audio_stream(path: str) -> bool:
         """Return True if the file contains at least one audio stream."""
         _, output = await _run_capture(
-            "ffprobe", "-v", "error",
-            "-select_streams", "a",
-            "-show_entries", "stream=codec_type",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
             path,
         )
         return bool(output)
@@ -179,25 +197,44 @@ class YtDlp(commands.Cog):
 
         compress_target_mb = _get_compress_target_mb()
         target_bits = compress_target_mb * 8 * 1024 * 1024
-        video_bitrate = int(target_bits / duration) - 128_000  # reserve 128k for audio
+        video_bitrate = (
+            int(target_bits / duration) - 128_000
+        )  # reserve 128k for audio
 
         if video_bitrate < 100_000:
-            log.warning("Calculated bitrate %d bps too low; skipping compression.", video_bitrate)
+            log.warning(
+                "Calculated bitrate %d bps too low; skipping compression.",
+                video_bitrate,
+            )
             return None
 
         output_path = input_path.replace(".mp4", "_compressed.mp4")
         code = await _run(
-            "ffmpeg", "-y", "-i", input_path,
-            "-b:v", str(video_bitrate),
-            "-maxrate", str(video_bitrate),
-            "-bufsize", str(video_bitrate * 2),
-            "-vcodec", "libx264", "-preset", "veryfast",
-            "-acodec", "aac", "-b:a", "128k",
+            "ffmpeg",
+            "-y",
+            "-i",
+            input_path,
+            "-b:v",
+            str(video_bitrate),
+            "-maxrate",
+            str(video_bitrate),
+            "-bufsize",
+            str(video_bitrate * 2),
+            "-vcodec",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-acodec",
+            "aac",
+            "-b:a",
+            "128k",
             output_path,
         )
 
         if code != 0 or not os.path.exists(output_path):
-            log.error("FFmpeg compression failed for %s (exit %d)", input_path, code)
+            log.error(
+                "FFmpeg compression failed for %s (exit %d)", input_path, code
+            )
             return None
 
         # Remove the uncompressed source to save temp-dir space
@@ -212,18 +249,24 @@ class YtDlp(commands.Cog):
         """Download audio and convert to MP3. Returns local path or None."""
         output_template = os.path.join(tmp_dir, "%(uploader)s – %(title)s.mp3")
         code = await _run(
-            "yt-dlp", "-x",
-            "--audio-format", "mp3",
-            "--audio-quality", "5",
+            "yt-dlp",
+            "-x",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "5",
             "--no-playlist",
             "--remote-components",
             "ejs:github",
             *self._cookies_for(url),
-            "-o", output_template,
+            "-o",
+            output_template,
             url,
         )
         if code != 0:
-            log.error("yt-dlp audio download failed (exit %d) for %s", code, url)
+            log.error(
+                "yt-dlp audio download failed (exit %d) for %s", code, url
+            )
             return None
 
         path = _find_file(tmp_dir, "mp3")
@@ -240,33 +283,46 @@ class YtDlp(commands.Cog):
         for height in _VIDEO_RESOLUTIONS:
             _clear_dir(tmp_dir)
 
-            output_template = str(Path(tmp_dir, "%(uploader)s – %(title)s.mp4"))
+            output_template = str(
+                Path(tmp_dir, "%(uploader)s – %(title)s.mp4")
+            )
             code = await _run(
                 "yt-dlp",
                 *self._cookies_for(url),
-                "-f", (
+                "-f",
+                (
                     f"bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]"
                     f"/bestvideo[height<={height}]+bestaudio"
                     f"/best[height<={height}]"
                 ),
-                "--merge-output-format", "mp4",
+                "--merge-output-format",
+                "mp4",
                 "--audio-multistreams",
-                "--postprocessor-args", "ffmpeg:-c:a aac",
+                "--postprocessor-args",
+                "ffmpeg:-c:a aac",
                 "--no-playlist",
                 "--remote-components",
                 "ejs:github",
-                "-o", output_template,
+                "-o",
+                output_template,
                 url,
             )
 
             path = _find_file(tmp_dir, "mp4")
 
             if code != 0 or path is None:
-                log.warning("yt-dlp video download failed at %dp (exit %d)", height, code)
+                log.warning(
+                    "yt-dlp video download failed at %dp (exit %d)",
+                    height,
+                    code,
+                )
                 continue
 
             if not await self._has_audio_stream(path):
-                log.warning("Downloaded file has no audio stream at %dp; skipping.", height)
+                log.warning(
+                    "Downloaded file has no audio stream at %dp; skipping.",
+                    height,
+                )
                 continue
 
             size = Path(path).stat().st_size
@@ -274,12 +330,20 @@ class YtDlp(commands.Cog):
                 return path
 
             if height == _VIDEO_RESOLUTIONS[-1]:
-                log.info("File too large at lowest resolution; attempting compression.")
+                log.info(
+                    "File too large at lowest resolution; attempting compression."
+                )
                 return await self._compress_video(path)
 
         return None
 
-    async def fetch_ytdlp(self, ctx: commands.Context, url: str, is_audio: bool = True, tmp_dir: str | None = None) -> str | None:
+    async def fetch_ytdlp(
+        self,
+        ctx: commands.Context,
+        url: str,
+        is_audio: bool = True,
+        tmp_dir: str | None = None,
+    ) -> str | None:
         """Download media into the provided temp directory and return the local file path."""
         _ = ctx
         url = _normalize_url(url)
@@ -288,20 +352,23 @@ class YtDlp(commands.Cog):
 
         if tmp_dir is None:
             with tempfile.TemporaryDirectory() as local_tmp_dir:
-                return await self._fetch_audio(url, local_tmp_dir) if is_audio else await self._fetch_video(url, local_tmp_dir)
+                return (
+                    await self._fetch_audio(url, local_tmp_dir)
+                    if is_audio
+                    else await self._fetch_video(url, local_tmp_dir)
+                )
 
-        try:
-            if is_audio:
-                return await self._fetch_audio(url, tmp_dir)
-            return await self._fetch_video(url, tmp_dir)
-        except asyncio.TimeoutError:
-            raise
+        if is_audio:
+            return await self._fetch_audio(url, tmp_dir)
+        return await self._fetch_video(url, tmp_dir)
 
     # ------------------------------------------------------------------
     # Shared download handler
     # ------------------------------------------------------------------
 
-    async def _handle_download(self, ctx: commands.Context, url: str, is_audio: bool) -> None:
+    async def _handle_download(
+        self, ctx: commands.Context, url: str, is_audio: bool
+    ) -> None:
         url = _normalize_url(url)
         if not is_public_http_url(url):
             await ctx.send("Please provide a public http(s) URL.")
@@ -318,11 +385,15 @@ class YtDlp(commands.Cog):
                     else:
                         local_path = await self._fetch_video(url, tmp_dir)
                 except asyncio.TimeoutError:
-                    await ctx.send(f"❌ **{kind} timed out.** The download took too long.")
+                    await ctx.send(
+                        f"❌ **{kind} timed out.** The download took too long."
+                    )
                     return
 
                 if not local_path or not os.path.exists(local_path):
-                    await ctx.send(f"❌ **{kind} failed.** Content is unavailable or too large.")
+                    await ctx.send(
+                        f"❌ **{kind} failed.** Content is unavailable or too large."
+                    )
                     return
 
                 size_bytes = os.path.getsize(local_path)
@@ -330,7 +401,9 @@ class YtDlp(commands.Cog):
 
                 # Sanity check: compressed file may still exceed the limit
                 if size_bytes > self.LIMIT_BYTES:
-                    await ctx.send(f"⚠️ **{kind} ({size_mb:.1f} MB) exceeds the 10 MB limit.**")
+                    await ctx.send(
+                        f"⚠️ **{kind} ({size_mb:.1f} MB) exceeds the 10 MB limit.**"
+                    )
                     return
 
                 elapsed = time.perf_counter() - start
@@ -344,7 +417,8 @@ class YtDlp(commands.Cog):
     # ------------------------------------------------------------------
 
     @commands.hybrid_command(
-        name="download", aliases=["dl"],
+        name="download",
+        aliases=["dl"],
         description="Download a video (1080p → 720p → 480p → compressed)",
     )
     @commands.cooldown(1, 30, commands.BucketType.user)
@@ -353,7 +427,8 @@ class YtDlp(commands.Cog):
         await self._handle_download(ctx, url, is_audio=False)
 
     @commands.hybrid_command(
-        name="audio", aliases=["mp3"],
+        name="audio",
+        aliases=["mp3"],
         description="Download a video as an MP3",
     )
     @app_commands.describe(url="URL of the video to extract audio from")

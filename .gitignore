@@ -71,3 +71,9 @@ diags.txt
 /part_class.txt
 out.txt
 memory.json
+
+# misc
+test_nitter2.py
+e501.txt
+*_test.txt
+test_*.txt
