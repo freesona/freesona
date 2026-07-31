@@ -27,7 +27,6 @@ OPTIONAL_MODULES = {
     "config":     "cogs.system.config",
     "logging":    "cogs.system.logging",
     "core":       "cogs.system.core",
-    "timezone":   "cogs.system.timezone",
 }
 
 DEFAULT_ENABLED_MODULES = {name: True for name in OPTIONAL_MODULES}
