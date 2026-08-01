@@ -9,10 +9,11 @@
 # - persistent decisions
 #
 # Scope: per (guild_id, user_id, persona_id) triple (NOT per channel)
-# Mutability: MUTABLE — memories added/updated/deleted via extraction pipeline
-# Boundaries: MUST NOT store canonical facts (PKB), user facts (User Memory),
-# or conversation history (ConversationManager). MUST consume ConversationManager
-# as source for extraction.
+# Mutability: MUTABLE — memories added/updated/deleted via extraction
+# pipeline
+# Boundaries: MUST NOT store canonical facts (PKB), user facts
+# (User Memory), or conversation history (ConversationManager).
+# MUST consume ConversationManager as source for extraction.
 
 from __future__ import annotations
 
@@ -38,7 +39,8 @@ logger = logging.getLogger("FreesonaBot")
 
 
 def _get_character_memory_file_path() -> str:
-    """Get the character memory database file path (reads env each call for testability)."""
+    """Get the character memory database file path (reads env
+    each call for testability)."""
     return os.getenv("CHARACTER_MEMORY_FILE_PATH", "./character_memory.db")
 
 
@@ -150,7 +152,8 @@ async def init_db():
         """)
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_char_mem_importance
-            ON character_memories (guild_id, user_id, persona_id, importance DESC)
+            ON character_memories (guild_id, user_id, persona_id,
+                                   importance DESC)
         """)
         await db.commit()
 
@@ -302,8 +305,10 @@ async def build_character_memory_context(
 
     Returns formatted string matching the expected output format:
     [Character Memory with {username}]
-    - [PROMISE] We promised to play chess next week. (importance: 0.9)
-    - [SHARED_EXPERIENCE] We decorated the server for Halloween. (importance: 0.7)
+    - [PROMISE] We promised to play chess next week.
+      (importance: 0.9)
+    - [SHARED_EXPERIENCE] We decorated the server for Halloween.
+      (importance: 0.7)
     ...
     """
     if not guild_id or not user_id or not persona_id:
@@ -335,25 +340,37 @@ async def build_character_memory_context(
 
 EXTRACTION_PROMPT = (
     "You are a character memory extraction assistant. "
-    "Given a conversation history between a user and a character, identify "
-    "memorable shared moments that define their relationship.\n\n"
+    "Given a conversation history between a user and a character, "
+    "identify memorable shared moments that define their "
+    "relationship.\n\n"
     "Extract memories of these types ONLY:\n"
-    '- PROMISE: Explicit commitments made between them ("I\'ll help you with...")\n'
-    '- SHARED_EXPERIENCE: Events they experienced together ("We fought the boss...")\n'
-    '- RECURRING_JOKE: Running gags or inside jokes ("Every time you mention cats...")\n'
-    '- UNFINISHED_ACTIVITY: Activities started but not completed ("We were building a house...")\n'
-    '- RELATIONSHIP_PROGRESSION: Notable shifts in their dynamic ("You\'ve become more open...")\n'
-    '- PERSISTENT_DECISION: Choices they made together that persist ("We agreed to use code names...")\n\n'
+    '- PROMISE: Explicit commitments made between them ("I\'ll '
+    'help you with...")\n'
+    '- SHARED_EXPERIENCE: Events they experienced together '
+    '("We fought the boss...")\n'
+    '- RECURRING_JOKE: Running gags or inside jokes ("Every '
+    'time you mention cats...")\n'
+    '- UNFINISHED_ACTIVITY: Activities started but not '
+    'completed ("We were building a house...")\n'
+    '- RELATIONSHIP_PROGRESSION: Notable shifts in their '
+    'dynamic ("You\'ve become more open...")\n'
+    '- PERSISTENT_DECISION: Choices they made together that '
+    'persist ("We agreed to use code names...")\n\n'
     "DO NOT extract:\n"
-    "- Facts about the user alone (preferences, background) → User Memory\n"
+    "- Facts about the user alone (preferences, background) "
+    "→ User Memory\n"
     "- Facts about the character's canon/lore → PKB/Canon\n"
     "- Raw conversation history → Conversation History\n"
     "- Speculative or assumed information\n\n"
     "Respond with a JSON array of memories, each with:\n"
-    '{"type": "PROMISE|SHARED_EXPERIENCE|RECURRING_JOKE|UNFINISHED_ACTIVITY|RELATIONSHIP_PROGRESSION|PERSISTENT_DECISION", '
-    '"content": "concise description", "importance": 0.0-1.0, "source_message_ids": [ids]}\n'
+    '{"type": "PROMISE|SHARED_EXPERIENCE|RECURRING_JOKE|'
+    'UNFINISHED_ACTIVITY|RELATIONSHIP_PROGRESSION|PERSISTENT_DECISION", '
+    '"content": "concise description", "importance": 0.0-1.0, '
+    '"source_message_ids": [ids]}\n'
     "Return empty array [] if no qualifying memories found.\n"
-    "Be selective — only extract genuinely memorable relationship moments.")
+    "Be selective — only extract genuinely memorable "
+    "relationship moments."
+)
 
 
 async def extract_memories_from_conversation(
@@ -416,8 +433,9 @@ async def extract_memories_from_conversation(
                 extracted = json.loads(match.group(1))
             else:
                 logger.warning(
-                    f"Character memory extraction returned invalid JSON: {raw[:200]}"
-                )
+                "Character memory extraction returned invalid "
+                f"JSON: {raw[:200]}"
+            )
                 return []
 
         if not isinstance(extracted, list):

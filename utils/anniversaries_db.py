@@ -86,7 +86,8 @@ async def insert_entry(data: dict) -> None:
 async def update_calendar_event_id(
     entry_id: str, calendar_event_id: str
 ) -> None:
-    """Update the calendar_event_id for an entry after successful calendar sync."""
+    """Update the calendar_event_id for an entry after
+    successful calendar sync."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "UPDATE anniversaries SET calendar_event_id = ? WHERE id = ?",
@@ -101,7 +102,10 @@ async def update_thumbnail(
     """Update thumbnail and reference URL for an entry."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "UPDATE anniversaries SET thumbnail_url = ?, reference_url = ? WHERE id = ?",
+            (
+                "UPDATE anniversaries SET thumbnail_url = ?, "
+                "reference_url = ? WHERE id = ?"
+            ),
             (thumbnail_url, reference_url, entry_id),
         )
         await db.commit()
@@ -112,7 +116,11 @@ async def get_user_entries(guild_id: int, user_id: int) -> list[dict]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT * FROM anniversaries WHERE guild_id = ? AND user_id = ? ORDER BY claimed_at DESC",
+            (
+                "SELECT * FROM anniversaries "
+                "WHERE guild_id = ? AND user_id = ? "
+                "ORDER BY claimed_at DESC"
+            ),
             (guild_id, user_id),
         ) as cur:
             rows = await cur.fetchall()
@@ -208,7 +216,10 @@ async def get_entries_missing_thumbnail(
     guild_id: int | None = None,
 ) -> list[dict]:
     """Get all entries with no thumbnail_url (for cover sync operations)."""
-    sql = "SELECT * FROM anniversaries WHERE thumbnail_url IS NULL OR thumbnail_url = ''"
+    sql = (
+        "SELECT * FROM anniversaries "
+        "WHERE thumbnail_url IS NULL OR thumbnail_url = ''"
+    )
     params: list = []
     if guild_id is not None:
         sql += " AND guild_id = ?"

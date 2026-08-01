@@ -33,10 +33,16 @@ async def init_db():
             )
         """)
         await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_guild_user ON warnings (guild_id, user_id)"
+            (
+                "CREATE INDEX IF NOT EXISTS idx_guild_user "
+                "ON warnings (guild_id, user_id)"
+            )
         )
         await db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_warn_id ON warnings (warn_id)"
+            (
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "idx_warn_id ON warnings (warn_id)"
+            )
         )
         await db.commit()
 
@@ -58,7 +64,8 @@ async def resolve_user(
 ) -> discord.User | discord.Member | None:
     """
     Resolves a user from a mention, username, or raw ID.
-    Returns a Member if in guild, User if resolvable via API, None if not found.
+    Returns a Member if in guild, User if resolvable via API,
+    None if not found.
     """
     # Strip mention formatting if present
     cleaned = user_input.strip().lstrip("<@").rstrip(">").lstrip("!")
@@ -129,7 +136,10 @@ async def apply_threshold(ctx, member: discord.Member, warn_count: int):
             logger.warning(f"Unknown warn_threshold action: {action}")
     except discord.Forbidden:
         await ctx.send(
-            f"Auto-threshold triggered but I lack permissions to {action} {member.mention}."
+            (
+                "Auto-threshold triggered but I lack permissions "
+                f"to {action} {member.mention}."
+            )
         )
     except discord.HTTPException as e:
         logger.error(
@@ -207,12 +217,18 @@ class ThresholdModal(discord.ui.Modal, title="Edit Warn Thresholds"):
             "true",
             "1",
         )
-        parsed = text_to_thresholds(self.rules.value, is_enabled)
+        parsed = text_to_thresholds(
+            self.rules.value, is_enabled
+        )
 
         if parsed is None:
             await interaction.response.send_message(
-                "Invalid format. Each line must be: `<count> <action> [duration]`\n"
-                "Valid actions: `timeout` (requires duration e.g. `1h`), `kick`, `ban`.",
+                (
+                    "Invalid format. Each line must be: "
+                    "`<count> <action> [duration]`\n"
+                    "Valid actions: `timeout` (requires duration e.g. `1h`), "
+                    "`kick`, `ban`."
+                ),
                 ephemeral=True,
             )
             return
@@ -270,7 +286,8 @@ class WarnsCog(commands.Cog):
         guild_member = ctx.guild.get_member(user.id)
         if not guild_member:
             await ctx.send(
-                "That user isn't in this server. You can only warn members."
+                "That user isn't in this server. "
+                "You can only warn members."
             )
             return
 
@@ -285,7 +302,8 @@ class WarnsCog(commands.Cog):
             and ctx.guild.owner != ctx.author
         ):
             await ctx.send(
-                "You can't warn someone with a role higher than or equal to yours."
+                "You can't warn someone with a role higher "
+                "than or equal to yours."
             )
             return
 
@@ -294,7 +312,10 @@ class WarnsCog(commands.Cog):
 
         async with aiosqlite.connect(WARNINGS_DB) as db:
             await db.execute(
-                "INSERT INTO warnings (warn_id, guild_id, user_id, mod_id, reason, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "INSERT INTO warnings (warn_id, guild_id, user_id, "
+                    "mod_id, reason, timestamp) VALUES (?, ?, ?, ?, ?, ?)"
+                ),
                 (
                     warn_id,
                     ctx.guild.id,
@@ -314,7 +335,11 @@ class WarnsCog(commands.Cog):
         dm_embed.add_field(name="Server", value=ctx.guild.name, inline=False)
         dm_embed.add_field(name="Reason", value=reason, inline=False)
         dm_embed.set_footer(
-            text=f"Warning ID: {warn_id} • You now have {warn_count} warning(s).")
+            text=(
+                f"Warning ID: {warn_id} • "
+                f"You now have {warn_count} warning(s)."
+            )
+        )
         try:
             await guild_member.send(embed=dm_embed)
             dm_note = ""
@@ -322,8 +347,10 @@ class WarnsCog(commands.Cog):
             dm_note = " *(couldn't DM user)*"
 
         await ctx.send(
-            f"**{guild_member}** has been warned ({warn_count} total). "
-            f"Reason: {reason} • ID: `{warn_id}`{dm_note}"
+            (
+                f"**{guild_member}** has been warned ({warn_count} total). "
+                f"Reason: {reason} • ID: `{warn_id}`{dm_note}"
+            )
         )
 
         await apply_threshold(ctx, guild_member, warn_count)
@@ -348,7 +375,10 @@ class WarnsCog(commands.Cog):
         async with aiosqlite.connect(WARNINGS_DB) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
-                "SELECT warn_id, mod_id, reason, timestamp FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY timestamp ASC",
+                (
+                    "SELECT warn_id, mod_id, reason, timestamp FROM warnings "
+                    "WHERE guild_id = ? AND user_id = ? ORDER BY timestamp ASC"
+                ),
                 (ctx.guild.id, user.id),
             ) as cursor:
                 rows = list(await cursor.fetchall())
@@ -391,7 +421,10 @@ class WarnsCog(commands.Cog):
 
         async with aiosqlite.connect(WARNINGS_DB) as db:
             async with db.execute(
-                "SELECT warn_id, user_id FROM warnings WHERE warn_id = ? AND guild_id = ?",
+                (
+                    "SELECT warn_id, user_id FROM warnings "
+                    "WHERE warn_id = ? AND guild_id = ?"
+                ),
                 (warn_id.lower(), ctx.guild.id),
             ) as cursor:
                 row = await cursor.fetchone()
@@ -419,7 +452,11 @@ class WarnsCog(commands.Cog):
         usage="<member|id>",
     )
     @app_commands.describe(
-        member="The member to clear all warnings for (mention, username, or ID).")
+        member=(
+            "The member to clear all warnings for "
+            "(mention, username, or ID)."
+        ),
+    )
     @commands.has_permissions(moderate_members=True)
     async def clearwarns_cmd(self, ctx, member: str):
         await ctx.defer()
@@ -431,7 +468,10 @@ class WarnsCog(commands.Cog):
 
         async with aiosqlite.connect(WARNINGS_DB) as db:
             async with db.execute(
-                "SELECT COUNT(*) FROM warnings WHERE guild_id = ? AND user_id = ?",
+                (
+                    "SELECT COUNT(*) FROM warnings "
+                    "WHERE guild_id = ? AND user_id = ?"
+                ),
                 (ctx.guild.id, user.id),
             ) as cursor:
                 row = await cursor.fetchone()
@@ -442,7 +482,10 @@ class WarnsCog(commands.Cog):
                 return
 
             await db.execute(
-                "DELETE FROM warnings WHERE guild_id = ? AND user_id = ?",
+                (
+                    "DELETE FROM warnings "
+                    "WHERE guild_id = ? AND user_id = ?"
+                ),
                 (ctx.guild.id, user.id),
             )
             await db.commit()
@@ -477,9 +520,13 @@ class WarnsCog(commands.Cog):
                 rules[key] = value
             if not rules:
                 await ctx.send(
-                    f"Warn thresholds are currently **{'enabled' if enabled else 'disabled'}** with no rules set.\n"
+                (
+                    f"Warn thresholds are currently **"
+                    f"{'enabled' if enabled else 'disabled'}** "
+                    "with no rules set.\n"
                     "Use `/warnthresholds` (slash command) to edit via modal."
                 )
+            )
                 return
             lines = []
             for count, rule in sorted(rules.items(), key=lambda x: int(x[0])):
@@ -487,9 +534,13 @@ class WarnsCog(commands.Cog):
                 duration = rule.get("duration", "")
                 lines.append(f"`{count} warns` → {action} {duration}".strip())
             await ctx.send(
-                f"Warn thresholds **{'enabled' if enabled else 'disabled'}**:\n"
-                + "\n".join(lines)
-                + "\n\nUse `/warnthresholds` (slash command) to edit via modal."
+                (
+                    f"Warn thresholds **"
+                    f"{'enabled' if enabled else 'disabled'}**:\n"
+                    + "\n".join(lines)
+                    + "\n\nUse `/warnthresholds` (slash command) to edit "
+                    "via modal."
+                )
             )
 
 

@@ -61,13 +61,9 @@ class NewsCog(commands.Cog):
             title_stripped = title.rstrip(" .,;:!?")
             if summary.startswith(title_stripped):
                 # Remove the duplicate portion from summary
-                summary = (
-                    summary[len(title_stripped):]
-                    .lstrip()
-                    .lstrip(".,;:!?\n\t")
-                )
+                summary = summary[len(title_stripped) :].lstrip().lstrip(".,;:!?\n\t")
             elif summary.startswith(title):
-                summary = summary[len(title):].lstrip().lstrip(".,;:!?\n\t")
+                summary = summary[len(title) :].lstrip().lstrip(".,;:!?\n\t")
 
         embed = discord.Embed(
             title=title,
@@ -110,60 +106,70 @@ class NewsCog(commands.Cog):
                         url, headers={"User-Agent": "FreesonaBot/1.0"}
                     ) as resp:
                         if resp.status >= 400:
-                            logger.warning(f"RSS poll: {name} returned HTTP {
-                                resp.status}")
+                            logger.warning(
+                                "RSS poll: %s returned HTTP %s",
+                                name,
+                                resp.status,
+                            )
                             continue
                         xml_text = await resp.text()
 
                     items = parse_feed(xml_text, limit=10)
-
-                    for item in items:
-                        if not item.link:
-                            continue
-
-                        # Resolve relative links using the feed's base URL
-                        if not urlparse(item.link).netloc:
-                            from urllib.parse import urljoin
-
-                            item.link = urljoin(url, item.link)
-
-                        if item.link in seen:
-                            continue
-
-                        embed = self._build_news_embed(item, name)
-
-                        for guild_id_str, channel_id in rss_channels.items():
-                            # Ensure channel_id is an int for get_channel
-                            channel = self.bot.get_channel(int(channel_id))
-                            if not isinstance(channel, discord.TextChannel):
-                                continue
-
-                            try:
-                                await channel.send(embed=embed)
-                            except discord.Forbidden:
-                                logger.error(
-                                    f"RSS: Permission denied in guild {guild_id_str}")
-                                continue
-                            except discord.HTTPException as e:
-                                logger.warning(
-                                    f"RSS: Failed to send item from {name}: {e}")
-                                continue
-
-                        new_links.append(item.link)
-                        seen.add(item.link)
-                        await asyncio.sleep(0.5)
-
                 except (
                     aiohttp.ClientError,
                     asyncio.TimeoutError,
                     ValueError,
                 ) as e:
-                    logger.warning(f"RSS poll error for {name}: {e}")
+                    logger.warning("RSS poll error for %s: %s", name, e)
                     continue
+
+                for item in items:
+                    if not item.link:
+                        continue
+
+                    # Resolve relative links using the feed's base URL
+                    if not urlparse(item.link).netloc:
+                        from urllib.parse import urljoin
+
+                        item.link = urljoin(url, item.link)
+
+                    if item.link in seen:
+                        continue
+
+                    embed = self._build_news_embed(item, name)
+                    posted = False
+
+                    for guild_id_str, channel_id in rss_channels.items():
+                        # Ensure channel_id is an int for get_channel
+                        channel = self.bot.get_channel(int(channel_id))
+                        if not isinstance(channel, discord.TextChannel):
+                            continue
+
+                        try:
+                            await channel.send(embed=embed)
+                            posted = True
+                        except discord.Forbidden:
+                            logger.error(
+                                "RSS: Permission denied in guild %s",
+                                guild_id_str,
+                            )
+                            continue
+                        except discord.HTTPException as e:
+                            logger.warning(
+                                "RSS: Failed to send item from %s: %s",
+                                name,
+                                e,
+                            )
+                            continue
+
+                    if posted:
+                        new_links.append(item.link)
+                        seen.add(item.link)
+                        await asyncio.sleep(0.5)
 
         if new_links:
             mark_links_seen(new_links)
-            logger.info(f"RSS: posted {len(new_links)} new article(s)")
+            logger.info("RSS: posted %s new article(s)", len(new_links))
 
     @poll_feeds.before_loop
     async def before_poll(self):
@@ -189,13 +195,9 @@ class NewsCog(commands.Cog):
         channels = config.setdefault(RSS_CHANNELS_KEY, {})
         channels[str(ctx.guild.id)] = channel.id
         save_config(config)
-        await ctx.send(
-            f"RSS articles will post to {channel.mention}.", ephemeral=True
-        )
+        await ctx.send(f"RSS articles will post to {channel.mention}.", ephemeral=True)
 
-    @rss_group.command(
-        name="clearchannel", help="Stop auto-posting RSS (Admin only)."
-    )
+    @rss_group.command(name="clearchannel", help="Stop auto-posting RSS (Admin only).")
     @commands.has_permissions(administrator=True)
     async def rss_clearchannel(self, ctx):
         config = load_config()
@@ -224,9 +226,7 @@ class NewsCog(commands.Cog):
         embed.set_footer(text=f"Auto-post channel: {channel_mention}")
         await ctx.send(embed=embed, ephemeral=True)
 
-    @rss_group.command(
-        name="latest", help="Show latest items from an RSS feed."
-    )
+    @rss_group.command(name="latest", help="Show latest items from an RSS feed.")
     @app_commands.autocomplete(name=feed_autocomplete)
     async def rss_latest(self, ctx, name: str, limit: int = 5):
         feeds = load_rss_feeds()
@@ -244,9 +244,7 @@ class NewsCog(commands.Cog):
                 aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=12)
                 ) as session,
-                session.get(
-                    url, headers={"User-Agent": "FreesonaBot/1.0"}
-                ) as resp,
+                session.get(url, headers={"User-Agent": "FreesonaBot/1.0"}) as resp,
             ):
                 if resp.status >= 400:
                     await ctx.send(f"Feed returned HTTP {resp.status}.")
@@ -269,9 +267,7 @@ class NewsCog(commands.Cog):
         embeds = [self._build_news_embed(item, key) for item in items]
         await ctx.send(embeds=embeds)
 
-    @rss_group.command(
-        name="add", help="Add or update an RSS feed (Admin only)."
-    )
+    @rss_group.command(name="add", help="Add or update an RSS feed (Admin only).")
     @commands.has_permissions(administrator=True)
     async def rss_add(self, ctx, name: str, url: str):
         key = name.lower().strip()

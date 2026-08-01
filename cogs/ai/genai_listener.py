@@ -78,11 +78,14 @@ def _extract_embeds(embeds: list[discord.Embed]) -> list[str]:
     return embed_texts
 
 
-def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDict:
+def build_payload(
+    message: discord.Message, role: str, bot_id: int
+) -> PayloadDict:
     """
     Build a standardized payload from a Discord message.
 
-    Eliminates duplicated payload construction between conversation and autonomy paths.
+    Eliminates duplicated payload construction between
+    conversation and autonomy paths.
     """
     payload: PayloadDict = {
         "role": role,
@@ -108,7 +111,10 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
         if embed_texts:
             payload["embeds"] = embed_texts
 
-    if message.reference and isinstance(message.reference.resolved, discord.Message):
+    if (
+        message.reference
+        and isinstance(message.reference.resolved, discord.Message)
+    ):
         ref = message.reference.resolved
         reply_payload: ReplyPayload = {
             "author": ref.author.display_name,
@@ -194,7 +200,9 @@ class GenAIListenerCog(commands.Cog):
         chat_channel_id = config.get("chat_channel_id")
         if chat_channel_id and message.channel.id == chat_channel_id:
             response_mode = config.get("conversation_response_mode", "all")
-            if not should_respond_in_chat_channel(message, bot_user, response_mode):
+            if not should_respond_in_chat_channel(
+                message, bot_user, response_mode
+            ):
                 return
 
             user_id = message.author.id
@@ -212,7 +220,9 @@ class GenAIListenerCog(commands.Cog):
             async def debounced_respond(_key=_debounce_key):
                 try:
                     current_config = load_config()
-                    debounce_seconds = current_config.get("debounce_seconds", 1.2)
+                    debounce_seconds = current_config.get(
+                        "debounce_seconds", 1.2
+                    )
                     await asyncio.sleep(debounce_seconds)
 
                     # Check bot permissions before processing
@@ -227,7 +237,9 @@ class GenAIListenerCog(commands.Cog):
                         return
 
                     async with channel_snapshot.typing():
-                        attachments = await extract_attachments(message_snapshot)
+                        attachments = await extract_attachments(
+                            message_snapshot
+                        )
                         response = await safe_generate(
                             payload,
                             current_persona=CURRENT_PERSONA,
@@ -238,16 +250,22 @@ class GenAIListenerCog(commands.Cog):
                             message_id=message_snapshot.id,
                             username=username_snapshot,
                             attachments=attachments,
-                            guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
+                            guild_world_accessor=DiscordGuildWorldAccessor(
+                                self.bot
+                            ),
                         )
-                        reply_target = get_reply_target(message_snapshot, self.bot.user)
+                        reply_target = get_reply_target(
+                            message_snapshot, self.bot.user
+                        )
                         await send_response(
                             response, channel_snapshot, reply_to=reply_target
                         )
 
                     # Extract and store long-term user facts after responding
                     try:
-                        provider_name = current_config.get("provider", "gemini")
+                        provider_name = current_config.get(
+                            "provider", "gemini"
+                        )
                         model_name = current_config.get(
                             "provider_model"
                         ) or current_config.get(
@@ -266,7 +284,8 @@ class GenAIListenerCog(commands.Cog):
                         )
                     except (RuntimeError, ValueError, OSError) as fact_exc:
                         logger.warning(
-                            f"Fact extraction failed for user {user_id}: {fact_exc}"
+                            "Fact extraction failed for user "
+                            f"{user_id}: {fact_exc}"
                         )
                 except asyncio.CancelledError:
                     pass
@@ -277,12 +296,15 @@ class GenAIListenerCog(commands.Cog):
                     discord.DiscordException,
                 ) as exc:
                     logger.error(
-                        f"Error in debounced response for user {user_id}: {exc}"
+                        "Error in debounced response for user "
+                        f"{user_id}: {exc}"
                     )
                 finally:
                     _pending_responses.pop(_key, None)
 
-            _pending_responses[_debounce_key] = asyncio.create_task(debounced_respond())
+            _pending_responses[_debounce_key] = asyncio.create_task(
+                debounced_respond()
+            )
             return
 
         # -------------------------------------------------------------------
@@ -301,7 +323,9 @@ class GenAIListenerCog(commands.Cog):
             threshold = FREQUENCY_THRESHOLD.get(freq_setting, 0.50)
             now = time.time()
             last_channel = _autonomy_cooldown.get(message.channel.id, 0)
-            autonomy_cooldown_seconds = config.get("autonomy_cooldown_seconds", 120)
+            autonomy_cooldown_seconds = config.get(
+                "autonomy_cooldown_seconds", 120
+            )
             autonomy_user_cooldown = config.get("autonomy_user_cooldown", 60)
 
             last_user = _autonomy_user_cooldown.get(message.author.id, 0)
@@ -312,11 +336,16 @@ class GenAIListenerCog(commands.Cog):
             if channel_ready and user_ready:
                 intent = evaluate_intent(message, self.bot.user, False)
 
-                if intent.intent != INTENT_IGNORE and intent.confidence >= threshold:
+                if (
+                    intent.intent != INTENT_IGNORE
+                    and intent.confidence >= threshold
+                ):
                     _autonomy_cooldown[message.channel.id] = now
                     _autonomy_user_cooldown[message.author.id] = now
 
-                    autonomy_payload = build_payload(message, role, bot_id)
+                    autonomy_payload = build_payload(
+                        message, role, bot_id
+                    )
 
                     async with message.channel.typing():
                         attachments = await extract_attachments(message)
@@ -330,7 +359,9 @@ class GenAIListenerCog(commands.Cog):
                             message_id=message.id,
                             username=message.author.display_name,
                             attachments=attachments,
-                            guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
+                            guild_world_accessor=DiscordGuildWorldAccessor(
+                                self.bot
+                            ),
                         )
                         reply_target = get_reply_target(message, self.bot.user)
                         await send_response(
@@ -340,7 +371,9 @@ class GenAIListenerCog(commands.Cog):
                     # Extract and store long-term user facts after responding
                     try:
                         current_config = load_config()
-                        provider_name = current_config.get("provider", "gemini")
+                        provider_name = current_config.get(
+                            "provider", "gemini"
+                        )
                         model_name = current_config.get(
                             "provider_model"
                         ) or current_config.get(
@@ -359,7 +392,6 @@ class GenAIListenerCog(commands.Cog):
                         )
                     except (RuntimeError, ValueError, OSError) as fact_exc:
                         logger.warning(
-                            f"Fact extraction failed for user {message.author.id}: {
-                                fact_exc
-                            }"
+                            "Fact extraction failed for user "
+                            f"{message.author.id}: {fact_exc}"
                         )

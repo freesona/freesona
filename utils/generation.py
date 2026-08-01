@@ -77,10 +77,12 @@ def _get_rate_limit() -> int:
     return int(load_config().get("generation_rate_limit", 5))
 
 
-# Note: We no longer use Gemini's Interactions API for conversation continuity.
-# Conversation history is now managed by Freesona's ConversationManager (utils/conversation.py)
-# which provides provider-agnostic short-term memory for ALL providers.
-# The client is kept for other Gemini-specific operations if needed.
+# Note: We no longer use Gemini's Interactions API for
+# conversation continuity. Conversation history is now managed
+# by Freesona's ConversationManager (utils/conversation.py)
+# which provides provider-agnostic short-term memory for ALL
+# providers. The client is kept for other Gemini-specific
+# operations if needed.
 client = None
 if PROVIDER == "gemini" and genai is not None and GOOGLE_API_KEY:
     client = genai.Client(api_key=GOOGLE_API_KEY)
@@ -219,12 +221,14 @@ def _strip_reasoning_tags(text: str) -> str:
     """
     Strip reasoning/thinking tags from AI output.
 
-    Some models (especially reasoning models) output their thought process
-    in XML-like tags such as <thought>, <thinking>, <reasoning>, etc.
-    These should not be shown to users.
+    Some models (especially reasoning models) output their
+    thought process in XML-like tags such as <thought>,
+    <thinking>, <reasoning>, etc. These should not be shown
+    to users.
     """
     # Pattern matches: <thought>...</thought>, <thinking>...</thinking>,
-    # <reasoning>...</reasoning>, and self-closing variants like <thought/> or <thought id="1"/>
+    # <reasoning>...</reasoning>, and self-closing variants like
+    # <thought/> or <thought id="1"/>
     reasoning_tags = [
         r"<thought>.*?</thought>",
         r"<thinking>.*?</thinking>",
@@ -309,7 +313,8 @@ async def _send_first_segment_with_reply(
     text: str,
     reply_to: discord.Message,
 ) -> None:
-    """Send the first segment, trying reply first then falling back to regular send."""
+    """Send the first segment, trying reply first then
+    falling back to regular send."""
     try:
         await reply_to.reply(text)
     except discord.NotFound:
@@ -355,7 +360,8 @@ async def retrieve_knowledge_context(
     top_k: int = KB_TOP_K,
 ) -> str:
     """
-    Retrieves relevant knowledge base entries for the given persona and query.
+    Retrieves relevant knowledge base entries for the given
+    persona and query.
 
     Args:
         query: The user's message/query to search for.
@@ -363,7 +369,8 @@ async def retrieve_knowledge_context(
         top_k: Maximum number of entries to retrieve.
 
     Returns:
-        Formatted knowledge context string, or empty string if disabled/no results.
+        Formatted knowledge context string, or empty string
+        if disabled/no results.
     """
     if not KB_ENABLED:
         return ""
@@ -494,10 +501,11 @@ async def generate(
         current_model = get_provider_model() or get_model_name()
         current_temperature = get_model_temperature()
 
-        # All providers now use the same stateless generate_text interface.
-        # Conversation history is injected via the system prompt (ConversationHistoryProvider),
-        # NOT via provider-specific APIs like Gemini's Interactions API.
-        # This makes providers completely stateless and interchangeable.
+        # All providers now use the same stateless generate_text
+        # interface. Conversation history is injected via the system
+        # prompt (ConversationHistoryProvider), NOT via provider-
+        # specific APIs like Gemini's Interactions API. This makes
+        # providers completely stateless and interchangeable.
 
         # Get previous interaction ID for Gemini multi-turn support
         previous_interaction_id = None

@@ -64,7 +64,8 @@ class ModerationCog(commands.Cog):
             and ctx.guild.owner != ctx.author
         ):
             await ctx.send(
-                "You can't kick someone with a role higher than or equal to yours."
+                "You can't kick someone with a role higher "
+                "than or equal to yours."
             )
             return
 
@@ -114,7 +115,10 @@ class ModerationCog(commands.Cog):
     )
     @app_commands.describe(
         member="The user to ban.",
-        delete_messages="How far back to delete messages (e.g. 1d, 7d). Max 7d.",
+        delete_messages=(
+            "How far back to delete messages (e.g. 1d, 7d). "
+            "Max 7d."
+        ),
         reason="Why are they being banned?",
     )
     @commands.has_permissions(ban_members=True)
@@ -139,7 +143,8 @@ class ModerationCog(commands.Cog):
                 and ctx.guild.owner != ctx.author
             ):
                 await ctx.send(
-                    "You can't ban someone with a role higher than or equal to yours."
+                    "You can't ban someone with a role higher "
+                    "than or equal to yours."
                 )
                 return
 
@@ -177,7 +182,10 @@ class ModerationCog(commands.Cog):
                 else ""
             )
             await ctx.send(
-                f"**{member}** has been banned{del_note}. Reason: {reason}{note}"
+                (
+                    f"**{member}** has been banned{del_note}. "
+                    f"Reason: {reason}{note}"
+                )
             )
         except discord.Forbidden:
             await ctx.send("I don't have permission to ban this user.")
@@ -189,7 +197,10 @@ class ModerationCog(commands.Cog):
     )
     @app_commands.describe(
         member="The member to softban.",
-        delete_messages="How far back to delete messages (e.g. 1d, 7d). Defaults to 7d.",
+        delete_messages=(
+            "How far back to delete messages (e.g. 1d, 7d). "
+            "Defaults to 7d."
+        ),
         reason="Reason for the softban.",
     )
     @commands.has_permissions(ban_members=True)
@@ -212,7 +223,8 @@ class ModerationCog(commands.Cog):
             and ctx.guild.owner != ctx.author
         ):
             await ctx.send(
-                "You can't softban someone with a role higher than or equal to yours."
+                "You can't softban someone with a role higher "
+                "than or equal to yours."
             )
             return
 
@@ -228,7 +240,11 @@ class ModerationCog(commands.Cog):
         dm_embed.add_field(name="Server", value=ctx.guild.name, inline=False)
         dm_embed.add_field(name="Reason", value=reason, inline=False)
         dm_embed.set_footer(
-            text="A softban removes your recent messages but does not permanently ban you.")
+            text=(
+                "A softban removes your recent messages but does "
+                "not permanently ban you."
+            )
+        )
         dm_sent = await try_dm(member, dm_embed)
 
         try:
@@ -240,14 +256,19 @@ class ModerationCog(commands.Cog):
             await ctx.guild.unban(member, reason="Softban: automatic unban")
             note = "" if dm_sent else " *(couldn't DM user)*"
             await ctx.send(
-                f"**{member}** has been softbanned (messages from past {delete_messages} deleted). Reason: {reason}{note}"
+                (
+                    f"**{member}** has been softbanned "
+                    f"(messages from past {delete_messages} deleted). "
+                    f"Reason: {reason}{note}"
+                )
             )
         except discord.Forbidden:
             await ctx.send("I don't have permission to ban this member.")
         except discord.HTTPException as e:
             logger.error(f"Softban failed for {member}: {e}")
             await ctx.send(
-                "Softban failed. The ban may have gone through without the unban -- check manually."
+                "Softban failed. The ban may have gone through "
+                "without the unban -- check manually."
             )
 
     @commands.hybrid_command(
@@ -321,7 +342,10 @@ class ModerationCog(commands.Cog):
                 delta, reason=f"Timed out by {ctx.author}: {reason}"
             )
             await ctx.send(
-                f"{member.mention} has been timed out for {length}. Reason: {reason}"
+                (
+                    f"{member.mention} has been timed out "
+                    f"for {length}. Reason: {reason}"
+                )
             )
         except discord.Forbidden:
             await ctx.send("I can't timeout that member.")
@@ -350,7 +374,8 @@ class ModerationCog(commands.Cog):
         usage="<duration|off>",
     )
     @app_commands.describe(
-        delay="Delay between messages (e.g. 10s, 5m). Use 'off' to disable."
+        delay="Delay between messages (e.g. 10s, 5m). "
+        "Use 'off' to disable."
     )
     @commands.has_permissions(manage_channels=True)
     @commands.bot_has_permissions(manage_channels=True)
@@ -377,7 +402,10 @@ class ModerationCog(commands.Cog):
 
     @commands.hybrid_command(
         name="lock",
-        help="Locks the current channel, preventing members from sending messages.",
+        help=(
+            "Locks the current channel, preventing members "
+            "from sending messages."
+        ),
         usage="[reason]",
     )
     @app_commands.describe(reason="Reason for locking the channel.")

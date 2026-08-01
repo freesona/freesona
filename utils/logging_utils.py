@@ -381,13 +381,13 @@ async def send_log_message(bot: Client, message: str, level: str = "INFO"):
             )
             return
 
-    if channel and hasattr(channel, "send"):
+    if isinstance(channel, discord.abc.Messageable):
         try:
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             formatted = f"[{timestamp}] [{level}] {message}"
             if len(formatted) > 1900:
                 formatted = formatted[:1900] + "... [truncated]"
-            await channel.send(f"```\n{formatted}\n```")  # type: ignore[reportAttributeAccessIssue]
+            await channel.send(f"```\n{formatted}\n```")
         except (
             discord.NotFound,
             discord.Forbidden,

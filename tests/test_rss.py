@@ -59,7 +59,9 @@ class RssTests(unittest.TestCase):
                     <title>Test Title</title>
                     <link>https://example.com/test</link>
                     <pubDate>Sun, 24 May 2026 01:00:00 GMT</pubDate>
-                    <description>&lt;p&gt;Test description&lt;/p&gt;</description>
+                    <description>
+                        &lt;p&gt;Test description&lt;/p&gt;
+                    </description>
                 </item>
             </channel>
         </rss>"""

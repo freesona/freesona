@@ -4,9 +4,20 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import discord
 import pytz
+from discord import app_commands
 from discord.ext import commands
 
 from utils.config import load_config, save_config
+
+
+async def timezone_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    return [
+        app_commands.Choice(name=tz, value=tz)
+        for tz in pytz.common_timezones
+        if current.lower() in tz.lower()
+    ][:25]
 
 
 class TimezoneCog(commands.Cog):
@@ -22,18 +33,17 @@ class TimezoneCog(commands.Cog):
     )
     @commands.has_permissions(administrator=True)
     @discord.app_commands.describe(
-        timezone="IANA timezone string, e.g. Asia/Manila, America/New_York, UTC"
+        timezone=("IANA timezone string, e.g. Asia/Manila, America/New_York, UTC")
     )
-    @discord.app_commands.autocomplete(
-        timezone=lambda self, interaction: self.settimezone_autocomplete(interaction)  # type: ignore[attr-defined]
-    )
+    @discord.app_commands.autocomplete(timezone=timezone_autocomplete)
     async def settimezone_cmd(self, ctx: commands.Context, timezone: str):
         try:
             ZoneInfo(timezone)
         except ZoneInfoNotFoundError:
             await ctx.send(
                 f"`{timezone}` is not a valid IANA timezone. "
-                "Examples: `Asia/Manila`, `America/New_York`, `Europe/London`, `UTC`.",
+                "Examples: `Asia/Manila`, `America/New_York`, "
+                "`Europe/London`, `UTC`.",
                 ephemeral=bool(ctx.interaction),
             )
             return
@@ -44,15 +54,6 @@ class TimezoneCog(commands.Cog):
         await ctx.send(
             f"Timezone set to `{timezone}`.", ephemeral=bool(ctx.interaction)
         )
-
-    async def settimezone_autocomplete(
-        self, interaction: discord.Interaction, member: str
-    ):
-        return [
-            discord.app_commands.Choice(name=tz, value=tz)
-            for tz in pytz.common_timezones
-            if member.lower() in tz.lower()
-        ][:25]
 
     @commands.hybrid_command(
         name="timezone",

@@ -54,7 +54,8 @@ class ProviderCog(commands.Cog):
         normalized = name.strip().lower()
         if normalized not in PROVIDER_CHOICES:
             await ctx.send(
-                f"Unknown provider `{name}`. Choose from: {', '.join(PROVIDER_CHOICES)}.",
+                (f"Unknown provider `{name}`. Choose from: "
+                 f"{', '.join(PROVIDER_CHOICES)}."),
                 ephemeral=bool(ctx.interaction),
             )
             return
@@ -70,7 +71,10 @@ class ProviderCog(commands.Cog):
     # type: ignore[attr-defined]
     @provider_group.command(
         name="reset",
-        help="Reset the active provider to the environment/default value.",
+        help=(
+            "Reset the active provider to the "
+            "environment/default value."
+        ),
     )
     @commands.is_owner()
     async def provider_reset(self, ctx: commands.Context):

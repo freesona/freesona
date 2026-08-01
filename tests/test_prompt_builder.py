@@ -34,7 +34,8 @@ class TestPromptBuilderArchitecture(unittest.TestCase):
     """Test the PromptBuilder architecture and provider ordering."""
 
     def test_provider_priority_ordering(self):
-        """Providers should be sorted by priority (lower = earlier in prompt)."""
+        """Providers should be sorted by priority
+        (lower = earlier in prompt)."""
         builder = PromptBuilder(
             providers=[
                 PersonaContextProvider(),  # priority 20
@@ -86,7 +87,8 @@ class TestPromptBuilderArchitecture(unittest.TestCase):
         self.assertEqual(ProviderPriority.PERSONA_KNOWLEDGE_BASE, 60)
 
     def test_get_provider_metadata_returns_correct_info(self):
-        """get_provider_metadata should return name, priority, mutability for each provider."""
+        """get_provider_metadata should return name, priority,
+        mutability for each provider."""
         builder = PromptBuilder.with_default_providers()
         metadata = builder.get_provider_metadata()
 
@@ -196,15 +198,18 @@ class TestSystemContextProvider(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("Discord mention guidelines:", result.content)
         self.assertIn(
-            "When REPLYING to a message (using Discord's reply feature), do NOT add a @mention",
+            "When REPLYING to a message (using Discord's reply feature), "
+            "do NOT add a @mention",
             result.content,
         )
         self.assertIn(
-            "When mentioning the user you're responding to in a NON-reply message, use <@USER_ID> format to ping them",
+            "When mentioning the user you're responding to in a "
+            "NON-reply message, use <@USER_ID> format to ping them",
             result.content,
         )
         self.assertIn(
-            "When referencing other users in conversation, prefer their display name or nickname naturally",
+            "When referencing other users in conversation, prefer "
+            "their display name or nickname naturally",
             result.content,
         )
         self.assertIn("Do NOT use @username format", result.content)
@@ -299,7 +304,8 @@ class TestPersonaContextProvider(unittest.IsolatedAsyncioTestCase):
 
 
 class TestConversationHistoryProvider(unittest.IsolatedAsyncioTestCase):
-    """Tests for ConversationHistoryProvider (Provider-agnostic Conversation Manager)."""
+    """Tests for ConversationHistoryProvider
+    (Provider-agnostic Conversation Manager)."""
 
     def test_name_and_priority(self):
         provider = ConversationHistoryProvider()
@@ -426,8 +432,12 @@ class TestCharacterMemoryProvider(unittest.IsolatedAsyncioTestCase):
     async def test_build_delegates_to_character_memory_module(
         self, mock_build
     ):
-        """Delegates to CharacterMemory.build_character_memory_context."""
-        mock_build.return_value = "[Character Memory with TestUser]\n[PROMISE] We promised to play chess. (importance: 0.9)"
+        """Delegates to CharacterMemory.
+        build_character_memory_context."""
+        mock_build.return_value = (
+            "[Character Memory with TestUser]\n[PROMISE] We promised to play "
+            "chess. (importance: 0.9)"
+        )
 
         provider = CharacterMemoryProvider()
         context = PromptBuildContext(
@@ -447,7 +457,10 @@ class TestCharacterMemoryProvider(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             result.content,
-            "[Character Memory with TestUser]\n[PROMISE] We promised to play chess. (importance: 0.9)",
+            (
+                "[Character Memory with TestUser]\n[PROMISE] We promised "
+                "to play chess. (importance: 0.9)"
+            ),
         )
         self.assertEqual(result.mutability, Mutability.MUTABLE)
 
@@ -542,12 +555,14 @@ class TestPersonaKnowledgeBaseProvider(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Relevant Canonical Context", result.content)
         self.assertIn("1. Chisato loves aquariums.", result.content)
         self.assertIn(
-            "(Source: Episode 06, Type: dialogue, Scene: Aquarium, Speaker: Chisato, Timestamp: S01E06 12:34, Canon: canon)",
+            "(Source: Episode 06, Type: dialogue, Scene: Aquarium, "
+            "Speaker: Chisato, Timestamp: S01E06 12:34, Canon: canon)",
             result.content,
         )
         self.assertIn("2. Takina is serious.", result.content)
         self.assertIn(
-            "(Source: Episode 01, Type: narration, Chapter: Chapter 1, Canon: canon)",
+            "(Source: Episode 01, Type: narration, Chapter: Chapter 1, "
+            "Canon: canon)",
             result.content,
         )
         self.assertEqual(result.mutability, Mutability.IMMUTABLE)
@@ -757,7 +772,10 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
     ):
         mock_get_facts.return_value = ""
         result = await build_system_prompt(
-            current_persona="<system_instructions>\nGlobal sys\n</system_instructions>\n\n<role>\nGlobal core\n</role>",
+            current_persona=(
+                "<system_instructions>\nGlobal sys\n</system_instructions>\n\n"
+                "<role>\nGlobal core\n</role>"
+            ),
             persona_id="test",
             guild_id=1,
             user_id=2,
@@ -767,7 +785,8 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Global sys", result)
         self.assertIn("Discord mention guidelines:", result)
         self.assertIn(
-            "When REPLYING to a message (using Discord's reply feature), do NOT add a @mention",
+            "When REPLYING to a message (using Discord's reply feature), "
+            "do NOT add a @mention",
             result,
         )
         self.assertIn("<role>\nGlobal core\n</role>", result)
@@ -776,7 +795,10 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
     async def test_uses_provided_persona_data(self, mock_get_facts):
         mock_get_facts.return_value = ""
         result = await build_system_prompt(
-            current_persona="<system_instructions>\nProvided sys\n</system_instructions>\n\n<role>\nProvided core\n</role>",
+            current_persona=(
+                "<system_instructions>\nProvided sys\n"
+                "</system_instructions>\n\n<role>\nProvided core\n</role>"
+            ),
             persona_id="test",
             guild_id=1,
             user_id=2,
@@ -790,7 +812,8 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Provided sys", result)
         self.assertIn("Discord mention guidelines:", result)
         self.assertIn(
-            "When REPLYING to a message (using Discord's reply feature), do NOT add a @mention",
+            "When REPLYING to a message (using Discord's reply feature), "
+            "do NOT add a @mention",
             result,
         )
         self.assertIn("<role>\nProvided core\n</role>", result)
@@ -1025,7 +1048,8 @@ class TestTokenBudgetEnforcement(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.count("x" * 100), 3)
 
     async def test_build_drops_mutable_blocks_in_reverse_priority_order(self):
-        """When over budget, MUTABLE blocks dropped in reverse priority order."""
+        """When over budget, MUTABLE blocks dropped
+        in reverse priority order."""
 
         class SmallProvider(ContextProvider):
             def __init__(self, name, priority, mutability, content):
@@ -1066,9 +1090,11 @@ class TestTokenBudgetEnforcement(unittest.IsolatedAsyncioTestCase):
         ]
         # Total ~125 tokens, budget 100
         # Should drop mutable_high (50) first, then mutable_mid (40) if needed
-        # But immutable are never dropped (10 + 60 = 20 priority values, ~50 tokens)
+        # But immutable are never dropped (10 + 60 = 20 priority
+        # values, ~50 tokens)
         # So remaining budget for mutable = 100 - 50 = 50 tokens
-        # Can fit mutable_low (30, 25 tokens) and mutable_mid (40, 25 tokens) = 50 tokens
+        # Can fit mutable_low (30, 25 tokens) and mutable_mid
+        # (40, 25 tokens) = 50 tokens
         # mutable_high (50) should be dropped
         builder = PromptBuilder.with_providers(providers, token_budget=100)
         context = PromptBuildContext(apply_persona=True)
@@ -1176,10 +1202,12 @@ class TestTokenBudgetEnforcement(unittest.IsolatedAsyncioTestCase):
         # Placeholder should not appear (empty content or skipped)
         self.assertIn("A" * 100, result)
         # Note: PLACEHOLDER blocks with content ARE included if not empty
-        # But is_empty check should skip them if content is empty/whitespace
+        # But is_empty check should skip them if content is
+        # empty/whitespace
 
     async def test_build_with_default_providers_and_token_budget(self):
-        """PromptBuilder.with_default_providers should accept token_budget parameter."""
+        """PromptBuilder.with_default_providers should
+        accept token_budget parameter."""
         builder = PromptBuilder.with_default_providers(token_budget=4000)
         self.assertEqual(builder.token_budget, 4000)
 

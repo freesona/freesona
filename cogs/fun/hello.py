@@ -13,5 +13,5 @@ class HelloCog(commands.Cog):
         await ctx.send(f"Hello {ctx.author.mention}!")
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(HelloCog(bot))

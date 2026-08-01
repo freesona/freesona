@@ -41,7 +41,8 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         channel.send.assert_called_once_with("Hello world")
 
     async def test_send_response_with_typing(self):
-        """send_response should trigger typing indicator when segment has typing=True."""
+        """send_response should trigger typing indicator
+        when segment has typing=True."""
         channel = AsyncMock()
 
         # Mock the async context manager for channel.typing()
@@ -60,7 +61,8 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         channel.send.assert_called_once_with("Hello")
 
     async def test_send_response_reply_to_message(self):
-        """send_response should use reply for first segment when reply_to is provided."""
+        """send_response should use reply for first segment
+        when reply_to is provided."""
         channel = AsyncMock()
 
         typing_cm = AsyncMock()
@@ -86,7 +88,8 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         channel.send.assert_called_once_with("Second message")
 
     async def test_send_response_reply_not_found_fallback(self):
-        """send_response should fall back to channel.send when reply_to raises NotFound."""
+        """send_response should fall back to channel.send
+        when reply_to raises NotFound."""
         channel = AsyncMock()
 
         typing_cm = AsyncMock()
@@ -226,7 +229,11 @@ class TestStripReasoningTags(unittest.TestCase):
 
     def test_strip_multiple_tags(self):
         """Should strip multiple different tag types."""
-        text = "<thought>think</thought> Hello <thinking>reason</thinking> world <reasoning>analyze</reasoning>"
+        text = (
+            "<thought>think</thought> Hello "
+            "<thinking>reason</thinking> world "
+            "<reasoning>analyze</reasoning>"
+        )
         result = _strip_reasoning_tags(text)
         self.assertEqual(result, "Hello  world")
 

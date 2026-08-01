@@ -87,7 +87,10 @@ class ConfigModal(ui.Modal, title="Edit Config Value"):
                     new_value = False
                 else:
                     await interaction.response.send_message(
-                        f"❌ Invalid boolean value for `{self.key}`. Use true/false, yes/no, 1/0, on/off",
+                        (
+                            f"❌ Invalid boolean value for `{self.key}`. "
+                            "Use true/false, yes/no, 1/0, on/off"
+                        ),
                         ephemeral=True,
                     )
                     return
@@ -115,7 +118,10 @@ class ConfigModal(ui.Modal, title="Edit Config Value"):
             allowed = CONFIG_ALLOWED_VALUES[self.key]
             if str(new_value).lower() not in [v.lower() for v in allowed]:
                 await interaction.response.send_message(
-                    f"❌ Invalid value for `{self.key}`. Allowed: {', '.join(allowed)}",
+                    (
+                        f"❌ Invalid value for `{self.key}`. "
+                        f"Allowed: {', '.join(allowed)}"
+                    ),
                     ephemeral=True,
                 )
                 return
@@ -199,13 +205,19 @@ class ConfigPanelView(ui.View):
         if mode == "list":
             embed = discord.Embed(
                 title="⚙️ Configuration Categories",
-                description="Select a category to view all config keys and their current values.",
+                description=(
+                    "Select a category to view all config keys "
+                    "and their current values."
+                ),
                 color=discord.Color.blurple(),
             )
         else:
             embed = discord.Embed(
                 title="⚙️ Configuration Panel",
-                description="Select a category to view and edit config values.",
+                description=(
+                    "Select a category to view and edit "
+                    "config values."
+                ),
                 color=discord.Color.blue(),
             )
         for category, keys in CONFIG_CATEGORIES.items():
@@ -250,7 +262,10 @@ class ConfigPanelView(ui.View):
 
         embed = discord.Embed(
             title=f"⚙️ {category} Settings",
-            description="Select a key to edit its value. Current values shown.",
+            description=(
+                "Select a key to edit its value. "
+                "Current values shown."
+            ),
             color=discord.Color.green(),
         )
 
@@ -335,7 +350,10 @@ class ConfigResetConfirmView(ui.View):
         save_config(config)
 
         await interaction.response.edit_message(
-            content=f"✅ Config reset to defaults{' for selected keys' if self.keys else ''}.",
+            content=(
+                f"✅ Config reset to defaults"
+                f"{' for selected keys' if self.keys else ''}."
+            ),
             embed=None,
             view=None,
         )
@@ -413,7 +431,10 @@ class ConfigKeySelectForMode(ui.Select):
             desc = CONFIG_DESCRIPTIONS.get(key, "No description available.")
             embed = discord.Embed(
                 title=f"Config: {key}",
-                description=f"{desc}\n\n**Current Value:** `{current}`\n**Default Value:** `{default}`",
+                description=(
+                    f"{desc}\n\n**Current Value:** `{current}`\n"
+                    f"**Default Value:** `{default}`"
+                ),
                 color=discord.Color.blurple(),
             )
             await interaction.response.edit_message(embed=embed, view=None)
@@ -422,13 +443,19 @@ class ConfigKeySelectForMode(ui.Select):
                 config.pop(key)
                 save_config(config)
                 await interaction.response.edit_message(
-                    content=f"✅ Reset `{key}` to default (`{default}`).",
+                    content=(
+                        f"✅ Reset `{key}` to default "
+                        f"(`{default}`)."
+                    ),
                     embed=None,
                     view=None,
                 )
             else:
                 await interaction.response.edit_message(
-                    content=f"`{key}` is already at default value (`{default}`).",
+                    content=(
+                        f"`{key}` is already at default value "
+                        f"(`{default}`)."
+                    ),
                     embed=None,
                     view=None,
                 )

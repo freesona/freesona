@@ -72,6 +72,15 @@ diags.txt
 out.txt
 memory.json
 
+# Local test/report artifacts
+full_test.txt
+test_output.txt
+test_pb.txt
+test_results.txt
+e501_current.txt
+flake8_current.txt
+flake8_results.txt
+
 # misc
 test_nitter2.py
 e501.txt

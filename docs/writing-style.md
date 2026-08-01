@@ -1,7 +1,8 @@
 # Documentation writing style
 
-Use this style for all project documentation. It applies the practical rules
-of ASD-STE100 Simplified Technical English to Freesona documentation.
+Use this style for all project documentation. All repository documentation must
+adhere to ASD-STE100 Simplified Technical English. This guide applies the
+practical rules of ASD-STE100 to Freesona documentation.
 
 ## Purpose
 

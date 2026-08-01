@@ -120,7 +120,10 @@ class MathCogTests(unittest.TestCase):
         for expr in [
             "x = cos(t), y = sin(t)",  # circle
             # heart
-            "x = 16*sin(t)**3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",
+            (
+                "x = 16*sin(t)**3, "
+                "y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)"
+            ),
         ]:
             with self.subTest(expr=expr):
                 buf = generate_plot(expr)
@@ -144,15 +147,18 @@ class MathCogTests(unittest.TestCase):
         # Test stripping links and Wolfram ads
         self.assertEqual(
             self.cog.format_wolfram_text(
-                "Wolfram Language code: foo\nResult:\n4\nplot: https://example.com/plot.png"
+                "Wolfram Language code: foo\nResult:\n4\nplot: "
+                "https://example.com/plot.png"
             ),
             "4",
         )
         self.assertEqual(self.cog.format_wolfram_text(""), "No result found.")
 
     def test_regression_expressions_previously_failing(self):
-        """Test that expressions which previously failed the is_safe_expression check now work for plotting."""
-        # These expressions used to fail with "Unsafe characters or expressions detected"
+        """Test that expressions which previously failed the
+        is_safe_expression check now work for plotting."""
+        # These expressions used to fail with "Unsafe characters
+        # or expressions detected"
         # They should now generate valid plots
         import io
 
@@ -160,7 +166,10 @@ class MathCogTests(unittest.TestCase):
             "f(x)=x**2",  # function notation
             "(x^2 + y^2 - 1)^3 - x^2*y^3 = 0",  # heart curve (with ^)
             # parametric heart
-            "x = 16*sin(t)^3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)",
+            (
+                "x = 16*sin(t)^3, "
+                "y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)"
+            ),
         ]:
             with self.subTest(expr=expr):
                 buf = generate_plot(expr)
@@ -169,7 +178,8 @@ class MathCogTests(unittest.TestCase):
                 self.assertTrue(png_data.startswith(b"\x89PNG\r\n\x1a\n"))
 
     def test_solve_locally_still_secure(self):
-        """Ensure solve_locally still rejects dangerous expressions (security regression test)."""
+        """Ensure solve_locally still rejects dangerous expressions
+        (security regression test)."""
         dangerous = [
             "__import__('os').system('whoami')",
             "eval('2+2')",

@@ -532,14 +532,18 @@ class TestCanonDefaultCreation(unittest.TestCase):
             snapshots = await get_snapshots(new_persona, limit=1)
             self.assertEqual(len(snapshots), 1)
             self.assertEqual(
-                snapshots[0].description, "Initial canon creation"
+                snapshots[0].description,
+                "Initial canon creation",
             )
 
         asyncio.run(test())
 
 
 class TestCanonValidation(unittest.TestCase):
-    """Test canon component validation (Canonical Truth Invariant enforcement)."""
+    """Test canon component validation.
+
+    Canonical Truth Invariant enforcement.
+    """
 
     def test_validate_canon_component_behavioral_rules_require_explanation(
         self,
@@ -572,7 +576,8 @@ class TestCanonValidation(unittest.TestCase):
             validate_canon_component(invalid_rule)
 
     def test_validate_warns_for_suspicious_content(self):
-        """Test validation warns for content that may violate Canonical Truth Invariant."""
+        """Test validation warns for content that may violate
+        Canonical Truth Invariant."""
         suspicious = CanonComponent(
             component_id="suspicious",
             persona_id=TEST_PERSONA_ID,

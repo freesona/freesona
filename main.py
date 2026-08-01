@@ -39,6 +39,24 @@ logger = logging.getLogger(__name__)
 bot_token = os.getenv("BOT_TOKEN")
 channel_id_str = os.getenv("CHANNEL_ID")
 
+# Legacy persona notice message (sent via DM to bot owner)
+LEGACY_PERSONA_NOTICE = (
+    "⚠️ **{bot_name} detected a legacy `persona.txt` file.**\n\n"
+    "The persona system now uses a structured `persona.json` "
+    "format. "
+    "Your existing persona is still active, but to use the new "
+    "structured editor, "
+    "you'll need to migrate your content into the new fields.\n\n"
+    "Use `/setpersona core` and `/setpersona style` to set up "
+    "the "
+    "new format. "
+    "Once saved, `persona.json` will take over and "
+    "`persona.txt` "
+    "can be removed.\n\n"
+    "You can also run `/debugpersona` to confirm your current "
+    "state."
+)
+
 if not bot_token or not channel_id_str:
     raise ValueError(
         "Missing BOT_TOKEN or CHANNEL_ID in environment variables"
@@ -109,22 +127,14 @@ class Freesona(commands.Bot):
         await super().close()
 
     async def notify_owner_legacy(self, bot_name: str):
-        """DM the bot owner about legacy persona.txt — called from genai cog."""
+        """DM the bot owner about legacy persona.txt."""
         if self._legacy_notice_sent:
             return
         self._legacy_notice_sent = True
         try:
             info = await self.application_info()
             owner = info.owner
-            await owner.send(
-                f"⚠️ **{bot_name} detected a legacy `persona.txt` file.**\n\n"
-                f"The persona system now uses a structured `persona.json` format. "
-                f"Your existing persona is still active, but to use the new structured editor, "
-                f"you'll need to migrate your content into the new fields.\n\n"
-                f"Use `/setpersona core` and `/setpersona style` to set up the new format. "
-                f"Once saved, `persona.json` will take over and `persona.txt` can be removed.\n\n"
-                f"You can also run `/debugpersona` to confirm your current state."
-            )
+            await owner.send(LEGACY_PERSONA_NOTICE.format(bot_name=bot_name))
         except (discord.HTTPException, discord.Forbidden, AttributeError) as e:
             logger.warning(
                 f"Could not DM owner for legacy persona notice: {e}"
@@ -212,19 +222,20 @@ async def on_command_error(ctx, error):
         cmd = ctx.command
         prefix = ctx.prefix
         embed = discord.Embed(
-            title=f"Help: `{prefix} {cmd.name} `"
-            + (
-                f" (alias: `{prefix} {ctx.invoked_with} `) "
-                if ctx.invoked_with != cmd.name
-                else ""
-            ),
+            title=f"Help: `{prefix} {cmd.name} `" + (
+                    f" (alias: `{prefix} {ctx.invoked_with} `) "
+                    if ctx.invoked_with != cmd.name
+                    else ""
+                ),
             description=cmd.help or "No description provided.",
             color=discord.Color.green(),
         )
         if cmd.usage:
-            embed.add_field(name="Usage", value=f"`{prefix}{
-                cmd.name} {
-                cmd.usage}`", inline=False)
+            embed.add_field(
+                name="Usage",
+                value=f"`{prefix}{cmd.name} {cmd.usage}`",
+                inline=False,
+            )
         if cmd.aliases:
             embed.add_field(
                 name="Aliases",
@@ -244,9 +255,11 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_app_command_error(
-    interaction: discord.Interaction, error: app_commands.AppCommandError
+    interaction: discord.Interaction,
+    error: app_commands.AppCommandError,
 ):
-    """Handle slash command errors safely without type or attribute exceptions."""
+    """Handle slash command errors safely without
+        type or attribute exceptions."""
     raw_error = (
         error.original
         if isinstance(error, app_commands.CommandInvokeError)
@@ -271,8 +284,10 @@ async def on_app_command_error(
     ):
         await send_app_error(interaction, f"Invalid argument: {raw_error}")
     else:
-        logger.error(f"Unhandled slash command error: {
-            type(raw_error).__name__}: {raw_error}")
+        logger.error(
+            "Unhandled slash command error: "
+            f"{type(raw_error).__name__}: {raw_error}"
+        )
         await send_app_error(
             interaction, "An unexpected error occurred. Please try again."
         )

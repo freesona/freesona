@@ -1,5 +1,7 @@
 # Multi-Guild Identity Architecture Alignment Report
 
+This document follows ASD-STE100 Simplified Technical English.
+
 **Status**: Alignment Review  
 **Date**: 2026-07-18  
 **Related**: ADR-0003 (Context Semantics), architecture.md, architecture-review-v2.md

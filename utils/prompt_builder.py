@@ -1,4 +1,4 @@
-# utils/prompt_builder.py: Explicit, inspectable prompt assembly via independent context providers.
+# utils/prompt_builder.py: Explicit prompt assembly via independent context providers.
 # Architecture per AGENTS.md Step 1 — PromptBuilder with independent
 # context providers.
 

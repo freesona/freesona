@@ -236,7 +236,10 @@ class MVSepCog(commands.Cog):
                 queue_pos = payload.get("data", {}).get("current_order")
                 if queue_pos not in (None, ""):
                     logger.info(
-                        f"MVSEP job {job_hash} — status: {status}, queue position: {queue_pos}")
+                        "MVSEP job "
+                        f"{job_hash} — status: {status}, "
+                        f"queue position: {queue_pos}"
+                    )
 
                 if status_msg is not None:
                     status_text = mvsep_status_text(
@@ -285,7 +288,10 @@ class MVSepCog(commands.Cog):
                     queue_pos = payload.get("data", {}).get("current_order")
                     if queue_pos not in (None, ""):
                         logger.info(
-                            f"MVSEP job {job_hash} — status: {status}, queue position: {queue_pos}")
+                            "MVSEP job "
+                            f"{job_hash} — status: {status}, "
+                            f"queue position: {queue_pos}"
+                        )
 
                     if status_msg is not None:
                         status_text = mvsep_status_text(
@@ -315,7 +321,9 @@ class MVSepCog(commands.Cog):
             raise RuntimeError("Job hash not found — it may have expired.")
 
     # ------------------------------------------------------------------
-    # Input resolver: attachment > direct URL > yt-dlp: I'm starting to think that this dosen't support direct URLs. May fix this later.
+    # Input resolver: attachment > direct URL > yt-dlp:
+    # I'm starting to think that this dosen't support direct URLs.
+    # May fix this later.
     # ------------------------------------------------------------------
 
     async def _resolve_input(
@@ -392,7 +400,10 @@ class MVSepCog(commands.Cog):
         aliases=[
             "sep",
             "stems"],
-        help="Separate vocals and instrumental from audio. Attach a file or pass a URL.",
+        help=(
+            "Separate vocals and instrumental from audio. "
+            "Attach a file or pass a URL."
+        ),
     )
     @commands.cooldown(1, 60, commands.BucketType.guild)
     async def separate(
@@ -412,7 +423,8 @@ class MVSepCog(commands.Cog):
         if self._busy:
             await ctx.send(
                 "⏳ A separation job is already running. "
-                "Free tier only allows one at a time — try again when it finishes.",
+                "Free tier only allows one at a time — "
+                "try again when it finishes.",
                 ephemeral=bool(ctx.interaction),
             )
             return
@@ -460,19 +472,29 @@ class MVSepCog(commands.Cog):
                             "message", "Unknown error."
                         )
                         await status_msg.edit(
-                            content=f"❌ MVSEP rejected the job: {msg}"
+                            content=(
+                                "❌ MVSEP rejected the job: "
+                                f"{msg}"
+                            )
                         )
                         return
 
                     job_hash = result["data"]["hash"]
                     if MVSEP_WEBHOOK_URL:
                         await status_msg.edit(
-                            content=f"✅ Job submitted. Waiting for MVSEP webhook... (`{job_hash}`)"
+                            content=(
+                                "✅ Job submitted. Waiting for "
+                                "MVSEP webhook... "
+                                f"(`{job_hash}`)"
+                            )
                         )
                     else:
                         poll_interval = _get_poll_interval()
                         await status_msg.edit(
-                            content=f"✅ Job submitted. Polling every {poll_interval}s... (`{job_hash}`)"
+                            content=(
+                                "✅ Job submitted. Polling every "
+                                f"{poll_interval}s... (`{job_hash}`)"
+                            )
                         )
 
                     done = None
@@ -488,11 +510,16 @@ class MVSepCog(commands.Cog):
                             else:
                                 status = webhook_payload.get("status")
                                 logger.warning(
-                                    f"MVSEP webhook returned non-terminal status: {status}")
+                                    "MVSEP webhook returned non-terminal "
+                                    f"status: {status}"
+                                )
                         except asyncio.TimeoutError:
                             poll_interval = _get_poll_interval()
                             await status_msg.edit(
-                                content=f"⚠️ Webhook timed out. Polling every {poll_interval}s... (`{job_hash}`)"
+                                content=(
+                                    "⚠️ Webhook timed out. Polling every "
+                                    f"{poll_interval}s... (`{job_hash}`)"
+                                )
                             )
                         except RuntimeError as e:
                             await status_msg.edit(content=f"❌ {e}")

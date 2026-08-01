@@ -129,7 +129,8 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(entries_after, [])
 
     def test_add_knowledge_rejects_missing_metadata(self):
-        """Test that add_knowledge rejects entries with missing required metadata fields."""
+        """Test that add_knowledge rejects entries with missing
+        required metadata fields."""
         fake_collection = FakeCollection()
 
         # Missing required fields
@@ -295,28 +296,41 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             zf.writestr("mimetype", "application/epub+zip")
             zf.writestr(
                 "META-INF/container.xml",
-                """<?xml version="1.0" encoding="UTF-8"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>""",
+                (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<container version="1.0" '
+                    'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                    "  <rootfiles>"
+                    '    <rootfile full-path="OEBPS/content.opf" '
+                    'media-type="application/oebps-package+xml"/>'
+                    "  </rootfiles>"
+                    "</container>"
+                ),
             )
             zf.writestr(
                 "OEBPS/content.opf",
-                """<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="https://www.idpf.org/2007/opf" xmlns:dc="https://purl.org/dc/elements/1.1/" version="3.0">
-  <metadata><dc:title>Example</dc:title></metadata>
-  <manifest>
-    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="chapter1"/></spine>
-</package>""",
+                (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<package xmlns="https://www.idpf.org/2007/opf" '
+                    'xmlns:dc="https://purl.org/dc/elements/1.1/" '
+                    'version="3.0">'
+                    "  <metadata><dc:title>Example</dc:title></metadata>"
+                    "  <manifest>"
+                    '    <item id="chapter1" href="chapter1.xhtml" '
+                    'media-type="application/xhtml+xml"/>'
+                    "  </manifest>"
+                    "  <spine><itemref idref=\"chapter1\"/></spine>"
+                    "</package>"
+                ),
             )
             zf.writestr(
                 "OEBPS/chapter1.xhtml",
-                """<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Chapter One</h1><p>Alpha content for test.</p></body></html>""",
+                (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<html xmlns="http://www.w3.org/1999/xhtml">'
+                    "<body><h1>Chapter One</h1>"
+                    "<p>Alpha content for test.</p></body></html>"
+                ),
             )
 
         text = chroma.extract_text_from_bytes(
@@ -326,7 +340,10 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         self.assertIn("Alpha content for test.", text)
 
     def test_add_knowledge_accepts_optional_fields(self):
-        """Test that add_knowledge accepts optional metadata fields (chapter, timestamp, canon_level, tags)."""
+        """Test that add_knowledge accepts optional metadata fields.
+
+        (chapter, timestamp, canon_level, tags)
+        """
         fake_collection = FakeCollection()
 
         metadata_with_optionals = {
@@ -483,14 +500,17 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         # First chunk has speaker -> entry_type should be dialogue
         self.assertEqual(results[0]["metadata"]["entry_type"], "dialogue")
         self.assertEqual(results[0]["metadata"]["speaker"], "Chisato")
-        # Second chunk has no speaker (Narrator) -> entry_type should be
-        # narration
+        # Second chunk has no speaker (Narrator) ->
+        # entry_type should be narration
         self.assertEqual(results[1]["metadata"]["entry_type"], "narration")
         self.assertNotIn("speaker", results[1]["metadata"])
 
     def test_ingest_source_full_pipeline(self):
         """Test the full ingest_source pipeline."""
-        raw_text = "Chisato: I'll protect everyone!\nTakina: I'll help too.\n\nThe aquarium shimmered with light."
+        raw_text = (
+            "Chisato: I'll protect everyone!\nTakina: I'll help too.\n\n"
+            "The aquarium shimmered with light."
+        )
 
         base_metadata = {
             "persona": "chisato_nishikigi",

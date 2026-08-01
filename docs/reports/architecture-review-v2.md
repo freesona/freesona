@@ -1,5 +1,7 @@
 # Architectural Review Report — Post ConversationManager Implementation
 
+This document follows ASD-STE100 Simplified Technical English.
+
 **Date**: 2026-07-17  
 **Status**: Post-Step 1 (PromptBuilder) + Step 2 (ConversationManager) Implementation  
 **Baseline**: `docs/reports/architecture-audit-v1.md`

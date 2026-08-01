@@ -21,11 +21,18 @@ class GenAIMemoryCog(commands.Cog):
     @commands.hybrid_command(
         name="clearmemory",
         aliases=["smcl"],
-        help="Clear conversation memory for this channel (Admin only). Optionally clear long-term facts.",
+        help=(
+            "Clear conversation memory for this channel "
+            "(Admin only). Optionally clear long-term facts."
+        ),
     )
     @commands.has_permissions(administrator=True)
     @app_commands.describe(
-        clear_facts="Also clear long-term memory facts for all users in this channel (default: False).")
+        clear_facts=(
+            "Also clear long-term memory facts for all users "
+            "in this channel (default: False)."
+        ),
+    )
     async def clear_memory(
         self, ctx: commands.Context, clear_facts: bool = False
     ):
@@ -41,7 +48,8 @@ class GenAIMemoryCog(commands.Cog):
             # Clear long-term facts for all users in this guild
             await clear_user_facts(guild.id)
             await ctx.send(
-                "Conversation memory and long-term facts cleared for this channel."
+                "Conversation memory and long-term facts "
+                "cleared for this channel."
             )
         else:
             await ctx.send("Conversation memory cleared for this channel.")
@@ -84,7 +92,11 @@ class GenAIMemoryCog(commands.Cog):
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
-                "SELECT content, importance FROM user_facts WHERE guild_id = ? AND user_id = ? ORDER BY importance DESC",
+                (
+                    "SELECT content, importance FROM user_facts "
+                    "WHERE guild_id = ? AND user_id = ? "
+                    "ORDER BY importance DESC"
+                ),
                 (str(guild.id), str(target_user.id)),
             ) as cursor:
                 rows = await cursor.fetchall()
@@ -112,7 +124,10 @@ class GenAIMemoryCog(commands.Cog):
     @commands.hybrid_command(
         name="memoryclear",
         aliases=["memcl"],
-        help="Clear long-term facts. Users can clear their own; Admins can clear anyone.",
+        help=(
+            "Clear long-term facts. Users can clear their own; "
+            "Admins can clear anyone."
+        ),
     )
     @app_commands.describe(
         user="The user whose memory to clear (defaults to you)."
@@ -143,7 +158,10 @@ class GenAIMemoryCog(commands.Cog):
 
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             async with db.execute(
-                "SELECT COUNT(*) FROM user_facts WHERE guild_id = ? AND user_id = ?",
+                (
+                    "SELECT COUNT(*) FROM user_facts "
+                    "WHERE guild_id = ? AND user_id = ?"
+                ),
                 (str(guild.id), str(target_user.id)),
             ) as cursor:
                 row = await cursor.fetchone()
@@ -151,14 +169,19 @@ class GenAIMemoryCog(commands.Cog):
 
             if count > 0:
                 await db.execute(
-                    "DELETE FROM user_facts WHERE guild_id = ? AND user_id = ?",
+                    (
+                        "DELETE FROM user_facts "
+                        "WHERE guild_id = ? AND user_id = ?"
+                    ),
                     (str(guild.id), str(target_user.id)),
                 )
                 await db.commit()
                 msg = (
-                    f"✅ I have forgotten {count} facts about you in this server."
+                    "✅ I have forgotten "
+                    f"{count} facts about you in this server."
                     if target_user.id == ctx.author.id
-                    else f"✅ Cleared {count} facts for {target_user.mention}."
+                    else "✅ Cleared "
+                    f"{count} facts for {target_user.mention}."
                 )
                 await ctx.send(msg, ephemeral=True)
                 return
@@ -175,7 +198,9 @@ class GenAIMemoryCog(commands.Cog):
     @commands.hybrid_command(
         name="memorydelete",
         aliases=["memdel"],
-        help="Delete a specific memory fact by its list number.",
+        help=(
+            "Delete a specific memory fact by its list number."
+        ),
     )
     @app_commands.describe(
         index="The list number of the fact to delete.",
@@ -210,14 +235,21 @@ class GenAIMemoryCog(commands.Cog):
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
-                "SELECT message_id, content FROM user_facts WHERE guild_id = ? AND user_id = ? ORDER BY importance DESC",
+                (
+                    "SELECT message_id, content FROM user_facts "
+                    "WHERE guild_id = ? AND user_id = ? "
+                    "ORDER BY importance DESC"
+                ),
                 (str(guild.id), str(target_user.id)),
             ) as cursor:
                 rows = list(await cursor.fetchall())
 
             if not rows or index < 1 or index > len(rows):
                 await ctx.send(
-                    f"Invalid number. Use `/memorylist` to see the {len(rows)} stored facts.",
+                    (
+                        "Invalid number. Use `/memorylist` to see the "
+                        f"{len(rows)} stored facts."
+                    ),
                     ephemeral=True,
                 )
                 return
@@ -230,7 +262,11 @@ class GenAIMemoryCog(commands.Cog):
             await db.commit()
 
         await ctx.send(
-            f"✅ Deleted fact #{index} for {target_user.display_name}: *{target_fact['content'][:50]}...*",
+            (
+                f"✅ Deleted fact #{index} for "
+                f"{target_user.display_name}: "
+                f"*{target_fact['content'][:50]}...*"
+            ),
             ephemeral=True,
         )
 
@@ -238,7 +274,8 @@ class GenAIMemoryCog(commands.Cog):
     # /migrate
     # -------------------------------------------------------------------
     @commands.hybrid_command(
-        name="migrate", help="Migrate JSON memory to SQLite (Admin only)."
+        name="migrate",
+        help="Migrate JSON memory to SQLite (Admin only).",
     )
     @commands.has_permissions(administrator=True)
     async def migrate_memory(self, ctx: commands.Context):

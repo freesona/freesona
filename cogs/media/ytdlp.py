@@ -38,23 +38,27 @@ def _normalize_url(url: str) -> str:
 
 def _clear_dir(directory: str) -> None:
     """Remove all files in a directory, ignoring errors."""
-    for name in os.listdir(directory):
+    directory_path = Path(directory)
+    for entry in directory_path.iterdir():
         try:
-            os.remove(os.path.join(directory, name))
+            entry.unlink()
         except OSError:
             pass
 
 
 def _find_file(directory: str, ext: str) -> str | None:
-    """Return the first file with the given extension in a directory, or None."""
-    for name in os.listdir(directory):
-        if name.endswith(f".{ext}"):
-            return os.path.join(directory, name)
+    """Return the first file with the given extension
+    in a directory, or None."""
+    directory_path = Path(directory)
+    for entry in directory_path.iterdir():
+        if entry.suffix == f".{ext}":
+            return str(entry)
     return None
 
 
 async def _run(*cmd: str, timeout: int | None = None) -> int:
-    """Run a subprocess and return its exit code. Raises TimeoutError on timeout."""
+    """Run a subprocess and return its exit code.
+    Raises TimeoutError on timeout."""
     if timeout is None:
         timeout = _get_subprocess_timeout()
     proc = await asyncio.create_subprocess_exec(*cmd)
@@ -69,10 +73,9 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
     return return_code
 
 
-async def _run_capture(
-    *cmd: str, timeout: int | None = None
-) -> tuple[int, str]:
-    """Run a subprocess, capture stdout, and return (exit_code, stdout_text)."""
+async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]:
+    """Run a subprocess, capture stdout, and return
+    (exit_code, stdout_text)."""
     if timeout is None:
         timeout = _get_subprocess_timeout()
     proc = await asyncio.create_subprocess_exec(
@@ -102,7 +105,8 @@ class YtDlp(commands.Cog):
     #
     # 2. Railway / secrets volume (/etc/secrets mount):
     #    Set COOKIES_INSTAGRAM=/etc/secrets/instagram.txt
-    #    Then place the Netscape-format cookies file at that path in your volume.
+    #    Then place the Netscape-format cookies file
+    #    at that path in your volume.
     #
     # Variable naming: COOKIES_<PLATFORM> (uppercase), e.g.:
     #   COOKIES_INSTAGRAM=/etc/secrets/instagram.txt
@@ -136,9 +140,7 @@ class YtDlp(commands.Cog):
             if platform not in hostname:
                 continue
             if not os.path.isfile(path):
-                log.warning(
-                    "Cookies file for %s not found at %s", platform, path
-                )
+                log.warning("Cookies file for %s not found at %s", platform, path)
                 continue
             log.debug("Using cookies file %s for %s", path, url)
             return ["--cookies", path]
@@ -151,7 +153,8 @@ class YtDlp(commands.Cog):
 
     @staticmethod
     async def _get_duration(path: str) -> float | None:
-        """Return the duration of a media file in seconds, or None on failure."""
+        """Return the duration of a media file in seconds,
+        or None on failure."""
         _, output = await _run_capture(
             "ffprobe",
             "-v",
@@ -187,9 +190,10 @@ class YtDlp(commands.Cog):
 
     async def _compress_video(self, input_path: str) -> str | None:
         """
-        Re-encode the video to fit within the configured target size using FFmpeg.
-        Returns the path to the compressed file, or None if compression fails
-        or the resulting bitrate would be unwatchably low.
+        Re-encode the video to fit within the configured target
+        size using FFmpeg. Returns the path to the compressed file,
+        or None if compression fails or the resulting bitrate
+        would be unwatchably low.
         """
         duration = await self._get_duration(input_path)
         if duration is None:
@@ -197,9 +201,7 @@ class YtDlp(commands.Cog):
 
         compress_target_mb = _get_compress_target_mb()
         target_bits = compress_target_mb * 8 * 1024 * 1024
-        video_bitrate = (
-            int(target_bits / duration) - 128_000
-        )  # reserve 128k for audio
+        video_bitrate = int(target_bits / duration) - 128_000  # reserve 128k for audio
 
         if video_bitrate < 100_000:
             log.warning(
@@ -232,9 +234,7 @@ class YtDlp(commands.Cog):
         )
 
         if code != 0 or not os.path.exists(output_path):
-            log.error(
-                "FFmpeg compression failed for %s (exit %d)", input_path, code
-            )
+            log.error("FFmpeg compression failed for %s (exit %d)", input_path, code)
             return None
 
         # Remove the uncompressed source to save temp-dir space
@@ -264,9 +264,7 @@ class YtDlp(commands.Cog):
             url,
         )
         if code != 0:
-            log.error(
-                "yt-dlp audio download failed (exit %d) for %s", code, url
-            )
+            log.error("yt-dlp audio download failed (exit %d) for %s", code, url)
             return None
 
         path = _find_file(tmp_dir, "mp3")
@@ -283,9 +281,7 @@ class YtDlp(commands.Cog):
         for height in _VIDEO_RESOLUTIONS:
             _clear_dir(tmp_dir)
 
-            output_template = str(
-                Path(tmp_dir, "%(uploader)s – %(title)s.mp4")
-            )
+            output_template = str(Path(tmp_dir, "%(uploader)s – %(title)s.mp4"))
             code = await _run(
                 "yt-dlp",
                 *self._cookies_for(url),
@@ -330,9 +326,7 @@ class YtDlp(commands.Cog):
                 return path
 
             if height == _VIDEO_RESOLUTIONS[-1]:
-                log.info(
-                    "File too large at lowest resolution; attempting compression."
-                )
+                log.info("File too large at lowest resolution; attempting compression.")
                 return await self._compress_video(path)
 
         return None
@@ -344,7 +338,8 @@ class YtDlp(commands.Cog):
         is_audio: bool = True,
         tmp_dir: str | None = None,
     ) -> str | None:
-        """Download media into the provided temp directory and return the local file path."""
+        """Download media into the provided temp directory
+        and return the local file path."""
         _ = ctx
         url = _normalize_url(url)
         if not is_public_http_url(url):
@@ -408,7 +403,9 @@ class YtDlp(commands.Cog):
 
                 elapsed = time.perf_counter() - start
                 await ctx.send(
-                    content=f"✅ **{kind} Downloaded** • {elapsed:.2f}s • {size_mb:.1f} MB",
+                    content=(
+                        f"✅ **{kind} Downloaded** • {elapsed:.2f}s • {size_mb:.1f} MB"
+                    ),
                     file=discord.File(local_path),
                 )
 
@@ -442,7 +439,7 @@ class YtDlp(commands.Cog):
     async def _dl_error(self, ctx: commands.Context, error: Exception) -> None:
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.send(
-                f"⏳ Wait **{error.retry_after:.1f}s** before downloading again.",
+                (f"⏳ Wait **{error.retry_after:.1f}s** before downloading again."),
                 ephemeral=True,
                 delete_after=10,
             )

@@ -33,7 +33,10 @@ class CoreCog(commands.Cog):
 
     @commands.hybrid_command(
         name="reboot",
-        help="Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart.",
+        help=(
+            "Gracefully shutdown the bot for restart "
+            "(Owner only). Requires process manager to restart."
+        ),
     )
     @commands.is_owner()
     async def reboot_cmd(self, ctx: commands.Context):

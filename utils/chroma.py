@@ -1,5 +1,6 @@
-# utils/chroma.py: ChromaDB utility functions for managing and querying a ChromaDB collection.
-# Implements the Persona-Agnostic Knowledge Base (RAG) architecture.
+# utils/chroma.py: ChromaDB utility functions for managing and
+# querying a ChromaDB collection. Implements the Persona-Agnostic
+# Knowledge Base (RAG) architecture.
 from dotenv import load_dotenv
 import io
 import json
@@ -135,7 +136,8 @@ def parse_discord_chat_json(raw_bytes: bytes) -> str:
 
 
 def extract_text_from_bytes(filename: str, data: bytes) -> str:
-    """Extracts plain text from various file formats (JSON, PDF, EPUB, TXT, MD)."""
+    """Extracts plain text from various file formats (JSON,
+    PDF, EPUB, TXT, MD)."""
     lower_name = (filename or "").lower()
 
     if lower_name.endswith(".json"):
@@ -148,7 +150,8 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
             from pypdf import PdfReader
         except ImportError:
             logger.warning(
-                "pypdf is not installed; falling back to raw bytes decode for PDF input."
+                "pypdf is not installed; falling back to raw "
+                "bytes decode for PDF input."
             )
             return data.decode("utf-8", errors="ignore").strip()
 
@@ -254,7 +257,8 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
 
 
 def _validate_metadata(metadata: dict[str, Any] | None) -> tuple[bool, str]:
-    """Validates that required metadata fields are present and correctly formatted."""
+    """Validates that required metadata fields are present and
+    correctly formatted."""
     if metadata is None:
         return False, "Metadata is required but was not provided."
 
@@ -423,11 +427,13 @@ def chunk_semantic_units(
     Args:
         text: The source text to chunk.
         max_chunk_size: Maximum characters per chunk.
-        min_chunk_size: Minimum characters per chunk (smaller chunks are merged).
+        min_chunk_size: Minimum characters per chunk
+        (smaller chunks are merged).
         speaker_data: Optional pre-identified speaker dialogue data.
 
     Returns:
-        List of chunks with metadata: document, speaker (if dialogue), estimated_tokens.
+        List of chunks with metadata: document, speaker (if dialogue),
+        estimated_tokens.
     """
     if speaker_data:
         # Use pre-identified speaker data for dialogue-based chunking
@@ -531,10 +537,12 @@ def assign_metadata(
 
     Args:
         chunks: List of chunk dicts from chunk_semantic_units.
-        base_metadata: Base metadata to apply to all chunks (persona, source, etc.)
+        base_metadata: Base metadata to apply to all chunks
+        (persona, source, etc.)
 
     Returns:
-        List of dicts with document and complete metadata ready for embedding.
+        List of dicts with document and complete metadata
+        ready for embedding.
     """
     results = []
     for chunk in chunks:
@@ -567,12 +575,14 @@ def ingest_source(
     min_chunk_size: int = 100,
 ) -> list[dict[str, Any]]:
     """
-    Full ingestion pipeline: clean -> identify speakers -> chunk -> assign metadata.
+    Full ingestion pipeline: clean -> identify speakers ->
+    chunk -> assign metadata.
 
     Args:
         raw_text: Raw source text.
-        base_metadata: Required metadata (persona, source, source_type, entry_type, topics)
-                      plus optional fields (episode, chapter, scene, timestamp, canon_level, tags).
+        base_metadata: Required metadata (persona, source,
+        source_type, entry_type, topics) plus optional fields
+        (episode, chapter, scene, timestamp, canon_level, tags).
         max_chunk_size: Maximum characters per chunk.
         min_chunk_size: Minimum characters per chunk.
 
@@ -611,8 +621,10 @@ def add_knowledge(
     Requires metadata with the following fields:
     - persona: Persona identifier (required)
     - source: Original source (required)
-    - source_type: Anime, Novel, Manga, Game, Guidebook, Interview, Website, Other (required)
-    - entry_type: Dialogue, Narration, Event, Relationship, Description (required)
+    - source_type: Anime, Novel, Manga, Game, Guidebook,
+      Interview, Website, Other (required)
+    - entry_type: Dialogue, Narration, Event, Relationship,
+      Description (required)
     - topics: List of semantic topics (required, non-empty)
 
     Optional metadata fields:
@@ -735,7 +747,8 @@ def query_knowledge(
         persona: Optional persona identifier to filter results by.
 
     Returns:
-        List of knowledge entries with document, metadata, and distance.
+        List of knowledge entries with document, metadata,
+        and distance.
     """
     collection = get_collection(collection_name)
     if collection is None:

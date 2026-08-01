@@ -1,10 +1,13 @@
-# utils/guild_world.py: Guild World Context — Environmental grounding for the persona.
+# utils/guild_world.py: Guild World Context — Environmental
+# grounding for the persona.
 #
-# Provides lightweight environmental context (guild name, channel name, topic)
-# so the character knows "where" they are without storing it as memory.
+# Provides lightweight environmental context (guild name,
+# channel name, topic) so the character knows "where" they
+# are without storing it as memory.
 #
-# This is NOT memory — it's the current environment. Fetched fresh each request.
-# No persistence, no history, no cross-guild awareness.
+# This is NOT memory — it's the current environment. Fetched
+# fresh each request. No persistence, no history, no cross-
+# guild awareness.
 
 from __future__ import annotations
 
@@ -58,10 +61,12 @@ class GuildChannelInfo:
 
 class GuildWorldAccessor(Protocol):
     """
-    Protocol for fetching guild/channel metadata without coupling to Discord.py.
+    Protocol for fetching guild/channel metadata without
+    coupling to Discord.py.
 
-    Implementations should be provided by the caller (generation.py / cogs)
-    which has access to the bot and Discord objects.
+    Implementations should be provided by the caller
+    (generation.py / cogs) which has access to the bot
+    and Discord objects.
     """
 
     async def get_guild_name(self, guild_id: int) -> str | None:
@@ -86,8 +91,9 @@ class GuildWorldAccessor(Protocol):
         """
         Return a list of all channels in the guild with basic metadata.
 
-        Useful for KB 2.0 to understand server structure, tag knowledge to channels,
-        or let the persona reference other channels by name.
+        Useful for KB 2.0 to understand server structure, tag
+        knowledge to channels, or let the persona reference other
+        channels by name.
 
         Returns empty list if unavailable.
         """
@@ -96,7 +102,8 @@ class GuildWorldAccessor(Protocol):
 
 # Default no-op accessor (used when Discord context is unavailable)
 class NullGuildWorldAccessor:
-    """Null implementation that returns no data — safe default for testing/fallback."""
+    """Null implementation that returns no data —
+    safe default for testing/fallback."""
 
     async def get_guild_name(self, guild_id: int) -> str | None:
         _ = guild_id
@@ -208,7 +215,9 @@ async def build_guild_world_context(
 
     except (discord.DiscordException, RuntimeError, ValueError, OSError) as e:
         logger.warning(
-            f"GuildWorldContext fetch failed for guild={guild_id}, channel={channel_id}: {e}")
+            f"GuildWorldContext fetch failed for "
+            f"guild={guild_id}, channel={channel_id}: {e}"
+        )
         return ""
 
 

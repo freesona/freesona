@@ -1,4 +1,5 @@
-# utils/config_schema.py: Shared configuration schema definitions for config commands.
+# utils/config_schema.py: Shared configuration schema definitions
+# for config commands.
 # Moved from cogs/system/admin.py to be shared across config-related cogs.
 
 from utils.config import DEFAULT_CONFIG
@@ -59,24 +60,68 @@ CONFIG_CATEGORIES = {
 # Configuration descriptions for /config show command
 CONFIG_DESCRIPTIONS = {
     "prefix": "Command prefix for text commands (default: ~)",
-    "conversation_response_mode": "How bot responds in conversations: all, mention, reply, dm (default: all)",
-    "provider": "AI provider to use: gemini, openai, anthropic, openrouter, etc. (default: gemini)",
-    "provider_model": "Specific model name for the provider (default: provider default)",
-    "model_temperature": "Temperature for AI generation 0.0-2.0 (default: 0.7)",
-    "chroma_collection": "ChromaDB collection name for embeddings (default: freesona)",
-    "chroma_persist_directory": "ChromaDB persistence directory (default: ./.chroma)",
+    "conversation_response_mode": (
+        "How bot responds in conversations: all, mention, "
+        "reply, dm (default: all)"
+    ),
+    "provider": (
+        "AI provider to use: gemini, openai, anthropic, "
+        "openrouter, etc. (default: gemini)"
+    ),
+    "provider_model": (
+        "Specific model name for the provider "
+        "(default: provider default)"
+    ),
+    "model_temperature": (
+        "Temperature for AI generation 0.0-2.0 "
+        "(default: 0.7)"
+    ),
+    "chroma_collection": (
+        "ChromaDB collection name for embeddings "
+        "(default: freesona)"
+    ),
+    "chroma_persist_directory": (
+        "ChromaDB persistence directory (default: ./.chroma)"
+    ),
     "debounce_seconds": "Message debounce time in seconds (default: 1.2)",
-    "autonomy_cooldown_seconds": "Cooldown between autonomous actions in seconds (default: 120)",
-    "autonomy_user_cooldown": "Cooldown per user for autonomous actions in seconds (default: 60)",
+    "autonomy_cooldown_seconds": (
+        "Cooldown between autonomous actions in seconds "
+        "(default: 120)"
+    ),
+    "autonomy_user_cooldown": (
+        "Cooldown per user for autonomous actions in seconds "
+        "(default: 60)"
+    ),
     "mvsep_poll_interval": "MVSEP API poll interval in seconds (default: 10)",
     "mvsep_poll_timeout": "MVSEP API poll timeout in seconds (default: 600)",
-    "ytdlp_subprocess_timeout": "YT-DLP subprocess timeout in seconds (default: 300)",
-    "ytdlp_compress_target_mb": "YT-DLP compression target size in MB (default: 9.5)",
-    "generation_split_min_length": "Minimum message length to trigger splitting (default: 280)",
-    "generation_split_delay_base": "Base delay between split messages in seconds (default: 1.2)",
-    "generation_split_delay_per_char": "Additional delay per character for split messages (default: 0.012)",
-    "generation_split_delay_max": "Maximum delay between split messages in seconds (default: 3.5)",
-    "generation_rate_limit": "Max messages per minute for generation (default: 5)",
+    "ytdlp_subprocess_timeout": (
+        "YT-DLP subprocess timeout in seconds "
+        "(default: 300)"
+    ),
+    "ytdlp_compress_target_mb": (
+        "YT-DLP compression target size in MB "
+        "(default: 9.5)"
+    ),
+    "generation_split_min_length": (
+        "Minimum message length to trigger splitting "
+        "(default: 280)"
+    ),
+    "generation_split_delay_base": (
+        "Base delay between split messages in seconds "
+        "(default: 1.2)"
+    ),
+    "generation_split_delay_per_char": (
+        "Additional delay per character for split messages "
+        "(default: 0.012)"
+    ),
+    "generation_split_delay_max": (
+        "Maximum delay between split messages in seconds "
+        "(default: 3.5)"
+    ),
+    "generation_rate_limit": (
+            "Max messages per minute for generation "
+            "(default: 5)"
+        ),
     "log_enabled": "Enable logging system (default: false)",
     "log_channel_id": "Discord channel ID for log output (default: 0)",
     "log_level": "Log level: DEBUG, INFO, WARNING, ERROR (default: INFO)",
@@ -239,7 +284,8 @@ def get_config_default(key: str):
 
 
 def is_valid_config_key(key: str) -> bool:
-    """Check if a config key is valid (exists in DEFAULT_CONFIG or CONFIG_DESCRIPTIONS)."""
+    """Check if a config key is valid
+    (exists in DEFAULT_CONFIG or CONFIG_DESCRIPTIONS)."""
     return key in DEFAULT_CONFIG or key in CONFIG_DESCRIPTIONS
 
 

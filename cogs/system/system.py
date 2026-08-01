@@ -1,4 +1,5 @@
-# cogs/system/system.py: Aggregate system extension loader for split command-type cogs.
+# cogs/system/system.py: Aggregate system extension loader
+# for split command-type cogs.
 # Mirrors the pattern used in cogs/ai/genai.py
 
 from .config import ConfigCog

@@ -346,7 +346,8 @@ class TestCharacterMemoryDatabase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(count2, 0)
 
     async def test_scope_isolation(self):
-        """Test that memories are isolated by (guild_id, user_id, persona_id)."""
+        """Test that memories are isolated by
+        (guild_id, user_id, persona_id)."""
         from utils.character_memory import (
             CharacterMemory,
             MemoryType,
@@ -508,7 +509,8 @@ class TestBuildCharacterMemoryContext(unittest.IsolatedAsyncioTestCase):
             "[PROMISE] We promised to play chess. (importance: 0.9)", result
         )
         self.assertIn(
-            "[SHARED_EXPERIENCE] We defeated the boss together. (importance: 0.7)",
+            "[SHARED_EXPERIENCE] We defeated the boss together. "
+            "(importance: 0.7)",
             result,
         )
         self.assertIn(

@@ -25,11 +25,12 @@ MAX_FACTS_PER_USER = 20
 MIN_IMPORTANCE = 0.3
 
 FACT_EXTRACT_PROMPT = (
-    "You are a memory assistant. Given the following user message, determine if it reveals "
-    "any fact worth remembering about the user. "
+    "You are a memory assistant. Given the following user message, "
+    "determine if it reveals any fact worth remembering about the user. "
     "Respond with a JSON object: "
     '{"content": "<one concise fact>", "importance": <float 0.0-1.0>} '
-    "or exactly: null")
+    "or exactly: null"
+)
 
 
 async def init_db():
@@ -47,7 +48,8 @@ async def init_db():
             )
         """)
         await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_user_guild ON user_facts (user_id, guild_id)"
+            "CREATE INDEX IF NOT EXISTS idx_user_guild "
+            "ON user_facts (user_id, guild_id)"
         )
         await db.commit()
 
@@ -66,14 +68,16 @@ async def get_user_facts_prompt(
 
             if not rows:
                 return (
-                    f"\n[Known facts about {display_name or f'Discord user {user_id}'}]\n"
-                    "None. You have no record of any past interactions with this user."
+                    "\n[Known facts about "
+                    f"{display_name or f'Discord user {user_id}'}]\n"
+                    "None. You have no record of any past "
+                    "interactions with this user."
                 )
 
             lines = [f"- {row['content']}" for row in rows]
             return (
-                f"\n[Known facts about {
-                    display_name or f'Discord user {user_id}'}]\n"
+                "\n[Known facts about "
+                f"{display_name or f'Discord user {user_id}'}]\n"
                 + "\n".join(lines)
             )
 
@@ -85,7 +89,8 @@ async def inject_user_memory(
 
 
 async def clear_user_facts(guild_id: int, user_id: int | None = None) -> int:
-    """Clear long-term memory facts for a guild, optionally for a specific user.
+    """Clear long-term memory facts for a guild, optionally for a
+    specific user.
 
     Returns the number of facts deleted.
     """
@@ -170,7 +175,10 @@ async def extract_and_store_fact(
 
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             await db.execute(
-                "INSERT OR IGNORE INTO user_facts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "INSERT OR IGNORE INTO user_facts "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ),
                 (
                     str(guild_id),
                     str(user_id),
@@ -239,7 +247,10 @@ async def run_migration():
                         "timestamp", datetime.now(timezone.utc).isoformat()
                     )
                     await db.execute(
-                        "INSERT OR IGNORE INTO user_facts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            "INSERT OR IGNORE INTO user_facts "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                        ),
                         (
                             str(guild_id),
                             str(user_id),

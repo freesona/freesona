@@ -144,7 +144,10 @@ def save_profiles(profiles: dict):
 
 
 def _load_and_assemble_persona() -> tuple[str, bool, dict]:
-    """Load persona from JSON file or legacy file. Returns (assembled_persona, legacy_detected, persona_data)."""
+    """Load persona from JSON file or legacy file.
+
+    Returns (assembled_persona, legacy_detected, persona_data).
+    """
     if os.path.exists(AI_PERSONA_JSON_PATH):
         persona_data = load_persona_json()
         current_persona = assemble_persona(persona_data)
@@ -172,7 +175,10 @@ def init_persona():
 
 
 def reload_persona() -> tuple[str, bool]:
-    """Reload persona from JSON file. Returns (assembled_persona, legacy_detected)."""
+    """Reload persona from JSON file.
+
+    Returns (assembled_persona, legacy_detected).
+    """
     global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
     CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = (
         _load_and_assemble_persona()
@@ -194,7 +200,9 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
         style=discord.TextStyle.paragraph,
         required=False,
         max_length=1024,
-        placeholder="Describe the bot's personality, identity, and core traits.",
+        placeholder=(
+            "Describe the bot's personality, identity, and core traits."
+        ),
     )
     background = ui.TextInput(
         label="Background & History",
@@ -237,7 +245,8 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
         try:
             save_persona_json(PERSONA_DATA)
             await interaction.response.send_message(
-                "✅ Core & Background saved. Use `/setpersona style` for the remaining fields.",
+                "✅ Core & Background saved. Use `/setpersona style` "
+                "for the remaining fields.",
                 ephemeral=True,
             )
         except (OSError, TypeError, UnicodeEncodeError) as e:
@@ -359,13 +368,14 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
             return
         for field_name in PERSONA_FIELDS:
             if field_name == "temperature":
-                continue  # Temperature is not in this modal; keep existing value
+                continue  # Temperature edited in core modal
             PERSONA_DATA[field_name] = getattr(self, field_name).value.strip()
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
         try:
             save_persona_json(PERSONA_DATA)
             await interaction.response.send_message(
-                "Persona saved. (Temperature is edited in Core & Background modal)",
+                "Persona saved. (Temperature is edited in Core & "
+                "Background modal)",
                 ephemeral=True,
             )
         except (OSError, TypeError, UnicodeEncodeError) as e:

@@ -58,8 +58,10 @@ class HelpView(discord.ui.View):
 
             embed = discord.Embed(
                 title=f"{category} Commands",
-                description=f"Detailed help for {BOT_NAME}'s {
-                    category.lower()} features.",
+                description=(
+                    f"Detailed help for {BOT_NAME}'s "
+                    f"{category.lower()} features."
+                ),
                 color=discord.Color.blue(),
             )
 
@@ -79,13 +81,16 @@ class HelpView(discord.ui.View):
                 name="Commands", value=chunks[self.page_index], inline=False
             )
             if len(chunks) > 1:
-                embed.set_footer(text=f"Page {
-                    self.page_index + 1}/{
-                    len(chunks)} • Use {
-                    self.prefix}help <command> for specifics.")
+                embed.set_footer(
+                    text=(
+                        f"Page {self.page_index + 1}/{len(chunks)} "
+                        f"• Use {self.prefix}help <command> for specifics."
+                    )
+                )
             else:
-                embed.set_footer(text=f"Use {
-                    self.prefix}help <command> for specifics.")
+                embed.set_footer(
+                    text=f"Use {self.prefix}help <command> for specifics."
+                )
 
             self.prev_button.disabled = self.page_index == 0
             self.next_button.disabled = self.page_index >= len(chunks) - 1
@@ -223,7 +228,9 @@ class HelpCog(commands.Cog):
         name="help", help="Shows help information for commands."
     )
     @app_commands.describe(
-        command_name="The name of the command you want details for."
+        command_name=(
+            "The name of the command you want details for."
+        )
     )
     async def help_cmd(self, ctx, *, command_name: str | None = None):
         raw_prefix = self.bot.command_prefix
@@ -282,7 +289,8 @@ class HelpCog(commands.Cog):
                     cats["Media"].append(entry)
                 elif cmd.name == "rss":
                     cats["News"].append(
-                        "`/rss list`, `/rss latest`, `/rss add`, `/rss setchannel`..."
+                        "`/rss list`, `/rss latest`, `/rss add`, "
+                        "`/rss setchannel`..."
                     )
                 elif cmd.name in self.ai_commands:
                     cats["AI Persona"].append(entry)
@@ -297,12 +305,18 @@ class HelpCog(commands.Cog):
                 "`/botwhitelist` — Manage bot whitelist"
             )
             formatted_cats["News"] = (
-                "`/rss list` — List feeds\n`/rss latest <name>` — Fetch articles\n"
-                "`/rss add <name> <url>` — Add feed\n`/rss setchannel <#ch>` — Auto-post")
+                "`/rss list` — List feeds\n"
+                "`/rss latest <name>` — Fetch articles\n"
+                "`/rss add <name> <url>` — Add feed\n"
+                "`/rss setchannel <#ch>` — Auto-post"
+            )
 
             embed = discord.Embed(
                 title=f"{BOT_NAME} Help Menu",
-                description=f"Click the buttons below to see commands.\n\n**Current Prefix:** `{prefix}`",
+                description=(
+                    "Click the buttons below to see commands.\n\n"
+                    f"**Current Prefix:** `{prefix}`"
+                ),
                 color=discord.Color.blue(),
             )
             bot_user = self.bot.user
@@ -327,9 +341,14 @@ class HelpCog(commands.Cog):
                     color=discord.Color.green(),
                 )
                 if command.usage:
-                    embed.add_field(name="Usage", value=f"`{prefix}{
-                        command.name} {
-                        command.usage}`", inline=False)
+                    embed.add_field(
+                        name="Usage",
+                        value=(
+                            f"`{prefix}{command.name} "
+                            f"{command.usage}`"
+                        ),
+                        inline=False,
+                    )
                 if command.aliases:
                     embed.add_field(
                         name="Aliases",

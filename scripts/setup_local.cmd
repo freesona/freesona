@@ -6,29 +6,29 @@ cd /d "%ROOT_DIR%"
 
 REM ASCII Art Banner
 echo.
-echo                     IIIII                                                                                                                  
-echo                     II II                                                                                                                  
-echo                     II II                                                                                                                  
-echo                 III       III                                                                                                              
-echo                II  IIIIIII  II                                                                                                             
-echo               I  IIIIIIIIIII  II                                                                                                           
-echo              I  IIIIIIIIIIIII  I                                                                                                           
-echo              I  IIIIIIIIIIIII  I                                                                                                           
-echo           III   IIIIIIIIIIIII    II                                                                                                        
-echo         II   II  IIIIIIIIIII  II   II                                                                                                      
-echo       II  IIIIII   IIIIIII   IIIIII  II                                                                                                    
-echo      II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII                                                                                  
-echo     I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII                                                                                  
-echo    I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III                                                                                         
-echo   II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII    
-echo   I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III   
-echo  II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII  
-echo  II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII  
-echo  II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII 
-echo  II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III 
+echo                     IIIII
+echo                     II II
+echo                     II II
+echo                 III       III
+echo                II  IIIIIII  II
+echo               I  IIIIIIIIIII  II
+echo              I  IIIIIIIIIIIII  I
+echo              I  IIIIIIIIIIIII  I
+echo           III   IIIIIIIIIIIII    II
+echo         II   II  IIIIIIIIIII  II   II
+echo       II  IIIIII   IIIIIII   IIIIII  II
+echo      II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII
+echo     I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII
+echo    I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III
+echo   II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII
+echo   I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III
+echo  II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII
+echo  II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII
+echo  II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII
+echo  II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III
 echo.
 echo =====================================================
-echo   Freesona - Self-Hosted Discord AI Framework Setup  
+echo   Freesona - Self-Hosted Discord AI Framework Setup
 echo =====================================================
 echo.
 

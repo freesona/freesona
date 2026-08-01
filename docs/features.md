@@ -1,5 +1,7 @@
 # Features
 
+This document follows ASD-STE100 Simplified Technical English.
+
 ## PromptBuilder Architecture
 
 Freesona assembles prompts using a modular **PromptBuilder** system with independent **ContextProvider** components. Each provider contributes a single, well-defined context block without knowledge of the others. Provider ordering is declared in a single registry (`utils/prompt_builder.py`) and can be inspected at runtime via `inspect()`.

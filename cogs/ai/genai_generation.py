@@ -229,7 +229,8 @@ class GenAIGenerationCog(commands.Cog):
                         apply_persona=False,
                         instruction_prefix=(
                             "Write in natural, flowing paragraphs. "
-                            "Do not use bullet points or one-sentence sections. "
+                            "Do not use bullet points or one-sentence "
+                            "sections. "
                             "Use **Bold Text** only for key terms. "
                             "Do not use markdown headers (#)."
                         ),

@@ -47,7 +47,11 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
         # Store some facts directly
         async with aiosqlite.connect(self.temp_db_path) as db:
             await db.execute(
-                "INSERT INTO user_facts (guild_id, user_id, content, importance, timestamp, message_id, channel_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "INSERT INTO user_facts (guild_id, user_id, content, "
+                    "importance, timestamp, message_id, channel_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ),
                 (
                     str(guild_id),
                     str(user_id),
@@ -59,7 +63,11 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
                 ),
             )
             await db.execute(
-                "INSERT INTO user_facts (guild_id, user_id, content, importance, timestamp, message_id, channel_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "INSERT INTO user_facts (guild_id, user_id, content, "
+                    "importance, timestamp, message_id, channel_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ),
                 (
                     str(guild_id),
                     str(user_id),
@@ -87,12 +95,15 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
         prompt = await get_user_facts_prompt(guild_id, user_id, display_name)
         self.assertIn("NoFactsUser", prompt)
         self.assertIn(
-            "None. You have no record of any past interactions", prompt
+            "None. You have no record of any past "
+            "interactions",
+            prompt,
         )
 
     async def test_fact_limit_enforced(self):
-        # The fact limit is enforced at insertion time (in extract_and_store_fact),
-        # not at query time. get_user_facts_prompt returns all facts ordered by importance.
+        # The fact limit is enforced at insertion time
+        # (in extract_and_store_fact), not at query time.
+        # get_user_facts_prompt returns all facts ordered by importance.
         # We test that the limit works by inserting via the extraction
         # function.
         from utils.memory import extract_and_store_fact
@@ -114,12 +125,12 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
             call_count[0] += 1
             if call_count[0] <= 25:
                 return (
-                    '{"content": "Fact '
-                    + str(call_count[0])
-                    + '", "importance": '
-                    + str(0.5 + call_count[0] * 0.01)
-                    + "}"
-                )
+                '{"content": "Fact '
+                + str(call_count[0])
+                + '", "importance": '
+                + str(0.5 + call_count[0] * 0.01)
+                + "}"
+            )
             return "null"
 
         utils.providers.generate_text = mock_generate_text
@@ -134,7 +145,7 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
                     user_id=user_id,
                     message_id=i,
                     channel_id=1000,
-                    client=None,  # Use generate_text path instead of gemini client
+                    client=None,
                     model_name="test-model",
                     provider_name="openai",
                 )
@@ -152,9 +163,9 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
             utils.providers.generate_text = original_generate
 
     async def test_importance_threshold(self):
-        # The importance threshold is enforced at insertion time (in extract_and_store_fact),
-        # not at query time. Facts with importance < MIN_IMPORTANCE are never
-        # stored.
+        # The importance threshold is enforced at insertion time
+        # (in extract_and_store_fact), not at query time.
+        # Facts with importance < MIN_IMPORTANCE are never stored.
         from utils.memory import extract_and_store_fact
 
         guild_id = 1
@@ -232,7 +243,11 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
 
         async with aiosqlite.connect(self.temp_db_path) as db:
             await db.execute(
-                "INSERT INTO user_facts (guild_id, user_id, content, importance, timestamp, message_id, channel_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "INSERT INTO user_facts (guild_id, user_id, content, "
+                    "importance, timestamp, message_id, channel_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ),
                 (
                     str(guild_id),
                     str(user_id),

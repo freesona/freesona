@@ -42,7 +42,9 @@ class TestReloadPersona(unittest.TestCase):
             persona_path = Path(tmpdir) / "persona.json"
             with open(persona_path, "w") as f:
                 f.write(
-                    '{"core_personality": "Test persona", "background": "", "beliefs": "", "language": "", "system_instructions": "", "temperature": ""}'
+                    '{"core_personality": "Test persona", "background": "", '
+                    '"beliefs": "", "language": "", '
+                    '"system_instructions": "", "temperature": ""}'
                 )
 
             with patch.dict(
@@ -58,7 +60,8 @@ class TestReloadPersona(unittest.TestCase):
                 self.assertFalse(legacy)
 
     def test_reload_persona_from_legacy(self):
-        """reload_persona should load from persona.txt when persona.json doesn't exist."""
+        """reload_persona should load from persona.txt when
+        persona.json doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             legacy_path = Path(tmpdir) / "persona.txt"
             with open(legacy_path, "w") as f:
@@ -115,12 +118,15 @@ class TestReloadPersona(unittest.TestCase):
                 self.assertFalse(legacy)
 
     def test_reload_persona_updates_globals(self):
-        """reload_persona should update global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED."""
+        """reload_persona should update global PERSONA_DATA,
+        CURRENT_PERSONA, LEGACY_DETECTED."""
         with tempfile.TemporaryDirectory() as tmpdir:
             persona_path = Path(tmpdir) / "persona.json"
             with open(persona_path, "w") as f:
                 f.write(
-                    '{"core_personality": "Updated persona", "background": "", "beliefs": "", "language": "", "system_instructions": "", "temperature": ""}'
+                    '{"core_personality": "Updated persona", '
+                    '"background": "", "beliefs": "", "language": "", '
+                    '"system_instructions": "", "temperature": ""}'
                 )
 
             with patch.dict(

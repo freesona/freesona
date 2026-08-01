@@ -1,5 +1,7 @@
 # Architectural Audit Report — Freesona v1
 
+This document follows ASD-STE100 Simplified Technical English.
+
 **Date:** 2026-07-17  
 **Scope:** Full codebase audit against `docs/architecture.md` and `AGENTS.md` principles  
 **Status:** Baseline — no code changes made

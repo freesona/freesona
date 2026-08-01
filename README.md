@@ -7,6 +7,9 @@
 
 # Freesona
 
+All repository documentation must adhere to ASD-STE100 Simplified Technical
+English.
+
 Freesona is an open-source, self-hosted Discord AI bot. It keeps persona,
 conversation, long-term memory, knowledge, and environment as separate systems.
 

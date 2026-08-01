@@ -34,10 +34,11 @@ FREQUENCY_THRESHOLD = {
 # ---------------------------------------------------------------------------
 
 SEMANTIC_TRIGGERS = re.compile(
-    r"\b(what|who|why|how|when|where|explain|describe|fix|help|can you|could you|"
-    r"tell me|show me|is it|is this|are you|do you|does it|did you|will you|"
-    r"should i|what is|what are|what was|what were|what if|think about|"
-    r"opinion on|thoughts on|analyze|summarize|translate|write|generate)\b",
+    r"\b(what|who|why|how|when|where|explain|describe|fix|help|can you|"
+    r"could you|tell me|show me|is it|is this|are you|do you|does it|"
+    r"did you|will you|should i|what is|what are|what was|what were|"
+    r"what if|think about|opinion on|thoughts on|analyze|summarize|"
+    r"translate|write|generate)\b",
     re.IGNORECASE,
 )
 
@@ -152,7 +153,8 @@ def evaluate_intent(
         score += 0.20
         targets.append("question_mark")
 
-    # --- Signal: channel has existing memory (bot is part of this conversation) ---
+    # --- Signal: channel has existing memory (bot is part of
+        # this conversation) ---
     if has_channel_memory:
         score += 0.10
         targets.append("channel_memory")

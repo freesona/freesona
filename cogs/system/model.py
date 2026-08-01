@@ -39,7 +39,8 @@ class ModelCog(commands.Cog):
         if ctx.invoked_subcommand is None:
             config = get_provider_config()
             await ctx.send(
-                f"Current provider: `{config['provider']}`\nCurrent model: `{config['model']}`",
+                f"Current provider: `{config['provider']}`\n"
+                f"Current model: `{config['model']}`",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -51,7 +52,8 @@ class ModelCog(commands.Cog):
     async def model_show(self, ctx: commands.Context):
         config = get_provider_config()
         await ctx.send(
-            f"Current provider: `{config['provider']}`\nCurrent model: `{config['model']}`",
+            f"Current provider: `{config['provider']}`\n"
+            f"Current model: `{config['model']}`",
             ephemeral=bool(ctx.interaction),
         )
 
@@ -92,7 +94,11 @@ class ModelCog(commands.Cog):
     )
     @commands.is_owner()
     @app_commands.describe(
-        value="Temperature value between 0.0 (deterministic) and 2.0 (very creative)")
+        value=(
+            "Temperature value between 0.0 (deterministic) "
+            "and 2.0 (very creative)"
+        )
+    )
     async def model_temperature(self, ctx: commands.Context, value: float):
         if value < 0.0 or value > 2.0:
             await ctx.send(

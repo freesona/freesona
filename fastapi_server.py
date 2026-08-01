@@ -57,7 +57,8 @@ def _is_valid_mvsep_payload(payload: Any) -> bool:
     """
     Validates that the payload looks like a legitimate MVSEP webhook.
     MVSEP sends no auth token, so we validate shape instead.
-    A valid payload must be a dict containing either a top-level or nested 'hash' field.
+    A valid payload must be a dict containing either a top-level
+    or nested 'hash' field.
     """
     if not isinstance(payload, dict):
         return False

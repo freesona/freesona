@@ -35,7 +35,7 @@ class _ImageURLExtractor(HTMLParser):
 
 
 def extract_image_url_from_html(html_text: str) -> str:
-    """Extract the first image URL from HTML content using a proper HTML parser."""
+    """Extract the first image URL from HTML content using an HTML parser."""
     if not html_text:
         return ""
     parser = _ImageURLExtractor()
@@ -165,7 +165,11 @@ def _deduplicate_short_urls(text: str) -> str:
     Nitter feeds often duplicate short URLs in titles and descriptions.
     """
     # Pattern to match short URLs with or without protocol
-    url_pattern = r"(?:https?://)?(?:reut\.rs|t\.co|bit\.ly|tinyurl\.com|goo\.gl|ow\.ly|is\.gd|buff\.ly|adf\.ly|bit\.do|short\.io|cutt\.ly|v\.gd|tr\.im|u\.nu|yourls\.org)/[a-zA-Z0-9]+"
+    url_pattern = (
+        r"(?:https?://)?(?:reut\.rs|t\.co|bit\.ly|tinyurl\.com|goo\.gl|ow\.ly|"
+        r"is\.gd|buff\.ly|adf\.ly|bit\.do|short\.io|cutt\.ly|v\.gd|tr\.im|"
+        r"u\.nu|yourls\.org)/[a-zA-Z0-9]+"
+    )
     matches = list(re.finditer(url_pattern, text))
     if len(matches) <= 1:
         return text
@@ -177,7 +181,7 @@ def _deduplicate_short_urls(text: str) -> str:
     for match in reversed(matches):
         url = match.group(0)
         # Normalize URL for comparison (add protocol if missing)
-        normalized = url if url.startswith("http") else "http://" + url
+        normalized = url if url.startswith("http") else "https://" + url
         if normalized in seen_urls:
             # Remove this duplicate occurrence
             start, end = match.span()

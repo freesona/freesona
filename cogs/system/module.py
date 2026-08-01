@@ -39,7 +39,8 @@ class ModuleCog(commands.Cog):
     async def module_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
             await ctx.send(
-                "Use `/module list`, `/module enable`, `/module disable`, or `/module reload`.",
+                "Use `/module list`, `/module enable`, `/module disable`, "
+                "or `/module reload`.",
                 ephemeral=bool(ctx.interaction),
             )
 

@@ -1,6 +1,8 @@
 # cogs/system/logging.py: Logging system control commands (/logging)
 
 import logging
+from collections.abc import Awaitable, Callable
+from typing import cast
 
 import discord
 from discord import app_commands
@@ -20,13 +22,26 @@ def is_owner_check():
     """Check if the interaction user is the bot owner (for app_commands)."""
 
     async def predicate(interaction: discord.Interaction) -> bool:
+        client = interaction.client
+        owner_check = cast(
+            Callable[[discord.User], Awaitable[bool]] | None,
+            getattr(client, "is_owner", None),
+        )
+
         try:
-            return await interaction.client.is_owner(interaction.user)  # type: ignore[reportAttributeAccessIssue]
+            if owner_check is not None:
+                return await owner_check(cast(discord.User, interaction.user))
+
+            owner = getattr(getattr(client, "application", None), "owner", None)
+            if owner is not None:
+                return owner.id == interaction.user.id
         except (AttributeError, discord.DiscordException) as e:
             logging.getLogger(__name__).warning(
                 "is_owner_check failed for user %s: %s", interaction.user, e
             )
             return False
+
+        return False
 
     return app_commands.check(predicate)
 
@@ -61,8 +76,10 @@ async def logging_status(interaction: discord.Interaction):
             f"**Enabled:** `{config.get('log_enabled', False)}`\n"
             f"**Channel ID:** `{config.get('log_channel_id', 0)}`\n"
             f"**Level:** `{config.get('log_level', 'INFO')}`\n"
-            f"**File Path:** `{config.get('log_file_path', 'logs/freesona.log')}`\n"
-            f"**Rotation (months):** `{config.get('log_file_max_months', 3)}`\n"
+            f"**File Path:** "
+            f"`{config.get('log_file_path', 'logs/freesona.log')}`\n"
+            f"**Rotation (months):** "
+            f"`{config.get('log_file_max_months', 3)}`\n"
             f"**Discord Output:** `{config.get('log_include_discord', True)}`"
         ),
         inline=False,
@@ -100,7 +117,10 @@ async def logging_status(interaction: discord.Interaction):
 
 @logging_group.command(name="enable", description="Enable a logging section")
 @app_commands.describe(
-    section="Section to enable (general, config, ai, memory, media, moderation, security, webhook)"
+    section=(
+        "Section to enable (general, config, ai, memory, "
+        "media, moderation, security, webhook)"
+    )
 )
 @app_commands.choices(
     section=[
@@ -139,7 +159,10 @@ async def logging_enable(
 
 @logging_group.command(name="disable", description="Disable a logging section")
 @app_commands.describe(
-    section="Section to disable (general, config, ai, memory, media, moderation, security, webhook)"
+    section=(
+        "Section to disable (general, config, ai, memory, "
+        "media, moderation, security, webhook)"
+    )
 )
 @app_commands.choices(
     section=[
@@ -176,9 +199,15 @@ async def logging_disable(
     )
 
 
-@logging_group.command(name="toggle", description="Toggle a logging section on/off")
+@logging_group.command(
+    name="toggle",
+    description="Toggle a logging section on/off",
+)
 @app_commands.describe(
-    section="Section to toggle (general, config, ai, memory, media, moderation, security, webhook)"
+    section=(
+        "Section to toggle (general, config, ai, memory, "
+        "media, moderation, security, webhook)"
+    )
 )
 @app_commands.choices(
     section=[
@@ -237,7 +266,8 @@ async def logging_setchannel(
 
 
 @logging_group.command(
-    name="clearchannel", description="Clear the Discord log channel setting"
+    name="clearchannel",
+    description="Clear the Discord log channel setting",
 )
 @is_owner_check()
 async def logging_clearchannel(interaction: discord.Interaction):

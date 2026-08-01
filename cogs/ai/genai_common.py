@@ -30,9 +30,9 @@ def should_respond_in_chat_channel(
 
     is_mention = bot_user is not None and bot_user in message.mentions
     is_reply = (
-        bot_user is not None and
-        message.reference is not None and
-        getattr(message.reference.resolved, "author", None) == bot_user
+        bot_user is not None
+        and message.reference is not None
+        and getattr(message.reference.resolved, "author", None) == bot_user
     )
 
     if mode == "mentions":
@@ -48,8 +48,9 @@ def get_reply_target(
     """
     Determine which message to reply to.
 
-    If the message mentions the bot AND is a reply to another user's message (not the bot),
-    return the referenced message (the original) so the bot replies to that instead of the reply.
+    If the message mentions the bot AND is a reply to another user's 
+    message (not the bot), return the referenced message (the original) 
+    so the bot replies to that instead of the reply.
     """
     if bot_user is None:
         return message
@@ -59,9 +60,9 @@ def get_reply_target(
 
     # Check if this message is a reply to another message
     if (
-        not is_mention or
-        not message.reference or
-        not isinstance(message.reference.resolved, discord.Message)
+        is_mention
+        or not message.reference
+        or not isinstance(message.reference.resolved, discord.Message)
     ):
         return message
 
@@ -94,10 +95,10 @@ def clean_sources_block(sources_text: str, max_length: int = 1024) -> str:
             markdown_link = line[1:].strip()
 
         if (
-            markdown_link and
-            markdown_link.startswith("[") and
-            "](" in markdown_link and
-            markdown_link.endswith(")")
+            markdown_link
+            and markdown_link.startswith("[")
+            and "](" in markdown_link
+            and markdown_link.endswith(")")
         ):
             text = markdown_link[1: markdown_link.index("](")]
             url = markdown_link[markdown_link.index("](") + 2: -1]

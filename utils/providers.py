@@ -60,9 +60,12 @@ def build_messages(
     Args:
         system_prompt: The system instruction/prompt
         user_prompt: The user's message content
-        attachments: Optional list of (bytes, mime_type) tuples for multimodal input
-        instruction_prefix: Optional prefix to prepend to user message (e.g., formatting instructions)
-        username: Optional username to tag in the message (e.g., "[username]: ")
+        attachments: Optional list of (bytes, mime_type)
+            tuples for multimodal input
+        instruction_prefix: Optional prefix to prepend to user
+            message (e.g., formatting instructions)
+        username: Optional username to tag in the message
+            (e.g., "[username]: ")
         user_id: Optional user ID to tag in the message
 
     Returns:
@@ -97,11 +100,12 @@ def build_messages(
             else:
                 # For non-image attachments (PDF, audio, video), use file
                 # format
+                filename = f"attachment.{att_mime.split('/')[-1]}"
                 content_parts.append(
                     {
                         "type": "file",
                         "file": {
-                            "filename": f"attachment.{att_mime.split('/')[-1]}",
+                            "filename": filename,
                             "file_data": f"data:{att_mime};base64,{b64}",
                         },
                     }
@@ -233,13 +237,17 @@ def build_interactions_input(
 
     Args:
         user_prompt: The user's text message
-        attachments: Optional list of (bytes, mime_type) tuples
-        previous_interaction_id: Optional ID of previous interaction for multi-turn
-        system_prompt: Optional system instruction (passed separately in generation config)
+        attachments: Optional list of (bytes, mime_type)
+            tuples
+        previous_interaction_id: Optional ID of previous
+            interaction for multi-turn
+        system_prompt: Optional system instruction (passed
+            separately in generation config)
         client: Optional Gemini client for File API uploads
 
     Returns:
-        Dict with 'input' (list of parts) and optionally 'previous_interaction_id'
+        Dict with 'input' (list of parts) and optionally
+        'previous_interaction_id'
     """
     input_parts: list[dict[str, Any]] = []
 
@@ -434,7 +442,9 @@ def generate_text(
                 "max_output_tokens": max_output_tokens,
                 "temperature": temp,
             },
-            "store": False,  # Stateless mode - Freesona manages conversation history
+            # Stateless mode - Freesona manages
+            # conversation history
+            "store": False,
         }
 
         # System instruction is a top-level parameter, not inside
@@ -543,7 +553,8 @@ def generate_text(
         url = os.getenv("AZURE_AI_BASE_URL")
         if not url:
             raise RuntimeError(
-                "AZURE_AI_BASE_URL missing — set it to your Azure AI Foundry endpoint."
+                "AZURE_AI_BASE_URL missing — set it to your "
+                "Azure AI Foundry endpoint."
             )
         headers = {
             "api-key": api_key,

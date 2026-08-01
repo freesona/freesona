@@ -214,7 +214,8 @@ class TestBuildConversationContext(unittest.IsolatedAsyncioTestCase):
     async def test_with_summary(self):
         # Add a message first to create the conversation state
         await add_user_message(1, 2, 3, "New message", 100, "user")
-        # Manually inject a summary (but summary field is removed, so this tests nothing now)
+        # Manually inject a summary (but summary field is removed,
+                # so this tests nothing now)
         # We'll just verify the function still works without the summary
         # parameter
         result = await build_conversation_context(1, 2, 3)
@@ -446,7 +447,8 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
             _conversation_store.clear()
 
     async def test_build_context_with_embeds_in_user_message(self):
-        """Test that embeds in user messages are included in conversation context."""
+        """Test that embeds in user messages are included
+        in conversation context."""
         await add_user_message(
             guild_id=1,
             channel_id=2,
@@ -482,7 +484,8 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Embed 3 content", result)
 
     async def test_build_context_with_embeds_in_reply(self):
-        """Test that embeds in reply messages are included in conversation context."""
+        """Test that embeds in reply messages are included
+        in conversation context."""
         await add_user_message(
             guild_id=1,
             channel_id=2,
@@ -558,7 +561,8 @@ class TestConversationEmbeds(unittest.IsolatedAsyncioTestCase):
 
         tokens = _estimate_tokens(state)
 
-        # "Hello" (5) + "Reply" (5) + "Embed content here" (18) + "Reply embed content" (19) = 47 chars
+        # "Hello" (5) + "Reply" (5) + "Embed content here" (18) +
+        # "Reply embed content" (19) = 47 chars
         # 47 // 4 = 11 tokens
         self.assertGreaterEqual(tokens, 11)
 

@@ -98,7 +98,8 @@ class GenAIPersonaCog(commands.Cog):
         key = name.lower()
         if key not in profiles:
             await ctx.send(
-                f"No profile named `{key}`. Use `/personalist` to see saved profiles."
+                f"No profile named `{key}`. Use `/personalist` "
+                "to see saved profiles."
             )
             return
         loaded = profiles[key]

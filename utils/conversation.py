@@ -1,7 +1,7 @@
-# utils/conversation.py: Provider-agnostic Conversation Manager (Short-Term Memory)
-# Freesona owns recent messages, summaries, token budgets, expiration, and context assembly.
-# Replaces Gemini-specific continuity while preserving identical behavior
-# across every provider.
+# utils/conversation.py: Provider-agnostic Conversation Manager
+# (Short-Term Memory) Freesona owns recent messages, summaries, token
+# budgets, expiration, and context assembly. Replaces Gemini-specific
+# continuity while preserving identical behavior across every provider.
 
 import asyncio
 import logging
@@ -271,8 +271,9 @@ async def build_conversation_context(
                     r_author_id = reply.get("author_id", "Unknown")
                     r_content = reply.get("content", "")
                     parts.append(
-                        f"  {
-                            r_role.capitalize()} ({r_author}, ID: {r_author_id}): {r_content}")
+                        f"  {r_role.capitalize()} ({r_author}, "
+                        f"ID: {r_author_id}): {r_content}"
+                    )
                     # Add reply embeds if present
                     if reply.get("embeds"):
                         parts.append("  Embeds:")
@@ -365,7 +366,8 @@ async def _enforce_limits(state: ConversationState) -> None:
 
 
 async def cleanup_expired_conversations() -> int:
-    """Remove conversations that haven't been accessed within TTL. Returns count removed."""
+    """Remove conversations that haven't been accessed within
+    TTL. Returns count removed."""
     ttl = _get_conversation_ttl_seconds()
     now = time.time()
     removed = 0

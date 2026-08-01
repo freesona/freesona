@@ -1,8 +1,8 @@
 # utils/canon.py: Canon Framework — Modular, immutable character definition.
 #
-# The Canon Framework replaces the monolithic persona prompt with structured,
-# authored components that explain WHY a character behaves as they do, not merely
-# WHAT they do.
+# The Canon Framework replaces the monolithic persona prompt with
+# structured, authored components that explain WHY a character behaves
+# as they do, not merely WHAT they do.
 #
 # Components:
 #   - Core Identity: Who the character fundamentally is (name, origin, nature)
@@ -39,7 +39,8 @@ logger = logging.getLogger("FreesonaBot")
 
 
 def _get_canon_file_path() -> str:
-    """Get the canon database file path (reads env each call for testability)."""
+    """Get the canon database file path (reads env
+    each call for testability)."""
     return os.getenv("CANON_FILE_PATH", "./canon.db")
 
 
@@ -58,7 +59,8 @@ CANON_FILE_PATH = _get_canon_file_path()
 
 
 class CanonComponentType(Enum):
-    """Types of canon components. Order reflects assembly priority within Canon."""
+    """Types of canon components. Order reflects assembly
+    priority within Canon."""
 
     CORE_IDENTITY = "core_identity"
     CORE_BELIEFS = "core_beliefs"
@@ -153,14 +155,14 @@ class CanonComponent:
         """Format this component for inclusion in the system prompt."""
         tag = COMPONENT_XML_TAGS[self.component_type]
         lines = [
-            f"<{tag} >",
+            f"<{tag}>",
             self.content.strip(),
             *(
-                [f"\n<!-- Why: {self.explanation.strip()}  -->"]
+                [f"\n<!-- Why: {self.explanation.strip()} -->"]
                 if self.explanation
                 else []
             ),
-            f"</{tag} >",
+            f"</{tag}>",
         ]
         return "\n".join(lines)
 
@@ -305,7 +307,8 @@ async def delete_component(component_id: str) -> None:
 
 
 async def get_components(persona_id: str) -> list[CanonComponent]:
-    """Retrieve all canon components for a persona, ordered by assembly priority."""
+    """Retrieve all canon components for a persona,
+    ordered by assembly priority."""
     async with aiosqlite.connect(_get_canon_file_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -402,9 +405,7 @@ async def create_snapshot(
     return snapshot
 
 
-async def get_snapshots(
-    persona_id: str, limit: int = 10
-) -> list[CanonSnapshot]:
+async def get_snapshots(persona_id: str, limit: int = 10) -> list[CanonSnapshot]:
     """Get recent snapshots for a persona."""
     async with aiosqlite.connect(_get_canon_file_path()) as db:
         db.row_factory = aiosqlite.Row
@@ -501,8 +502,9 @@ async def build_canon_context(persona_id: str) -> str:
     """
     Build the canon context block for PromptBuilder.
 
-    Returns formatted string with all canon components assembled in priority order.
-    Each component includes its explanation (the "why") as an XML comment.
+    Returns formatted string with all canon components assembled
+    in priority order. Each component includes its explanation
+    (the "why") as an XML comment.
     """
     if not persona_id or not persona_id.strip():
         return ""
@@ -527,35 +529,60 @@ async def build_canon_context(persona_id: str) -> str:
 DEFAULT_CANON_TEMPLATES: dict[CanonComponentType, dict[str, str]] = {
     CanonComponentType.CORE_IDENTITY: {
         "content": "",
-        "explanation": "The fundamental identity of the character — name, origin, essential nature. This is who they are at the deepest level, unchanging across situations.",
+        "explanation": (
+            "The fundamental identity of the character — name, origin, "
+            "essential nature. This is who they are at the deepest level, "
+            "unchanging across situations."
+        ),
     },
     CanonComponentType.CORE_BELIEFS: {
         "content": "",
-        "explanation": "Foundational convictions that the character holds as true. These are not opinions — they are the axioms from which the character reasons.",
+        "explanation": (
+            "Foundational convictions that the character holds as true. "
+            "These are not opinions — they are the axioms from which the "
+            "character reasons."
+        ),
     },
     CanonComponentType.MOTIVATIONS: {
         "content": "",
-        "explanation": "What the character wants and WHY they want it. Motivation explains the driving force behind actions, not just the actions themselves.",
+        "explanation": (
+            "What the character wants and WHY they want it. Motivation "
+            "explains the driving force behind actions, not just the "
+            "actions themselves."
+        ),
     },
     CanonComponentType.BEHAVIORAL_RULES: {
         "content": "",
-        "explanation": "Explicit behavioral constraints with reasoning. Format: 'Rule: [what]. Reason: [why].' The explanation is mandatory for behavioral rules — it prevents canon drift by making the rationale auditable.",
+        "explanation": (
+            "Explicit behavioral constraints with reasoning. Format: "
+            "'Rule: [what]. Reason: [why].' The explanation is mandatory "
+            "for behavioral rules — it prevents canon drift by making the "
+            "rationale auditable."
+        ),
     },
     CanonComponentType.WORLD_ASSUMPTIONS: {
         "content": "",
-        "explanation": "What the character takes for granted about how their world works. These are not beliefs the character chose — they are the character's lived reality.",
+        "explanation": (
+            "What the character takes for granted about how their world "
+            "works. These are not beliefs the character chose — they are "
+            "the character's lived reality."
+        ),
     },
     CanonComponentType.CANON_EXPLANATIONS: {
         "content": "",
-        "explanation": "Deep-dive explanations for key aspects of the character that don't fit in other categories. E.g., 'Why Chisato refuses lethal force: [detailed philosophical/personal history].' This is the 'author's notes' layer.",
+        "explanation": (
+            "Deep-dive explanations for key aspects of the character that "
+            "don't fit in other categories. E.g., 'Why Chisato refuses "
+            "lethal force: [detailed philosophical/personal history].' "
+            "This is the 'author's notes' layer."
+        ),
     },
 }
 
 
-async def ensure_default_canon(
-    persona_id: str, author: str = "system"
-) -> None:
-    """Create empty default canon components for a new persona if none exist."""
+async def ensure_default_canon(persona_id: str, author: str = "system") -> None:
+    """Create empty default canon components for a new
+    persona if none exist."""
     existing = await get_components(persona_id)
     if existing:
         return
@@ -592,7 +619,8 @@ def validate_canon_component(component: CanonComponent) -> list[str]:
     """
     Validate a canon component for architectural compliance.
 
-    Returns list of warnings (non-fatal) and raises CanonValidationError for violations.
+    Returns list of warnings (non-fatal) and raises
+    CanonValidationError for violations.
     """
     warnings = []
 
@@ -601,8 +629,9 @@ def validate_canon_component(component: CanonComponent) -> list[str]:
         not component.explanation or not component.explanation.strip()
     ):
         raise CanonValidationError(
-            f"BEHAVIORAL_RULES component {component.component_id} MUST have an explanation. "
-            "The 'why' is required to prevent canon drift."
+            f"BEHAVIORAL_RULES component {component.component_id} "
+            "MUST have an explanation. The 'why' is required to "
+            "prevent canon drift."
         )
 
     # Warn if explanation missing for other types (encouraged but not required)
@@ -610,7 +639,8 @@ def validate_canon_component(component: CanonComponent) -> list[str]:
         not component.explanation or not component.explanation.strip()
     ):
         warnings.append(
-            f"Component {component.component_id} ({component.component_type.value}) "
+            f"Component {component.component_id} "
+            f"({component.component_type.value}) "
             "should include an explanation (the 'why')."
         )
 
@@ -637,8 +667,9 @@ def validate_canon_component(component: CanonComponent) -> list[str]:
     for pattern in prohibited_patterns:
         if pattern in content_lower:
             warnings.append(
-                f"Component {component.component_id} may violate Canonical Truth Invariant: "
-                f"contains '{pattern}' — this sounds like Character Memory, User Memory, "
+                f"Component {component.component_id} may violate "
+                f"Canonical Truth Invariant: contains '{pattern}' — "
+                "this sounds like Character Memory, User Memory, "
                 "Conversation History, or Guild Context, not Canon."
             )
 
@@ -666,7 +697,8 @@ async def export_canon(persona_id: str) -> dict[str, Any]:
 async def import_canon(
     data: dict[str, Any], target_persona_id: str, author: str = "import"
 ) -> int:
-    """Import canon from exported data to a target persona. Returns count of components imported."""
+    """Import canon from exported data to a target persona.
+    Returns count of components imported."""
     if not target_persona_id:
         raise ValueError("Target persona_id is required for import")
 

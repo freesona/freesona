@@ -1,5 +1,7 @@
 # ADR-0003: Context Semantics — Formal Definition of PromptBuilder Context Providers
 
+This document follows ASD-STE100 Simplified Technical English.
+
 **Status**: Complete
 **Date**: 2026-07-18
 **Supersedes**: N/A

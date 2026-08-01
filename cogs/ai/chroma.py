@@ -56,19 +56,14 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=True,
         max_length=20,
-        placeholder=(
-            "anime, novel, manga, game, guidebook, "
-            "interview, website, other"
-        ),
+        placeholder=("anime, novel, manga, game, guidebook, interview, website, other"),
     )
     entry_type = ui.TextInput(
         label="Entry Type",
         style=discord.TextStyle.short,
         required=True,
         max_length=20,
-        placeholder=(
-            "dialogue, narration, event, relationship, " "description"
-        ),
+        placeholder=("dialogue, narration, event, relationship, description"),
     )
     topics = ui.TextInput(
         label="Topics (comma-separated)",
@@ -118,7 +113,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=False,
         max_length=20,
-        placeholder=("canon, semi-canon, non-canon, headcanon, " "alternate"),
+        placeholder=("canon, semi-canon, non-canon, headcanon, alternate"),
     )
     tags = ui.TextInput(
         label="Tags (comma-separated, optional)",
@@ -219,8 +214,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
 
         if not doc_id:
             await interaction.followup.send(
-                "ChromaDB is not available or could not "
-                "initialize the collection.",
+                "ChromaDB is not available or could not initialize the collection.",
                 ephemeral=True,
             )
             return
@@ -236,9 +230,7 @@ class ChromaCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_command(
-        name="kbsearch", help="Search the local knowledge base."
-    )
+    @commands.hybrid_command(name="kbsearch", help="Search the local knowledge base.")
     @app_commands.describe(
         query="Search query",
         persona="Optional persona to filter by",
@@ -272,9 +264,7 @@ class ChromaCog(commands.Cog):
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 150:
                 snippet = snippet[:147] + "..."
-            lines.append(
-                f"- **{persona_name}** ({entry_type}, {source}): {snippet}"
-            )
+            lines.append(f"- **{persona_name}** ({entry_type}, {source}): {snippet}")
 
         response_text = "\n".join(lines)
 
@@ -320,14 +310,10 @@ class ChromaCog(commands.Cog):
             try:
                 raw_bytes = await attachment.read()
             except discord.HTTPException as exc:
-                await ctx.send(
-                    f"Failed to read attachment: {exc}", ephemeral=True
-                )
+                await ctx.send(f"Failed to read attachment: {exc}", ephemeral=True)
                 return
             except OSError as exc:
-                await ctx.send(
-                    f"Failed to read attachment: {exc}", ephemeral=True
-                )
+                await ctx.send(f"Failed to read attachment: {exc}", ephemeral=True)
                 return
 
             # Extract text off-thread for CPU-heavy parsing (PDFs, EPUBs, JSON)
@@ -349,8 +335,7 @@ class ChromaCog(commands.Cog):
 
         if not text_parts:
             await ctx.send(
-                "Provide text or attach a supported file "
-                "(PDF, EPUB, TXT, JSON, MD).",
+                "Provide text or attach a supported file (PDF, EPUB, TXT, JSON, MD).",
                 ephemeral=True,
             )
             return
@@ -361,15 +346,11 @@ class ChromaCog(commands.Cog):
         modal = MetadataModal(
             document, title, attachment.filename if attachment else None
         )
-        await ctx.send(
-            "Please provide metadata for this knowledge entry:", ephemeral=True
-        )
         interaction = ctx.interaction
         if interaction is not None:
             await interaction.response.send_modal(modal)
         else:
-            # For prefix commands, we might need a different way to send modal
-            # or just fail
+            # Prefix-command attachments cannot open a Discord modal.
             await ctx.send(
                 "Modals can only be sent in response to slash commands.",
                 ephemeral=True,
@@ -419,8 +400,11 @@ class ChromaCog(commands.Cog):
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 80:
                 snippet = snippet[:77] + "..."
-            lines.append(f"**{index}.** [{persona_name}] {title} (`{
-                item['id']}`)\n└ {entry_type} · {source} · *{snippet}*")
+            lines.append(
+                f"**{index}.** [{persona_name}] {title} (`{item['id']}`)\n└ {
+                    entry_type
+                } · {source} · *{snippet}*"
+            )
 
         full_message = "\n".join(lines)
 
@@ -439,14 +423,10 @@ class ChromaCog(commands.Cog):
 
         success = await asyncio.to_thread(delete_knowledge, entry_id)
         if success:
-            await ctx.send(
-                f"Deleted knowledge entry `{entry_id}`.", ephemeral=True
-            )
+            await ctx.send(f"Deleted knowledge entry `{entry_id}`.", ephemeral=True)
             return
 
-        await ctx.send(
-            "Could not delete that knowledge entry.", ephemeral=True
-        )
+        await ctx.send("Could not delete that knowledge entry.", ephemeral=True)
 
     @commands.hybrid_command(
         name="kbpersona",
@@ -457,9 +437,7 @@ class ChromaCog(commands.Cog):
         limit="Maximum entries to show (default 50)",
     )
     @commands.has_permissions(administrator=True)
-    async def kbpersona(
-        self, ctx: commands.Context, persona: str, limit: int = 50
-    ):
+    async def kbpersona(self, ctx: commands.Context, persona: str, limit: int = 50):
         await ctx.defer(ephemeral=True)
 
         entries = await asyncio.to_thread(

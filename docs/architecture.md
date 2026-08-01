@@ -1,5 +1,7 @@
 # Architecture
 
+This document follows ASD-STE100 Simplified Technical English.
+
 This document explains how Freesona is structured internally. It is intended for developers who want to understand the codebase, extend it, or debug it.
 
 ---
