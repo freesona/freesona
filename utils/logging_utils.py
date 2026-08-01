@@ -112,7 +112,7 @@ class SectionFilter(logging.Filter):
 _section_filter: Optional["SectionFilter"] = None
 
 
-def get_section_filter() -> SectionFilter | None:
+def get_section_filter() -> SectionFilter:
     """Get or create the global section filter."""
     global _section_filter
     if _section_filter is None:

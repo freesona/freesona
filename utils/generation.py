@@ -295,9 +295,7 @@ async def send_response(
                     await asyncio.sleep(segment.delay)
 
             if i == 0 and reply_to is not None:
-                await _send_first_segment_with_reply(
-                    channel, segment.text, reply_to
-                )
+                await _send_first_segment_with_reply(channel, segment.text, reply_to)
             else:
                 await channel.send(segment.text)
         except discord.Forbidden:
@@ -319,9 +317,7 @@ async def _send_first_segment_with_reply(
         await reply_to.reply(text)
     except discord.NotFound:
         # Message was deleted or is inaccessible; fall back to regular send
-        logger.debug(
-            "Reply target message not found, falling back to channel.send"
-        )
+        logger.debug("Reply target message not found, falling back to channel.send")
         await channel.send(text)
 
 
@@ -535,11 +531,14 @@ async def generate(
         )
 
         # Handle new return type (tuple of output_text, interaction_id)
-        if isinstance(output, tuple):
+        output_text = "Something went wrong."
+        interaction_id: str | None = None
+        if isinstance(output, tuple) and len(output) == 2:
             output_text, interaction_id = output
+            if not isinstance(output_text, str):
+                output_text = str(output_text)
         else:
             output_text = output or "Something went wrong."
-            interaction_id = None
 
         # Store interaction ID for next turn
         if (
@@ -551,19 +550,13 @@ async def generate(
         ):
             from utils.conversation import set_last_interaction_id
 
-            await set_last_interaction_id(
-                guild_id, channel_id, user_id, interaction_id
-            )
+            await set_last_interaction_id(guild_id, channel_id, user_id, interaction_id)
 
         # Add assistant response to conversation history
         if guild_id and channel_id and user_id and output_text:
-            await add_assistant_message(
-                guild_id, channel_id, user_id, output_text
-            )
+            await add_assistant_message(guild_id, channel_id, user_id, output_text)
 
-        return build_response(
-            clean_text(output_text or "Something went wrong.")
-        )
+        return build_response(clean_text(output_text or "Something went wrong."))
 
     except Exception as e:
         logger.error(f"Generation error: {e}")

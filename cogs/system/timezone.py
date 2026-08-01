@@ -13,11 +13,12 @@ from utils.config import load_config, save_config
 async def timezone_autocomplete(
     interaction: discord.Interaction, current: str
 ) -> list[app_commands.Choice[str]]:
-    return [
+    choices: list[app_commands.Choice[str]] = [
         app_commands.Choice(name=tz, value=tz)
         for tz in pytz.common_timezones
         if current.lower() in tz.lower()
-    ][:25]
+    ]
+    return choices[:25]
 
 
 class TimezoneCog(commands.Cog):

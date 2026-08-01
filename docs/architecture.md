@@ -428,7 +428,7 @@ The knowledge base:
 - Provides identical retrieval behavior across all providers
 - Is fully **persona-agnostic** — adding a new persona requires only source material + metadata, no code changes
 
-### Configuration
+### Knowledge Base Configuration
 
 Environment variables (see `.env.sample`):
 
@@ -533,7 +533,7 @@ Freesona includes an optional logging system that can write to both rotating log
 ### Configuration
 
 | Config Key | Type | Default | Description |
-|:-----------|:-----|:--------|:------------|
+| :--------- | :--- | :------ | :---------- |
 | `log_enabled` | bool | `false` | Enable/disable logging system |
 | `log_channel_id` | int | `0` | Discord channel ID for log messages (0 = disabled) |
 | `log_level` | str | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
@@ -550,6 +550,7 @@ Freesona includes an optional logging system that can write to both rotating log
 | `log_section_webhook` | bool | `false` | Webhook events (FastAPI/MVSEP) |
 
 Environment variable overrides (see `.env.sample`):
+
 - `LOG_ENABLED`
 - `LOG_CHANNEL_ID`
 - `LOG_LEVEL`
@@ -565,12 +566,12 @@ Environment variable overrides (see `.env.sample`):
 - `LOG_SECTION_SECURITY`
 - `LOG_SECTION_WEBHOOK`
 
-### Log Sections
+### Log Section Definitions
 
 Log sections provide granular control over what gets logged. Each section maps to a set of logger name prefixes:
 
 | Section | Config Key | Logger Prefixes | Default |
-|:--------|:-----------|:----------------|:--------|
+| :------ | :--------- | :-------------- | :------ |
 | General | `log_section_general` | `main`, `cogs`, `utils` | ✅ Enabled |
 | Config | `log_section_config` | `utils.config`, `cogs.system.config` | ❌ Disabled |
 | AI | `log_section_ai` | `utils.providers`, `utils.generation`, `utils.prompt_builder*`, `cogs.ai` | ✅ Enabled |
@@ -605,7 +606,8 @@ logger.info("Generation completed", extra={"user_id": 123, "provider": "gemini"}
 ```
 
 The Discord log channel receives formatted messages in code blocks:
-```
+
+```text
 [2024-01-15 14:32:10] [INFO] utils.generation: Generation completed for user 123 via gemini
 ```
 
@@ -614,7 +616,7 @@ The Discord log channel receives formatted messages in code blocks:
 Owner-only slash commands for managing the logging system:
 
 | Command | Description |
-|:--------|:------------|
+| :------ | :---------- |
 | `/logging status` | Show current logging configuration and enabled sections |
 | `/logging enable <section>` | Enable a logging section |
 | `/logging disable <section>` | Disable a logging section |
@@ -679,21 +681,21 @@ All runtime-mutable settings are stored in `config.json`. Loaded fresh on every 
 See `.env.sample` for a full reference. Key variables:
 
 | Variable                | Required | Description                           |
-|:------------------------|:---------|:--------------------------------------|
-| `BOT_TOKEN`             | ✅        | Discord bot token                     |
-| `CHANNEL_ID`            | ✅        | Startup message channel               |
-| `GOOGLE_API_KEY`        | ✅        | Gemini API key                        |
-| `MODEL_NAME`            | ✅        | Default Gemini model                  |
-| `CONFIG_FILE_PATH`      | ✅        | Path to `config.json`                 |
-| `MEMORY_FILE_PATH`      | ✅        | Path to `memory.db`                   |
-| `BOT_NAME`              | —        | Display name for startup messages     |
-| `WOLFRAM_APPID_SHORT`   | —        | Wolfram Short Answer API key          |
-| `WOLFRAM_APPID_LLM`     | —        | Wolfram LLM API key                   |
-| `MVSEP_API_KEY`         | —        | MVSEP separation API key              |
-| `MVSEP_WEBHOOK_URL`     | —        | Public URL for MVSEP callbacks        |
-| `COOKIES_<PLATFORM>`    | —        | Netscape cookies file for yt-dlp auth |
-| `GOOGLE_SEARCH_API_KEY` | —        | Legacy Google Custom Search fallback  |
-| `SEARCH_ENGINE_ID`      | —        | Legacy Google Custom Search engine ID |
+| :---------------------- | :------- | :------------------------------------ |
+| `BOT_TOKEN`             | Yes      | Discord bot token                     |
+| `CHANNEL_ID`            | Yes      | Startup message channel               |
+| `GOOGLE_API_KEY`        | Yes      | Gemini API key                        |
+| `MODEL_NAME`            | Yes      | Default Gemini model                  |
+| `CONFIG_FILE_PATH`      | Yes      | Path to `config.json`                 |
+| `MEMORY_FILE_PATH`      | Yes      | Path to `memory.db`                   |
+| `BOT_NAME`              | No       | Display name for startup messages     |
+| `WOLFRAM_APPID_SHORT`   | No       | Wolfram Short Answer API key          |
+| `WOLFRAM_APPID_LLM`     | No       | Wolfram LLM API key                   |
+| `MVSEP_API_KEY`         | No       | MVSEP separation API key              |
+| `MVSEP_WEBHOOK_URL`     | No       | Public URL for MVSEP callbacks        |
+| `COOKIES_<PLATFORM>`    | No       | Netscape cookies file for yt-dlp auth |
+| `GOOGLE_SEARCH_API_KEY` | No       | Legacy Google Custom Search fallback  |
+| `SEARCH_ENGINE_ID`      | No       | Legacy Google Custom Search engine ID |
 
 ---
 

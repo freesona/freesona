@@ -33,7 +33,7 @@ Write `The ConversationManager stores recent messages.` Do not write
 Prefer common technical words with one meaning. Use these forms in new text:
 
 | Prefer | Avoid |
-|---|---|
+| :----- | :---- |
 | `use` | `utilize`, `leverage` |
 | `start` | `launch`, `initiate` |
 | `stop` | `terminate` |
