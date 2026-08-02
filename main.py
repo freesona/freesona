@@ -106,7 +106,15 @@ class Freesona(commands.Bot):
             if enabled_modules.get(name, True)
         ]
 
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        unique_extensions: list[str] = []
         for ext in extensions:
+            if ext not in seen:
+                seen.add(ext)
+                unique_extensions.append(ext)
+
+        for ext in unique_extensions:
             try:
                 await self.load_extension(ext)
             except Exception:

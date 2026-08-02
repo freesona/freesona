@@ -22,13 +22,15 @@ OPTIONAL_MODULES = {
     "mvsep": "cogs.media.mvsep",
     "warns": "cogs.moderation.warns",
     "chroma": "cogs.ai.chroma",
-    # Granular system modules (can be enabled/disabled independently)
-    "module": "cogs.system.module",
-    "model": "cogs.system.model",
-    "provider": "cogs.system.provider",
-    "config": "cogs.system.config",
-    "logging": "cogs.system.logging",
-    "core": "cogs.system.core",
+    # Granular system modules are loaded by cogs.system.system (CORE_EXTENSIONS).
+    # Keep the keys so /module list still shows them, but they map to the
+    # aggregate loader so they aren't double-loaded.
+    "module": "cogs.system.system",
+    "model": "cogs.system.system",
+    "provider": "cogs.system.system",
+    "config": "cogs.system.system",
+    "logging": "cogs.system.system",
+    "core": "cogs.system.system",
 }
 
 DEFAULT_ENABLED_MODULES = {name: True for name in OPTIONAL_MODULES}
