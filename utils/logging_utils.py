@@ -171,6 +171,10 @@ class MonthlyRotatingFileHandler(logging.handlers.BaseRotatingHandler):
         new_filename = self._compute_filename()
         return new_filename != self.current_filename
 
+    def shouldRollover(self, record: logging.LogRecord) -> bool:
+        """Backward-compatible alias for Python 3.13's handler API."""
+        return self.should_rollover(record)
+
     def do_rollover(self):
         """Perform the rollover."""
         if self.stream:

@@ -1,9 +1,8 @@
 # cogs/system/timezone.py: Timezone commands (/settimezone, /timezone)
 
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 import discord
-import pytz
 from discord import app_commands
 from discord.ext import commands
 
@@ -15,7 +14,7 @@ async def timezone_autocomplete(
 ) -> list[app_commands.Choice[str]]:
     choices: list[app_commands.Choice[str]] = [
         app_commands.Choice(name=tz, value=tz)
-        for tz in pytz.common_timezones
+        for tz in sorted(available_timezones())
         if current.lower() in tz.lower()
     ]
     return choices[:25]
