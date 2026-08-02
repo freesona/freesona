@@ -2,7 +2,7 @@ import asyncio
 import importlib
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class TimezoneCompatTests(unittest.TestCase):
@@ -13,7 +13,7 @@ class TimezoneCompatTests(unittest.TestCase):
             importlib.reload(timezone_module)
 
             choices = asyncio.run(
-                timezone_module.timezone_autocomplete(None, "America")
+                timezone_module.timezone_autocomplete(MagicMock(), "America")
             )
 
         self.assertTrue(choices)
