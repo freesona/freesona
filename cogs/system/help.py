@@ -224,6 +224,49 @@ class HelpCog(commands.Cog):
             "setpersona",
         }
 
+    def get_command_category(self, cmd):
+        # 1. Check for registered cog category
+        if cmd.cog and hasattr(cmd.cog, "help_category"):
+            return cmd.cog.help_category
+
+        # 2. Hardcoded fallback (maintaining current behavior)
+        if cmd.name in [
+            "hello",
+            "randommember",
+            "coinflip",
+            "roll",
+            "pick",
+        ]:
+            return "Fun"
+        elif cmd.name in [
+            "kick",
+            "purge",
+            "removetimeout",
+            "timeout",
+            "ban",
+            "unban",
+            "softban",
+            "warn",
+            "warns",
+            "delwarn",
+            "clearwarns",
+            "warnthresholds",
+            "slowmode",
+            "lock",
+            "unlock",
+        ]:
+            return "Moderation"
+        elif cmd.name in ["math", "plot", "help", "ping"]:
+            return "Utility"
+        elif cmd.name in ["download", "audio", "separate"]:
+            return "Media"
+        elif cmd.name == "rss":
+            return "News"
+        elif cmd.name in self.ai_commands:
+            return "AI Persona"
+
+        return "Utility" # Default fallback
+
     @commands.hybrid_command(
         name="help", help="Shows help information for commands."
     )
@@ -255,61 +298,31 @@ class HelpCog(commands.Cog):
                 if cmd.hidden:
                     continue
 
+                category = self.get_command_category(cmd)
+                if category not in cats:
+                    cats[category] = []
+
                 entry = f"`{cmd.name}` - {cmd.help or 'No description'}"
+                cats[category].append(entry)
 
-                if cmd.name in [
-                    "hello",
-                    "randommember",
-                    "coinflip",
-                    "roll",
-                    "pick",
-                ]:
-                    cats["Fun"].append(entry)
-                elif cmd.name in [
-                    "kick",
-                    "purge",
-                    "removetimeout",
-                    "timeout",
-                    "ban",
-                    "unban",
-                    "softban",
-                    "warn",
-                    "warns",
-                    "delwarn",
-                    "clearwarns",
-                    "warnthresholds",
-                    "slowmode",
-                    "lock",
-                    "unlock",
-                ]:
-                    cats["Moderation"].append(entry)
-                elif cmd.name in ["math", "plot", "help", "ping"]:
-                    cats["Utility"].append(entry)
-                elif cmd.name in ["download", "audio", "separate"]:
-                    cats["Media"].append(entry)
-                elif cmd.name == "rss":
-                    cats["News"].append(
-                        "`/rss list`, `/rss latest`, `/rss add`, "
-                        "`/rss setchannel`..."
-                    )
-                elif cmd.name in self.ai_commands:
-                    cats["AI Persona"].append(entry)
-
+            # Special additions to formatted strings
             formatted_cats = {
                 k: "\n".join(v) if v else "None" for k, v in cats.items()
             }
 
-            formatted_cats["AI Persona"] += (
-                "\n`/setpersona` — Persona editor\n"
-                "`/autonomy` — Auto-mode\n"
-                "`/botwhitelist` — Manage bot whitelist"
-            )
-            formatted_cats["News"] = (
-                "`/rss list` — List feeds\n"
-                "`/rss latest <name>` — Fetch articles\n"
-                "`/rss add <name> <url>` — Add feed\n"
-                "`/rss setchannel <#ch>` — Auto-post"
-            )
+            if "AI Persona" in formatted_cats:
+                formatted_cats["AI Persona"] += (
+                    "\n`/setpersona` — Persona editor\n"
+                    "`/autonomy` — Auto-mode\n"
+                    "`/botwhitelist` — Manage bot whitelist"
+                )
+            if "News" in formatted_cats:
+                formatted_cats["News"] = (
+                    "`/rss list` — List feeds\n"
+                    "`/rss latest <name>` — Fetch articles\n"
+                    "`/rss add <name> <url>` — Add feed\n"
+                    "`/rss setchannel <#ch>` — Auto-post"
+                )
 
             embed = discord.Embed(
                 title=f"{BOT_NAME} Help Menu",

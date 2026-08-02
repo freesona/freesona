@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import os
+
+logger = logging.getLogger(__name__)
+
 CORE_EXTENSIONS = [
     "cogs.system.help",
     "cogs.tools.ping",
@@ -10,7 +16,7 @@ CORE_EXTENSIONS = [
     "cogs.system.system",
 ]
 
-OPTIONAL_MODULES = {
+BUILTIN_OPTIONAL_MODULES = {
     "hello": "cogs.fun.hello",
     "random": "cogs.fun.random",
     "moderation": "cogs.moderation.core",
@@ -32,6 +38,33 @@ OPTIONAL_MODULES = {
     "logging": "cogs.system.system",
     "core": "cogs.system.system",
 }
+
+
+def _load_local_modules():
+    path = "modules.local.json"
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                valid = {}
+                for k, v in data.items():
+                    if isinstance(k, str) and isinstance(v, str):
+                        valid[k] = v
+                    else:
+                        logger.warning(f"Invalid entry in modules.local.json: {k}: {v}")
+                return valid
+            else:
+                logger.warning("modules.local.json is not a JSON object")
+                return {}
+    except Exception as e:
+        logger.exception(f"Failed to load modules.local.json: {e}")
+        return {}
+
+
+OPTIONAL_MODULES = BUILTIN_OPTIONAL_MODULES.copy()
+OPTIONAL_MODULES.update(_load_local_modules())
 
 DEFAULT_ENABLED_MODULES = {name: True for name in OPTIONAL_MODULES}
 
