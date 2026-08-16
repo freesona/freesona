@@ -8,26 +8,26 @@ cd "$ROOT_DIR"
 print_banner() {
 cat << 'EOF'
 
-                    IIIII                                                                                                                  
-                    II II                                                                                                                  
-                    II II                                                                                                                  
-                III       III                                                                                                              
-               II  IIIIIII  II                                                                                                             
-              I  IIIIIIIIIII  II                                                                                                           
-             I  IIIIIIIIIIIII  I                                                                                                           
-             I  IIIIIIIIIIIII  I                                                                                                           
-          III   IIIIIIIIIIIII    II                                                                                                        
-        II   II  IIIIIIIIIII  II   II                                                                                                      
-      II  IIIIII   IIIIIII   IIIIII  II                                                                                                    
-     II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII                                                                                  
-    I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII                                                                                  
-   I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III                                                                                         
-  II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII    
-  I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III   
- II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII   
- II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII   
- II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII  
- II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III  
+                    IIIII
+                    II II
+                    II II
+                III       III
+               II  IIIIIII  II
+              I  IIIIIIIIIII  II
+             I  IIIIIIIIIIIII  I
+             I  IIIIIIIIIIIII  I
+          III   IIIIIIIIIIIII    II
+        II   II  IIIIIIIIIII  II   II
+      II  IIIIII   IIIIIII   IIIIII  II
+     II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII
+    I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII
+   I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III
+  II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII
+  I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III
+ II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII
+ II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII
+ II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII
+ II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III
 EOF
 }
 print_banner
@@ -222,6 +222,17 @@ ENVEOF
 echo "Configuration saved to .env"
 echo ""
 
+# Ensure config.json exists with default values
+if [ ! -f config.json ]; then
+    echo "Creating default config.json..."
+    python - <<'PY'
+import sys
+sys.path.insert(0, '.')
+from utils.config import save_config, DEFAULT_CONFIG
+save_config(DEFAULT_CONFIG)
+PY
+fi
+
 # Validate required fields
 if [[ "$BOT_TOKEN" == "YOUR_DISCORD_BOT_TOKEN" ]] || [ -z "$BOT_TOKEN" ]; then
   echo "Warning: BOT_TOKEN not set. The bot will not start without a valid token."
@@ -251,6 +262,16 @@ fi
 source .venv/bin/activate
 python -m pip install --upgrade pip >/dev/null
 python -m pip install -r requirements.txt >/dev/null
+
+# Optional delphitools CLI installation
+read -p "Do you want to install delphitools CLI (requires Rust)? [y/N] " install_dt
+if [[ "$install_dt" =~ ^[Yy]$ ]]; then
+    if ! command -v rustc >/dev/null 2>&1; then
+        echo "Rust toolchain not found. Install it from https://www.rust-lang.org/tools/install"
+    else
+        cargo install delphitools-cli || echo "Failed to install delphitools-cli via cargo."
+    fi
+fi
 
 echo ""
 echo "Running project checks..."

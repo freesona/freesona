@@ -71,6 +71,9 @@ diags.txt
 /part_class.txt
 out.txt
 memory.json
+!.junie/skills/*
+.junie/mcp/mcp.json
+audit_findings.md
 
 # Local test/report artifacts
 full_test.txt

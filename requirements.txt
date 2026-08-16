@@ -57,5 +57,9 @@ chromadb
 
 # onnxruntime: Inference engine for running ONNX models, used in AI cogs.
 onnxruntime
+
+# protobuf: Protocol Buffers library for serializing structured data, used in AI cogs.
 protobuf
+
+#aiofiles: Asynchronous file handling library, used in cogs/media/mvsep.py
 aiofiles

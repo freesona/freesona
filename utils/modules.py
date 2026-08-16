@@ -28,6 +28,7 @@ BUILTIN_OPTIONAL_MODULES = {
     "mvsep": "cogs.media.mvsep",
     "warns": "cogs.moderation.warns",
     "chroma": "cogs.ai.chroma",
+    "conversion": "cogs.conversion.delphitools",
     # Granular system modules are loaded by cogs.system.system (CORE_EXTENSIONS).
     # Keep the keys so /module list still shows them, but they map to the
     # aggregate loader so they aren't double-loaded.

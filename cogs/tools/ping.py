@@ -40,20 +40,19 @@ class PingCog(commands.Cog):
 
         try:
             start = time.perf_counter()
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://discord.com/api/v10/gateway"
+                ) as response:
+                    end = time.perf_counter()
 
-            async with (
-                aiohttp.ClientSession() as session,
-                session.get("https://discord.com/api/v10/gateway") as response,
-            ):
-                end = time.perf_counter()
-
-                if response.status == 200:
-                    delta = end - start
-                    api_status = (
-                        f"Online ({delta * 1000:.{ROUND_LATENCY}f} ms)"
-                    )
-                else:
-                    api_status = f"HTTP {response.status}"
+                    if response.status == 200:
+                        delta = end - start
+                        api_status = (
+                            f"Online ({delta * 1000:.{ROUND_LATENCY}f} ms)"
+                        )
+                    else:
+                        api_status = f"HTTP {response.status}"
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             api_status = f"Error: {type(e).__name__}"

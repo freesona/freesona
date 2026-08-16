@@ -205,6 +205,18 @@ echo CHARACTER_MEMORY_FILE_PATH=character_memory.db
 echo Configuration saved to .env
 echo.
 
+REM Ensure config.json exists with default values
+if not exist config.json (
+    echo Creating default config.json...
+    python -c "
+import sys
+sys.path.insert(0, '.')
+from utils.config import load_config, save_config, DEFAULT_CONFIG
+# Save default config to ensure file exists
+save_config(DEFAULT_CONFIG)
+    "
+)
+
 REM Validate required fields
 if "%BOT_TOKEN%"=="YOUR_DISCORD_BOT_TOKEN" (
   echo Warning: BOT_TOKEN not set. The bot will not start without a valid token.
@@ -241,6 +253,23 @@ if not exist .venv (
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip >nul
 python -m pip install -r requirements.txt >nul
+
+REM Optional delphitools CLI installation
+set /p INSTALL_DT="Do you want to install delphitools CLI (requires Rust)? [y/N]: "
+if /I "%INSTALL_DT%"=="y" (
+    REM Check for Rust toolchain
+    rustc --version >nul 2>&1
+    if errorlevel 1 (
+        echo Rust toolchain not found. Install it from https://www.rust-lang.org/tools/install
+    ) else (
+        cargo install delphitools-cli
+        if errorlevel 1 (
+            echo Failed to install delphitools-cli via cargo.
+        ) else (
+            echo delphitools CLI installed successfully.
+        )
+    )
+)
 
 echo.
 echo Running project checks...

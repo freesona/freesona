@@ -1,4 +1,5 @@
-# utils/prompt_builder.py: Explicit prompt assembly via independent context providers.
+# utils/prompt_builder.py: Explicit prompt assembly via independent
+# context providers.
 # Architecture per AGENTS.md Step 1 — PromptBuilder with independent
 # context providers.
 
@@ -104,10 +105,12 @@ class ContextProvider(ABC):
         Build this provider's context block.
 
         Args:
-            context: Shared build context with all parameters needed by providers.
+            context: Shared build context with all parameters
+                needed by providers.
 
         Returns:
-            A ContextBlock with metadata and content (empty string if no contribution).
+            A ContextBlock with metadata and content
+                (empty string if no contribution).
         """
         ...
 
@@ -176,7 +179,8 @@ def _get_default_providers() -> list[ContextProvider]:
             SystemContextProvider(),  # 10 - System instructions (immutable)
             PersonaContextProvider(),  # 20 - Persona definition (immutable)
             CanonContextProvider(),  # 25 - Canon definition (immutable)
-            ConversationHistoryProvider(),  # 30 - Conversation history (mutable)
+            ConversationHistoryProvider(),
+            # 30 - Conversation history (mutable)
             UserMemoryProvider(),  # 40 - User memory (mutable)
             CharacterMemoryProvider(),  # 50 - Character memory (mutable)
             GuildWorldContextProvider(),  # 55 - Guild world context (mutable)
@@ -196,10 +200,13 @@ class PromptBuilder:
     Assembles the final system prompt from an ordered list of ContextProviders.
 
     Design goals:
-    - Explicit ordering: providers sorted by priority, not implicit concatenation
-    - Inspectability: `inspect()` returns each provider's ContextBlock with metadata
+    - Explicit ordering: providers sorted by priority,
+      not implicit concatenation
+    - Inspectability: `inspect()` returns each provider's ContextBlock
+      with metadata
     - Testability: each provider can be unit-tested in isolation
-    - Extensibility: new providers register via priority, no code changes to builder
+    - Extensibility: new providers register via priority,
+      no code changes to builder
     - Framework-agnostic: no Discord or provider-specific dependencies
     """
 
@@ -212,7 +219,8 @@ class PromptBuilder:
 
     @classmethod
     def with_default_providers(cls, token_budget: int = 8000) -> PromptBuilder:
-        """Create a PromptBuilder with the standard provider set from the registry."""
+        """Create a PromptBuilder with the standard provider set
+        from the registry."""
         return cls(
             providers=_get_default_providers(), token_budget=token_budget
         )
@@ -221,16 +229,19 @@ class PromptBuilder:
     def with_providers(
         cls, providers: Sequence[ContextProvider], token_budget: int = 8000
     ) -> PromptBuilder:
-        """Create a PromptBuilder with a custom provider list (for testing/extension)."""
+        """Create a PromptBuilder with a custom provider list
+        (for testing/extension)."""
         return cls(providers=providers, token_budget=token_budget)
 
     async def build(self, context: PromptBuildContext) -> str:
         """
-        Assemble the complete system prompt from all providers with token budget enforcement.
+        Assemble the complete system prompt from all providers
+        with token budget enforcement.
 
         Budget enforcement (per ADR-0003):
         - IMMUTABLE blocks (priority 10, 20, 25, 60) are NEVER dropped
-        - MUTABLE blocks (priority 30, 40, 50, 55) are dropped in REVERSE priority order
+        - MUTABLE blocks (priority 30, 40, 50, 55) are dropped in
+          REVERSE priority order
         - PLACEHOLDER blocks contribute zero tokens and are skipped
 
         Returns:
@@ -257,7 +268,8 @@ class PromptBuilder:
         self, blocks: list[ContextBlock]
     ) -> list[ContextBlock]:
         """
-        Enforce token budget by dropping MUTABLE blocks in reverse priority order.
+        Enforce token budget by dropping MUTABLE blocks
+        in reverse priority order.
 
         Per ADR-0003:
         - IMMUTABLE blocks (10, 20, 25, 60) are NEVER dropped
@@ -283,7 +295,8 @@ class PromptBuilder:
         # Calculate tokens used by immutable blocks
         immutable_tokens = sum(b.estimate_tokens() for b in immutable_blocks)
 
-        # Add mutable blocks back in priority order (lowest priority number first)
+        # Add mutable blocks back in priority order
+        # (lowest priority number first)
         # until we hit the budget
         kept_mutable = []
         current_tokens = immutable_tokens
@@ -295,9 +308,10 @@ class PromptBuilder:
                 current_tokens += block_tokens
             else:
                 logger.info(
-                    f"Token budget exceeded ({current_tokens + block_tokens}/{self.token_budget}), "
-                    f"dropping mutable block '{block.name}' (priority {block.priority}, "
-                    f"~{block_tokens} tokens)"
+                    f"Token budget exceeded "
+                    f"({current_tokens + block_tokens}/{self.token_budget}), "
+                    f"dropping mutable block '{block.name}' "
+                    f"(priority {block.priority}, ~{block_tokens} tokens)"
                 )
 
         # Combine: immutable blocks first (already in priority order), then
@@ -307,7 +321,8 @@ class PromptBuilder:
         result.sort(key=lambda b: b.priority)
 
         logger.debug(
-            f"Token budget enforced: {total_tokens} -> {current_tokens} tokens "
+            f"Token budget enforced: "
+            f"{total_tokens} -> {current_tokens} tokens "
             f"({len(blocks)} -> {len(result)} blocks)"
         )
 
@@ -360,7 +375,8 @@ class PromptBuilder:
 
 
 class ProviderPriority:
-    """Standard priority values for built-in providers. Lower = earlier in prompt."""
+    """Standard priority values for built-in providers.
+    Lower = earlier in prompt."""
 
     SYSTEM = 10
     PERSONA = 20
@@ -394,10 +410,12 @@ async def build_system_prompt(
     guild_world_accessor: Any = None,
 ) -> str:
     """
-    Backwards-compatible wrapper that replicates the exact current prompt assembly
+    Backwards-compatible wrapper that replicates the exact
+    current prompt assembly
     using the new PromptBuilder architecture.
 
-    This function exists to make the migration in generation.py a one-line change
+    This function exists to make the migration in generation.py
+    a one-line change
     while preserving byte-for-byte identical output.
     """
     from utils.config import get_prompt_token_budget
