@@ -1,5 +1,5 @@
 # discord.py: Interfaces with the Discord API.
-discord.py
+discord.py==2.7.1
 
 # python-dotenv: Loads environment variables from a .env file.
 python-dotenv

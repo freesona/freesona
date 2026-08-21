@@ -443,6 +443,10 @@ class YtDlp(commands.Cog):
                 ephemeral=True,
                 delete_after=10,
             )
+            return
+
+        log.error("Download command failed: %s", error)
+        await ctx.send("❌ Download failed. Please try another URL.")
 
 
 async def setup(bot: commands.Bot) -> None:

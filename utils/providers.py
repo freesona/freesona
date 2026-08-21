@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from utils.config import get_model_name, get_model_temperature
+from utils.config import get_model_name
 from utils.config import get_provider_model as get_configured_provider_model
 from utils.config import get_provider_name as get_configured_provider_name
 
@@ -333,6 +333,10 @@ def normalize_provider_name(provider: str | None) -> str:
         "groqcloud": "groq",
         "open-router": "openrouter",
         "open_router": "openrouter",
+        "openai-compatible": "custom",
+        "openai_compatible": "custom",
+        "custom-endpoint": "custom",
+        "custom_endpoint": "custom",
     }
     return aliases.get(provider_name, provider_name)
 
@@ -378,8 +382,6 @@ def post_chat_completion(
         raise
 
 
-from providers import get_provider
-
 def generate_text(
     user_prompt: str,
     *,
@@ -394,6 +396,8 @@ def generate_text(
     user_id: int | str | None = None,
     extra_payload: dict[str, Any] | None = None,
 ) -> str | tuple[str, Any]:
+    from providers.factory import get_provider
+
     provider_name = normalize_provider_name(provider)
     provider_impl = get_provider(provider_name)
     return provider_impl.generate_text(

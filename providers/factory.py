@@ -1,3 +1,5 @@
+import os
+
 from providers.base import BaseProvider
 from providers.gemini import GeminiProvider
 from providers.nim import NimProvider
@@ -37,5 +39,15 @@ def get_provider(provider_name: str) -> BaseProvider:
             api_key_env="OPENROUTER_API_KEY",
             default_model="meta-llama/llama-3.3-70b-instruct:free",
             token_field="max_completion_tokens",
+        )
+    elif provider_name == "custom":
+        base_url = os.getenv("CUSTOM_API_BASE_URL")
+        if not base_url:
+            raise RuntimeError("CUSTOM_API_BASE_URL missing.")
+        return OpenAICompatibleProvider(
+            base_url=base_url,
+            api_key_env="CUSTOM_API_KEY",
+            default_model="default",
+            require_api_key=False,
         )
     raise RuntimeError(f"Unsupported provider '{provider_name}'.")

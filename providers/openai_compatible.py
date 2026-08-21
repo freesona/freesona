@@ -1,16 +1,24 @@
 import os
-import requests
 from typing import Any
+
 from providers.base import BaseProvider
 from utils.providers import build_messages, post_chat_completion
 
+
 class OpenAICompatibleProvider(BaseProvider):
-    def __init__(self, base_url: str, api_key_env: str, default_model: str, token_field: str = "max_tokens"):
+    def __init__(
+        self,
+        base_url: str,
+        api_key_env: str,
+        default_model: str,
+        token_field: str = "max_tokens",
+        require_api_key: bool = True,
+    ):
         self.base_url = os.getenv(f"{api_key_env.replace('_API_KEY', '')}_BASE_URL", base_url)
         self.api_key = os.getenv(api_key_env)
         self.default_model = default_model
         self.token_field = token_field
-        if not self.api_key:
+        if require_api_key and not self.api_key:
             raise RuntimeError(f"{api_key_env} missing.")
 
     def generate_text(
@@ -27,10 +35,9 @@ class OpenAICompatibleProvider(BaseProvider):
         user_id: int | str | None = None,
         extra_payload: dict[str, Any] | None = None,
     ) -> str | tuple[str, Any]:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         # Add special headers for OpenRouter
         if "openrouter" in self.base_url:
             site_url = os.getenv("OPENROUTER_SITE_URL")

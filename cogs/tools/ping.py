@@ -15,6 +15,15 @@ from discord.ext import commands
 ROUND_LATENCY = 3
 
 
+def _invocation_timestamp(ctx):
+    """Return the timestamp for either a prefix or slash invocation."""
+    if ctx.message is not None:
+        return ctx.message.created_at
+    if ctx.interaction is not None:
+        return ctx.interaction.created_at
+    return discord.utils.utcnow()
+
+
 class PingCog(commands.Cog):
     """Shows latency and API status."""
 
@@ -27,9 +36,9 @@ class PingCog(commands.Cog):
     async def ping(self, ctx):
         await ctx.defer()
 
-        # Message processing latency
+        # Message processing latency. Slash-command contexts have no message.
         bot_ping = (
-            discord.utils.utcnow() - ctx.message.created_at
+            discord.utils.utcnow() - _invocation_timestamp(ctx)
         ).total_seconds() * 1000
 
         # Discord websocket latency
@@ -40,19 +49,18 @@ class PingCog(commands.Cog):
 
         try:
             start = time.perf_counter()
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    "https://discord.com/api/v10/gateway"
-                ) as response:
-                    end = time.perf_counter()
+            async with aiohttp.ClientSession() as session, session.get(
+                "https://discord.com/api/v10/gateway"
+            ) as response:
+                end = time.perf_counter()
 
-                    if response.status == 200:
-                        delta = end - start
-                        api_status = (
-                            f"Online ({delta * 1000:.{ROUND_LATENCY}f} ms)"
-                        )
-                    else:
-                        api_status = f"HTTP {response.status}"
+                if response.status == 200:
+                    delta = end - start
+                    api_status = (
+                        f"Online ({delta * 1000:.{ROUND_LATENCY}f} ms)"
+                    )
+                else:
+                    api_status = f"HTTP {response.status}"
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             api_status = f"Error: {type(e).__name__}"

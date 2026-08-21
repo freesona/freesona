@@ -254,6 +254,11 @@ async def on_command_error(ctx, error):
         await ctx.send(f"Cooldown. Try again in {error.retry_after:.1f}s.")
     elif isinstance(error, commands.BadArgument):
         await ctx.send(f"Invalid argument: {error}")
+    elif isinstance(error, commands.CommandNotFound):
+        return
+    else:
+        logger.error("Unhandled prefix command error: %s", error)
+        await ctx.send("An unexpected error occurred. Please try again.")
 
 
 @bot.event

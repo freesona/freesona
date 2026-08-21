@@ -125,6 +125,12 @@ def stem_label(file_info: dict, index: int) -> str:
         return "Instrumental"
     return f"Stem {index + 1}"
 
+
+def _has_message_attachment(ctx: commands.Context) -> bool:
+    """Return whether a prefix-command context contains an attachment."""
+    return ctx.message is not None and bool(ctx.message.attachments)
+
+
 def mvsep_status_text(status: str, queue_pos: object, job_hash: str) -> str:
     labels = {
         "waiting": "Queued",
@@ -417,7 +423,7 @@ class MVSepCog(commands.Cog):
             ctx.command.reset_cooldown(ctx)
             return
 
-        if not url and not ctx.message.attachments and not attachment:
+        if not url and not _has_message_attachment(ctx) and not attachment:
             await ctx.send("Attach an audio file or pass a URL.")
             ctx.command.reset_cooldown(ctx)
             return

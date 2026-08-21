@@ -9,6 +9,7 @@ from utils.config import DEFAULT_CONFIG, load_config, save_config
 from utils.config_schema import (
     CONFIG_CATEGORIES,
     CONFIG_DESCRIPTIONS,
+    PROVIDER_CHOICES,
     get_config_default,
     get_config_description,
 )
@@ -17,39 +18,7 @@ from utils.config_schema import (
 CONFIG_ALLOWED_VALUES = {
     "conversation_response_mode": ["all", "mentions", "reply", "dm"],
     "log_level": ["DEBUG", "INFO", "WARNING", "ERROR"],
-    "provider": [
-        "gemini",
-        "openai",
-        "anthropic",
-        "openrouter",
-        "nvidia",
-        "ollama",
-        "deepinfra",
-        "together",
-        "groq",
-        "fireworks",
-        "perplexity",
-        "cerebras",
-        "sambanova",
-        "xai",
-        "deepseek",
-        "moonshot",
-        "zhipu",
-        "baichuan",
-        "minimax",
-        "stepfun",
-        "volcengine",
-        "siliconflow",
-        "modelslab",
-        "infermatic",
-        "hyperbolic",
-        "novita",
-        "runpod",
-        "vast",
-        "lambda",
-        "together-legacy",
-        "openai-compatible",
-    ],
+    "provider": PROVIDER_CHOICES,
 }
 
 

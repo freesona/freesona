@@ -65,8 +65,8 @@ CONFIG_DESCRIPTIONS = {
         "reply, dm (default: all)"
     ),
     "provider": (
-        "AI provider to use: gemini, openai, anthropic, "
-        "openrouter, etc. (default: gemini)"
+        "AI provider to use: gemini, openai, ollama, nim, azure, groq, "
+        "openrouter, or custom (default: gemini)"
     ),
     "provider_model": (
         "Specific model name for the provider "
@@ -236,35 +236,12 @@ MODEL_CHOICES = {
 PROVIDER_CHOICES = [
     "gemini",
     "openai",
-    "anthropic",
-    "openrouter",
-    "nvidia",
     "ollama",
-    "deepinfra",
-    "together",
+    "nim",
+    "azure",
     "groq",
-    "fireworks",
-    "perplexity",
-    "cerebras",
-    "sambanova",
-    "xai",
-    "deepseek",
-    "moonshot",
-    "zhipu",
-    "baichuan",
-    "minimax",
-    "stepfun",
-    "volcengine",
-    "siliconflow",
-    "modelslab",
-    "infermatic",
-    "hyperbolic",
-    "novita",
-    "runpod",
-    "vast",
-    "lambda",
-    "together-legacy",
-    "openai-compatible",
+    "openrouter",
+    "custom",
 ]
 
 
