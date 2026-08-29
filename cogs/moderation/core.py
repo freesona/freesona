@@ -182,10 +182,10 @@ class ModerationCog(commands.Cog):
                 else ""
             )
             await ctx.send(
-                (
+                
                     f"**{member}** has been banned{del_note}. "
                     f"Reason: {reason}{note}"
-                )
+                
             )
         except discord.Forbidden:
             await ctx.send("I don't have permission to ban this user.")
@@ -256,11 +256,11 @@ class ModerationCog(commands.Cog):
             await ctx.guild.unban(member, reason="Softban: automatic unban")
             note = "" if dm_sent else " *(couldn't DM user)*"
             await ctx.send(
-                (
+                
                     f"**{member}** has been softbanned "
                     f"(messages from past {delete_messages} deleted). "
                     f"Reason: {reason}{note}"
-                )
+                
             )
         except discord.Forbidden:
             await ctx.send("I don't have permission to ban this member.")
@@ -342,10 +342,10 @@ class ModerationCog(commands.Cog):
                 delta, reason=f"Timed out by {ctx.author}: {reason}"
             )
             await ctx.send(
-                (
+                
                     f"{member.mention} has been timed out "
                     f"for {length}. Reason: {reason}"
-                )
+                
             )
         except discord.Forbidden:
             await ctx.send("I can't timeout that member.")

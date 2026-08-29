@@ -1,8 +1,11 @@
-from typing import Any
-from google import genai
 import os
+from typing import Any
+
+from google import genai
+
 from providers.base import BaseProvider
-from utils.providers import format_user_text, build_interactions_input
+from utils.providers import build_interactions_input, format_user_text
+
 
 class GeminiProvider(BaseProvider):
     def generate_text(

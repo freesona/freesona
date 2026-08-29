@@ -1,5 +1,12 @@
 # tests/test_generation.py: Unit tests for generation module
 
+import sys
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+import discord
+
 from utils.generation import (
     ConversationResponse,
     MessageSegment,
@@ -8,11 +15,6 @@ from utils.generation import (
     clean_text,
     send_response,
 )
-import discord
-import sys
-import unittest
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

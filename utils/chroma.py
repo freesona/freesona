@@ -58,7 +58,18 @@ REQUIRED_METADATA_FIELDS = frozenset(
 )
 # Optional metadata fields – these are not required for every entry but may be
 # provided when available.
-OPTIONAL_METADATA_FIELDS = frozenset(("episode", "chapter", "scene"))
+OPTIONAL_METADATA_FIELDS = frozenset(
+    (
+        "episode",
+        "chapter",
+        "scene",
+        "timestamp",
+        "canon_level",
+        "tags",
+        "speaker",
+        "title",
+    )
+)
 
 # Validation sets for metadata fields – these mirror the definitions used in the
 # Discord cog (`cogs/ai/chroma.py`). They are required by `_validate_metadata`
@@ -651,11 +662,9 @@ def add_knowledge(
     if title:
         meta["title"] = title
 
-    missing = REQUIRED_METADATA_FIELDS - meta.keys()
-    if missing:
-        logger.warning(
-            f"Missing required metadata fields for knowledge entry: {missing}"
-        )
+    valid, reason = _validate_metadata(meta)
+    if not valid:
+        logger.warning(f"Invalid metadata for knowledge entry: {reason}")
         return ""
 
     # Normalize metadata values (e.g., list of topics -> comma‑separated string)
@@ -742,8 +751,9 @@ def query_knowledge(
 
 def list_knowledge(
     collection_name: str | None = None,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Return all knowledge entries in the collection.
+    """Return all knowledgeB entries in the collection.
 
     This mirrors :func:`get_knowledge_by_persona` but without any persona
     filtering. It retrieves the full set of documents, their metadata, and the
@@ -752,6 +762,7 @@ def list_knowledge(
     Args:
         collection_name: Optional collection name override. If ``None`` the
             default collection name from the environment is used.
+        limit: Maximum number of entries to return.
 
     Returns:
         A list of dictionaries, each containing ``id``, ``document`` and
@@ -763,7 +774,7 @@ def list_knowledge(
         return []
 
     try:
-        result = collection.get(include=["documents", "metadatas"])
+        result = collection.get(limit=limit, include=["documents", "metadatas"])
 
         ids = result.get("ids", []) or []
         docs = result.get("documents", []) or []

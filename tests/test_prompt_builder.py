@@ -1,5 +1,21 @@
 # tests/test_prompt_builder.py: Tests for PromptBuilder and ContextProviders
 
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from utils.prompt_builder import (
+    ContextBlock,
+    ContextProvider,
+    Mutability,
+    PromptBuildContext,
+    PromptBuilder,
+    ProviderPriority,
+    build_system_prompt,
+)
 from utils.prompt_builder_providers import (
     CanonContextProvider,
     CharacterMemoryProvider,
@@ -10,21 +26,6 @@ from utils.prompt_builder_providers import (
     SystemContextProvider,
     UserMemoryProvider,
 )
-from utils.prompt_builder import (
-    ContextBlock,
-    ContextProvider,
-    Mutability,
-    PromptBuildContext,
-    PromptBuilder,
-    ProviderPriority,
-    build_system_prompt,
-)
-import os
-import sys
-import tempfile
-import unittest
-from pathlib import Path
-from unittest.mock import patch
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

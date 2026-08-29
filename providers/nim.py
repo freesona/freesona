@@ -1,5 +1,7 @@
 from typing import Any
+
 from providers.openai_compatible import OpenAICompatibleProvider
+
 
 class NimProvider(OpenAICompatibleProvider):
     def __init__(self):

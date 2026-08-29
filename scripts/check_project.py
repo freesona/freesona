@@ -203,12 +203,12 @@ def load_mvsep_helpers() -> dict:
             keep.append(node)
 
     namespace = {"urlparse": urlparse}
-    exec(
+    exec(  # noqa: S102 – dev script: executes AST-extracted helpers in sandboxed namespace
         compile(
             ast.Module(body=keep, type_ignores=[]), "cogs/mvsep.py", "exec"
         ),
         namespace,
-    )  # noqa: S102
+    )
     return namespace
 
 

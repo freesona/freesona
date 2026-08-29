@@ -1,7 +1,12 @@
 # tests/test_canon.py: Tests for the Canon Framework
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import os
+import tempfile
+import unittest
 
 from utils.canon import (
     COMPONENT_ASSEMBLY_ORDER,
@@ -27,10 +32,6 @@ from utils.canon import (
     update_component,
     validate_canon_component,
 )
-import os
-import tempfile
-import unittest
-
 
 TEST_PERSONA_ID = "test_persona_canon"
 

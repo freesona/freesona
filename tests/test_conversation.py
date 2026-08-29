@@ -1,5 +1,12 @@
 # tests/test_conversation.py: Unit tests for ConversationManager
 
+import sys
+import time
+import unittest
+from collections import deque
+from pathlib import Path
+
+import utils.conversation as conversation_module
 from utils.conversation import (
     ConversationMessage,
     ConversationState,
@@ -12,12 +19,6 @@ from utils.conversation import (
     get_conversation,
     get_conversation_stats,
 )
-import utils.conversation as conversation_module
-import sys
-import time
-import unittest
-from collections import deque
-from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

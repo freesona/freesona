@@ -1,13 +1,14 @@
 # tests/test_persona.py: Unit tests for persona module
 
 import importlib
-from utils.persona import CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from utils.persona import CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

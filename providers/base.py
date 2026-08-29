@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+
 class BaseProvider(ABC):
     @abstractmethod
     def generate_text(
@@ -18,4 +19,3 @@ class BaseProvider(ABC):
         extra_payload: dict[str, Any] | None = None,
     ) -> str | tuple[str, Any]:
         """Generate text using the provider."""
-        pass

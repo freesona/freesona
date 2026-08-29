@@ -4,10 +4,10 @@ from __future__ import annotations
 import html
 import logging
 import re
-import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
+from xml.etree import ElementTree
 
 from utils.config import load_config, save_config
 

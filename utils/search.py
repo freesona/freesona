@@ -114,13 +114,7 @@ async def _grounded_call(
 
             return SearchResult(text=text, sources=sources, model_used=model)
 
-        except (
-            ValueError,
-            RuntimeError,
-            OSError,
-            asyncio.TimeoutError,
-            Exception,
-        ) as e:
+        except Exception as e:  # noqa: BLE001 – genai API raises unpredictable types
             last_exc = e
             if _is_transient(e) and attempt < max_retries:
                 delay = RETRY_BASE_DELAY_SEC * (attempt + 1)
@@ -167,13 +161,7 @@ async def web_search(query: str) -> SearchResult:
                 f"Search succeeded via {model} ({len(result.sources)} sources)"
             )
             return result
-        except (
-            ValueError,
-            RuntimeError,
-            OSError,
-            asyncio.TimeoutError,
-            Exception,
-        ) as e:
+        except Exception as e:  # noqa: BLE001 – genai API raises unpredictable types
             logger.warning(f"Model {model} exhausted retries, escalating: {e}")
             continue
 

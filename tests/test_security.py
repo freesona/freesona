@@ -1,13 +1,14 @@
 # tests/test_security.py: Python module.
+import sys
+import unittest
+from pathlib import Path
+
 from utils.security import (
     detect_injection,
     is_public_http_url,
     sanitize_prompt,
     unsafe_output,
 )
-import sys
-import unittest
-from pathlib import Path
 
 # Add workspace directory to path to allow importing utils
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

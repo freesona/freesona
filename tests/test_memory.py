@@ -1,7 +1,4 @@
 # tests/test_memory.py: Python module.
-from utils.memory import (
-    MAX_FACTS_PER_USER,
-)
 import os
 import sys
 import tempfile
@@ -9,6 +6,10 @@ import unittest
 from pathlib import Path
 
 import aiosqlite
+
+from utils.memory import (
+    MAX_FACTS_PER_USER,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

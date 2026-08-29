@@ -1,9 +1,10 @@
 # tests/test_providers.py: Unit tests for providers module
 
-from utils.providers import _normalize_mime_type
 import sys
 import unittest
 from pathlib import Path
+
+from utils.providers import _normalize_mime_type
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

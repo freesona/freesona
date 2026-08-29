@@ -1,4 +1,4 @@
-from providers.factory import get_provider
 from providers.base import BaseProvider
+from providers.factory import get_provider
 
-__all__ = ["get_provider", "BaseProvider"]
+__all__ = ["BaseProvider", "get_provider"]

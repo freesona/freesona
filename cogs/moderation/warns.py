@@ -33,16 +33,16 @@ async def init_db():
             )
         """)
         await db.execute(
-            (
+            
                 "CREATE INDEX IF NOT EXISTS idx_guild_user "
                 "ON warnings (guild_id, user_id)"
-            )
+            
         )
         await db.execute(
-            (
+            
                 "CREATE UNIQUE INDEX IF NOT EXISTS "
                 "idx_warn_id ON warnings (warn_id)"
-            )
+            
         )
         await db.commit()
 
@@ -136,10 +136,10 @@ async def apply_threshold(ctx, member: discord.Member, warn_count: int):
             logger.warning(f"Unknown warn_threshold action: {action}")
     except discord.Forbidden:
         await ctx.send(
-            (
+            
                 "Auto-threshold triggered but I lack permissions "
                 f"to {action} {member.mention}."
-            )
+            
         )
     except discord.HTTPException as e:
         logger.error(
@@ -347,10 +347,10 @@ class WarnsCog(commands.Cog):
             dm_note = " *(couldn't DM user)*"
 
         await ctx.send(
-            (
+            
                 f"**{guild_member}** has been warned ({warn_count} total). "
                 f"Reason: {reason} • ID: `{warn_id}`{dm_note}"
-            )
+            
         )
 
         await apply_threshold(ctx, guild_member, warn_count)
@@ -520,12 +520,12 @@ class WarnsCog(commands.Cog):
                 rules[key] = value
             if not rules:
                 await ctx.send(
-                (
+                
                     f"Warn thresholds are currently **"
                     f"{'enabled' if enabled else 'disabled'}** "
                     "with no rules set.\n"
                     "Use `/warnthresholds` (slash command) to edit via modal."
-                )
+                
             )
                 return
             lines = []
@@ -534,13 +534,13 @@ class WarnsCog(commands.Cog):
                 duration = rule.get("duration", "")
                 lines.append(f"`{count} warns` → {action} {duration}".strip())
             await ctx.send(
-                (
+                
                     f"Warn thresholds **"
                     f"{'enabled' if enabled else 'disabled'}**:\n"
                     + "\n".join(lines)
                     + "\n\nUse `/warnthresholds` (slash command) to edit "
                     "via modal."
-                )
+                
             )
 
 

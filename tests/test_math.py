@@ -1,8 +1,9 @@
 # tests/test_math.py: Python module.
-from cogs.tools.math import MathCog, generate_plot, is_safe_expression
 import sys
 import unittest
 from pathlib import Path
+
+from cogs.tools.math import MathCog, generate_plot, is_safe_expression
 
 # Add workspace directory to path to allow importing cogs
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

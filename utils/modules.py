@@ -59,8 +59,8 @@ def _load_local_modules():
             else:
                 logger.warning("modules.local.json is not a JSON object")
                 return {}
-    except Exception as e:
-        logger.exception(f"Failed to load modules.local.json: {e}")
+    except Exception:
+        logger.exception("Failed to load modules.local.json")
         return {}
 
 
