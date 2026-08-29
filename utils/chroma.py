@@ -47,7 +47,7 @@ class ChromaCollection(Protocol):
 
     def delete(self, **kwargs: Any) -> None: ...
 
-    def get(self, **kwargs: Any) -> dict[str, Any]: ...
+    def get(self, limit: int | None = None, **kwargs: Any) -> dict[str, Any]: ...
 
     def query(self, **kwargs: Any) -> dict[str, Any]: ...
 
@@ -807,6 +807,10 @@ def get_knowledge_by_persona(
     try:
         result = collection.get(
             where={"persona": persona},
+            # ChromaDB .get() uses 'limit' in some versions, but the Protocol
+            # definition in this file doesn't specify it. For consistency
+            # with the collection.get() call on line 782, we use a slice
+            # or ensure the Protocol matches.
             limit=limit,
             include=["documents", "metadatas"],
         )

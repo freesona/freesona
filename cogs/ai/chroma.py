@@ -248,7 +248,9 @@ class ChromaCog(commands.Cog):
         await ctx.defer(ephemeral=True)
 
         # Run ChromaDB query off-thread to prevent event loop blocking
-        matches = await asyncio.to_thread(query_knowledge, query, limit, persona)
+        matches = await asyncio.to_thread(
+            query_knowledge, query, limit=limit, persona=persona
+        )
         if not matches:
             await ctx.send("No knowledge base matches found.", ephemeral=True)
             return
