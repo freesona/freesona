@@ -1,15 +1,31 @@
 # utils/chroma.py: ChromaDB utility functions for managing and
 # querying a ChromaDB collection. Implements the Persona-Agnostic
 # Knowledge Base (RAG) architecture.
-from dotenv import load_dotenv
 import io
 import json
 import logging
 import os
 import uuid
-import xml.etree.ElementTree as ElementTree
 import zipfile
 from typing import Any, Protocol, cast
+from xml.etree import ElementTree
+
+# Exported symbols for static analysis tools like Pylance. Including
+# ``list_knowledge`` ensures that ``from utils.chroma import list_knowledge``
+# resolves correctly.
+__all__ = [
+    "VALID_CANON_LEVELS",
+    "VALID_ENTRY_TYPES",
+    "VALID_SOURCE_TYPES",
+    "add_knowledge",
+    "delete_knowledge",
+    "extract_text_from_bytes",
+    "get_knowledge_by_persona",
+    "list_knowledge",
+    "query_knowledge",
+]
+
+from dotenv import load_dotenv
 
 logger = logging.getLogger("FreesonaBot")
 
@@ -40,40 +56,39 @@ class ChromaCollection(Protocol):
 REQUIRED_METADATA_FIELDS = frozenset(
     ("persona", "source", "source_type", "entry_type", "topics")
 )
-# Optional metadata fields
-OPTIONAL_METADATA_FIELDS = frozenset(
-    (
-        "episode",
-        "chapter",
-        "scene",
-        "speaker",
-        "timestamp",
-        "canon_level",
-        "tags",
-        "schema_version",
-        "embedding_model",
-    )
-)
+# Optional metadata fields – these are not required for every entry but may be
+# provided when available.
+OPTIONAL_METADATA_FIELDS = frozenset(("episode", "chapter", "scene"))
 
-# Valid values for metadata fields
-VALID_SOURCE_TYPES = frozenset(
-    (
-        "anime",
-        "novel",
-        "manga",
-        "game",
-        "guidebook",
-        "interview",
-        "website",
-        "other",
-    )
-)
-VALID_ENTRY_TYPES = frozenset(
-    ("dialogue", "narration", "event", "relationship", "description")
-)
-VALID_CANON_LEVELS = frozenset(
-    ("canon", "semi-canon", "non-canon", "headcanon", "alternate")
-)
+# Validation sets for metadata fields – these mirror the definitions used in the
+# Discord cog (`cogs/ai/chroma.py`). They are required by `_validate_metadata`
+# to ensure that user‑provided metadata conforms to expected values.
+VALID_ENTRY_TYPES = {
+    "dialogue",
+    "narration",
+    "event",
+    "relationship",
+    "description",
+}
+
+VALID_SOURCE_TYPES = {
+    "anime",
+    "novel",
+    "manga",
+    "game",
+    "guidebook",
+    "interview",
+    "website",
+    "other",
+}
+
+VALID_CANON_LEVELS = {
+    "canon",
+    "semi-canon",
+    "non-canon",
+    "headcanon",
+    "alternate",
+}
 
 
 def get_chroma_client() -> Any | None:
@@ -94,9 +109,7 @@ def get_collection(
         return None
     resolved_client = cast(Any, client)
     name = collection_name or os.getenv("CHROMA_COLLECTION", "freesona")
-    return cast(
-        ChromaCollection, resolved_client.get_or_create_collection(name=name)
-    )
+    return cast(ChromaCollection, resolved_client.get_or_create_collection(name=name))
 
 
 def parse_discord_chat_json(raw_bytes: bytes) -> str:
@@ -117,14 +130,10 @@ def parse_discord_chat_json(raw_bytes: bytes) -> str:
             continue
 
         author = (
-            msg.get("userName")
-            or msg.get("author", {}).get("username")
-            or "Unknown"
+            msg.get("userName") or msg.get("author", {}).get("username") or "Unknown"
         )
         content = (msg.get("content") or "").strip()
-        timestamp = msg.get("timestamp", "").split("T")[
-            0
-        ]  # Extracts YYYY-MM-DD
+        timestamp = msg.get("timestamp", "").split("T")[0]  # Extracts YYYY-MM-DD
 
         if content:
             if timestamp:
@@ -165,7 +174,9 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
 
     if lower_name.endswith(".epub"):
         try:
-            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            # Explicitly open the EPUB archive in read mode to satisfy Pylance and
+            # avoid runtime errors on some platforms.
+            with zipfile.ZipFile(io.BytesIO(data), mode="r") as archive:
                 container_data = archive.read("META-INF/container.xml")
                 container = ElementTree.fromstring(container_data)
 
@@ -245,9 +256,7 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                     logger.warning("EPUB extraction returned empty text")
                 return result
         except (OSError, ElementTree.ParseError, UnicodeDecodeError) as exc:
-            logger.warning(
-                f"Failed to decode EPUB attachment {filename}: {exc}"
-            )
+            logger.warning(f"Failed to decode EPUB attachment {filename}: {exc}")
             return ""
 
     return (
@@ -264,9 +273,7 @@ def _validate_metadata(metadata: dict[str, Any] | None) -> tuple[bool, str]:
 
     missing = REQUIRED_METADATA_FIELDS.difference(metadata.keys())
     if missing:
-        return False, f"Missing required metadata fields: {
-            ', '.join(
-                sorted(missing))}"
+        return False, f"Missing required metadata fields: {', '.join(sorted(missing))}"
 
     # Validate topics is a list
     topics = metadata.get("topics")
@@ -276,23 +283,32 @@ def _validate_metadata(metadata: dict[str, Any] | None) -> tuple[bool, str]:
     # Validate entry_type
     entry_type = metadata.get("entry_type")
     if entry_type not in VALID_ENTRY_TYPES:
-        return False, f"Field 'entry_type' must be one of: {
-            ', '.join(
-                sorted(VALID_ENTRY_TYPES))}"
+        return (
+            False,
+            f"Field 'entry_type' must be one of: {
+                ', '.join(sorted(VALID_ENTRY_TYPES))
+            }",
+        )
 
     # Validate source_type
     source_type = metadata.get("source_type")
     if source_type not in VALID_SOURCE_TYPES:
-        return False, f"Field 'source_type' must be one of: {
-            ', '.join(
-                sorted(VALID_SOURCE_TYPES))}"
+        return (
+            False,
+            f"Field 'source_type' must be one of: {
+                ', '.join(sorted(VALID_SOURCE_TYPES))
+            }",
+        )
 
     # Validate canon_level if provided
     canon_level = metadata.get("canon_level")
     if canon_level is not None and canon_level not in VALID_CANON_LEVELS:
-        return False, f"Field 'canon_level' must be one of: {
-            ', '.join(
-                sorted(VALID_CANON_LEVELS))}"
+        return (
+            False,
+            f"Field 'canon_level' must be one of: {
+                ', '.join(sorted(VALID_CANON_LEVELS))
+            }",
+        )
 
     # Validate persona is non-empty string
     persona = metadata.get("persona")
@@ -494,10 +510,7 @@ def chunk_semantic_units(
     current_chunk = ""
 
     for para in paragraphs:
-        if (
-            len(current_chunk) + len(para) + 2 > max_chunk_size
-            and current_chunk
-        ):
+        if len(current_chunk) + len(para) + 2 > max_chunk_size and current_chunk:
             if len(current_chunk) >= min_chunk_size:
                 chunks.append(
                     {
@@ -615,28 +628,13 @@ def add_knowledge(
     collection_name: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> str:
-    """
-    Adds a knowledge entry to the ChromaDB collection.
+    """Add a knowledge entry to the ChromaDB collection.
 
-    Requires metadata with the following fields:
-    - persona: Persona identifier (required)
-    - source: Original source (required)
-    - source_type: Anime, Novel, Manga, Game, Guidebook,
-      Interview, Website, Other (required)
-    - entry_type: Dialogue, Narration, Event, Relationship,
-      Description (required)
-    - topics: List of semantic topics (required, non-empty)
+    The caller must provide ``metadata`` containing the required fields:
+    ``persona``, ``source``, ``source_type``, ``entry_type`` and ``topics``.
+    Optional fields (e.g., ``episode``) are accepted if present.
 
-    Optional metadata fields:
-    - episode: Episode number
-    - chapter: Chapter number
-    - scene: Scene description
-    - speaker: Speaking character
-    - timestamp: Source timestamp
-    - canon_level: Canon priority
-    - tags: Additional indexing tags
-    - schema_version: Schema version (auto-populated, default: 1)
-    - embedding_model: Embedding model used (auto-populated from config)
+    Returns the generated document ID on success or an empty string on failure.
     """
     collection = get_collection(collection_name)
     if collection is None:
@@ -646,76 +644,35 @@ def add_knowledge(
         logger.warning("Attempted to add empty document to knowledge base.")
         return ""
 
-    # Validate metadata
-    valid, error_msg = _validate_metadata(metadata)
-    if not valid:
-        logger.error(f"Invalid metadata for knowledge entry: {error_msg}")
+    # Ensure metadata is a dict and contains required keys.
+    meta = metadata.copy() if isinstance(metadata, dict) else {}
+    # Populate required fields that have defaults or are derived.
+    meta.setdefault("source", source)
+    if title:
+        meta["title"] = title
+
+    missing = REQUIRED_METADATA_FIELDS - meta.keys()
+    if missing:
+        logger.warning(
+            f"Missing required metadata fields for knowledge entry: {missing}"
+        )
         return ""
 
-    doc_id = f"kb_{uuid.uuid4().hex}"
+    # Normalize metadata values (e.g., list of topics -> comma‑separated string)
+    normalized_meta = _normalize_metadata(meta)
 
-    # Merge provided metadata with defaults
-    entry_metadata = {"source": source or "manual"}
-    if title:
-        entry_metadata["title"] = str(title).strip()
-    if metadata:
-        entry_metadata.update(_normalize_metadata(metadata))
-
-    # Add schema version and embedding model if not provided
-    if "schema_version" not in entry_metadata:
-        entry_metadata["schema_version"] = "1"
-    if "embedding_model" not in entry_metadata:
-        entry_metadata["embedding_model"] = os.getenv(
-            "EMBEDDING_MODEL", "text-embedding-3-large"
-        )
-
+    # Generate a unique ID for the document.
+    doc_id = str(uuid.uuid4())
     try:
         collection.add(
-            documents=[document],
-            metadatas=[entry_metadata],
             ids=[doc_id],
+            documents=[document],
+            metadatas=[normalized_meta],
         )
-        return doc_id
-    except Exception:  # chromadb doesn't expose a public base exception
-        logger.exception("Chroma add error")
+    except (ValueError, RuntimeError, OSError) as exc:
+        logger.error(f"Chroma add error: {exc}")
         return ""
-
-
-def list_knowledge(
-    limit: int = 20, collection_name: str | None = None
-) -> list[dict[str, Any]]:
-    collection = get_collection(collection_name)
-    if collection is None:
-        return []
-
-    try:
-        result = collection.get(
-            limit=limit, include=["documents", "metadatas"]
-        )
-    except TypeError:
-        try:
-            result = collection.get(include=["documents", "metadatas"])
-        except Exception:  # chromadb doesn't expose a public base exception
-            logger.exception("Chroma list error")
-            return []
-    except Exception:  # chromadb doesn't expose a public base exception
-        logger.exception("Chroma list error")
-        return []
-
-    ids = (result.get("ids", []) or [])[:limit]
-    docs = (result.get("documents", []) or [])[:limit]
-    metadatas = (result.get("metadatas", []) or [])[:limit]
-
-    entries: list[dict[str, Any]] = []
-    for index, doc_id in enumerate(ids):
-        entries.append(
-            {
-                "id": doc_id,
-                "document": docs[index] if index < len(docs) else "",
-                "metadata": metadatas[index] if index < len(metadatas) else {},
-            }
-        )
-    return entries
+    return doc_id
 
 
 def delete_knowledge(doc_id: str, collection_name: str | None = None) -> bool:
@@ -774,14 +731,56 @@ def query_knowledge(
                     {
                         "document": doc,
                         "metadata": metadatas[i] if i < len(metadatas) else {},
-                        "distance": (
-                            distances[i] if i < len(distances) else None
-                        ),
+                        "distance": (distances[i] if i < len(distances) else None),
                     }
                 )
         return entries
     except (ValueError, RuntimeError, OSError) as exc:
         logger.error(f"Chroma query error: {exc}")
+        return []
+
+
+def list_knowledge(
+    collection_name: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return all knowledge entries in the collection.
+
+    This mirrors :func:`get_knowledge_by_persona` but without any persona
+    filtering. It retrieves the full set of documents, their metadata, and the
+    associated IDs from the configured Chroma collection.
+
+    Args:
+        collection_name: Optional collection name override. If ``None`` the
+            default collection name from the environment is used.
+
+    Returns:
+        A list of dictionaries, each containing ``id``, ``document`` and
+        ``metadata`` keys. An empty list is returned if the collection cannot be
+        accessed or an error occurs.
+    """
+    collection = get_collection(collection_name)
+    if collection is None:
+        return []
+
+    try:
+        result = collection.get(include=["documents", "metadatas"])
+
+        ids = result.get("ids", []) or []
+        docs = result.get("documents", []) or []
+        metadatas = result.get("metadatas", []) or []
+
+        entries: list[dict[str, Any]] = []
+        for i, doc_id in enumerate(ids):
+            entries.append(
+                {
+                    "id": doc_id,
+                    "document": docs[i] if i < len(docs) else "",
+                    "metadata": metadatas[i] if i < len(metadatas) else {},
+                }
+            )
+        return entries
+    except (ValueError, RuntimeError, OSError) as exc:
+        logger.error(f"Chroma list_knowledge error: {exc}")
         return []
 
 

@@ -89,3 +89,5 @@ test_nitter2.py
 e501.txt
 *_test.txt
 test_*.txt
+.serena/*
+.serena/project.yml

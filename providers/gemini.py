@@ -1,6 +1,6 @@
-import os
 from typing import Any
 from google import genai
+import os
 from providers.base import BaseProvider
 from utils.providers import format_user_text, build_interactions_input
 
@@ -22,6 +22,8 @@ class GeminiProvider(BaseProvider):
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY missing.")
+        if genai is None:
+            raise RuntimeError("Google Gemini SDK not installed.")
         client = genai.Client(api_key=api_key)
 
         # Build user text

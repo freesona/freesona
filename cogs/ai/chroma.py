@@ -248,9 +248,7 @@ class ChromaCog(commands.Cog):
         await ctx.defer(ephemeral=True)
 
         # Run ChromaDB query off-thread to prevent event loop blocking
-        matches = await asyncio.to_thread(
-            query_knowledge, query, limit=limit, persona=persona
-        )
+        matches = await asyncio.to_thread(query_knowledge, query, limit, persona)
         if not matches:
             await ctx.send("No knowledge base matches found.", ephemeral=True)
             return
@@ -264,7 +262,9 @@ class ChromaCog(commands.Cog):
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 150:
                 snippet = snippet[:147] + "..."
-            lines.append(f"- **{persona_name}** ({entry_type}, {source}):\n    {snippet}")
+            lines.append(
+                f"- **{persona_name}** ({entry_type}, {source}):\n    {snippet}"
+            )
 
         response_text = "\n".join(lines)
 
@@ -310,12 +310,10 @@ class ChromaCog(commands.Cog):
             try:
                 raw_bytes = await attachment.read()
             except discord.HTTPException as exc:
-                await ctx.send(f"Failed to read attachment: {exc}",
-                    ephemeral=True)
+                await ctx.send(f"Failed to read attachment: {exc}", ephemeral=True)
                 return
             except OSError as exc:
-                await ctx.send(f"Failed to read attachment: {exc}",
-                    ephemeral=True)
+                await ctx.send(f"Failed to read attachment: {exc}", ephemeral=True)
                 return
 
             # Extract text off-thread for CPU-heavy parsing (PDFs, EPUBs, JSON)
@@ -425,12 +423,10 @@ class ChromaCog(commands.Cog):
 
         success = await asyncio.to_thread(delete_knowledge, entry_id)
         if success:
-            await ctx.send(f"Deleted knowledge entry `{entry_id}`.",
-                ephemeral=True)
+            await ctx.send(f"Deleted knowledge entry `{entry_id}`.", ephemeral=True)
             return
 
-        await ctx.send("Could not delete that knowledge entry.",
-            ephemeral=True)
+        await ctx.send("Could not delete that knowledge entry.", ephemeral=True)
 
     @commands.hybrid_command(
         name="kbpersona",
@@ -441,8 +437,7 @@ class ChromaCog(commands.Cog):
         limit="Maximum entries to show (default 50)",
     )
     @commands.has_permissions(administrator=True)
-    async def kbpersona(self, ctx: commands.Context, persona: str, limit: int =
-        50):
+    async def kbpersona(self, ctx: commands.Context, persona: str, limit: int = 50):
         await ctx.defer(ephemeral=True)
 
         entries = await asyncio.to_thread(
