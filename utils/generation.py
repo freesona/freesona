@@ -286,24 +286,18 @@ async def send_response(
 
     segments = [s for s in response.segments if s.text.strip()]
     if not segments:
-        return
+        # Ensure we always have at least one segment to send
+        segments = [MessageSegment(text=".", delay=0, typing=False)]
 
     for i, segment in enumerate(segments):
-        try:
-            if segment.typing and segment.delay > 0:
-                async with channel.typing():
-                    await asyncio.sleep(segment.delay)
+        if segment.typing and segment.delay > 0:
+            async with channel.typing():
+                await asyncio.sleep(segment.delay)
 
-            if i == 0 and reply_to is not None:
-                await _send_first_segment_with_reply(channel, segment.text, reply_to)
-            else:
-                await channel.send(segment.text)
-        except discord.Forbidden:
-            channel_id = getattr(channel, "id", "Unknown")
-            logger.warning(
-                f"Missing permissions to send messages in channel {channel_id}"
-            )
-            return
+        if i == 0 and reply_to is not None:
+            await _send_first_segment_with_reply(channel, segment.text, reply_to)
+        else:
+            await channel.send(segment.text)
 
 
 async def _send_first_segment_with_reply(
