@@ -294,10 +294,14 @@ async def send_response(
             async with channel.typing():
                 await asyncio.sleep(segment.delay)
 
-        if i == 0 and reply_to is not None:
-            await _send_first_segment_with_reply(channel, segment.text, reply_to)
-        else:
-            await channel.send(segment.text)
+        try:
+            if i == 0 and reply_to is not None:
+                await _send_first_segment_with_reply(channel, segment.text, reply_to)
+            else:
+                await channel.send(segment.text)
+        except discord.Forbidden:
+            # Stop sending when Forbidden error occurs (e.g., lack of permissions)
+            return
 
 
 async def _send_first_segment_with_reply(
