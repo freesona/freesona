@@ -293,8 +293,8 @@ if [ ! -d .venv ]; then
 fi
 
 source .venv/bin/activate
-python3 -m pip install --upgrade pip >/dev/null
-python3 -m pip install -r requirements.txt >/dev/null
+python -m pip install --upgrade pip >/dev/null
+python -m pip install -r requirements.txt >/dev/null
 
 # Optional delphitools CLI installation
 read -p "Do you want to install delphitools CLI (requires Rust)? [y/N] " install_dt
@@ -308,11 +308,11 @@ fi
 
 echo ""
 echo "Running project checks..."
-python3 scripts/check_project.py
+python scripts/check_project.py
 
 echo ""
 echo "====================================================="
 echo "         Setup complete! Starting Freesona...        "
 echo "====================================================="
 echo ""
-python3 main.py
+python main.py
