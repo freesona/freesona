@@ -1,13 +1,22 @@
+#!/usr/bin/env python3
+
 # scripts/dump_command.py: Python module.
+
 import sys
 from pathlib import Path
 
 # Ensure project root is in sys.path for local imports
+
 ROOT = Path(__file__).resolve().parents[1]
+
 if str(ROOT) not in sys.path:
+
     sys.path.insert(0, str(ROOT))
 
+
+
 # Standard library imports
+
 import asyncio
 import logging
 import warnings
@@ -29,145 +38,288 @@ from utils.modules import (
 )
 
 # Suppress noisy logs to keep output clean
+
 logging.basicConfig(level=logging.WARNING)
+
 logging.captureWarnings(True)
+
 logger = logging.getLogger("PreviewBot")
+
 logging.getLogger("discord").setLevel(logging.ERROR)
+
 logging.getLogger("discord.state").setLevel(logging.ERROR)
+
 logging.getLogger("discord.client").setLevel(logging.ERROR)
+
 logging.getLogger("discord.http").setLevel(logging.ERROR)
+
 logging.getLogger("asyncio").setLevel(logging.ERROR)
 
+
+
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="asyncio")
+
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="asyncio")
+
 warnings.filterwarnings("ignore", module="discord")
 
+
+
 ROOT = Path(__file__).resolve().parents[1]
+
 if str(ROOT) not in sys.path:
+
     sys.path.insert(0, str(ROOT))
 
 
+
+
+
 class PreviewBot(commands.Bot):
+
     async def setup_hook(self):
+
         pass
 
 
+
+
+
 def get_params(command: Any) -> list[dict]:
+
     """Extracts parameter details from both Prefix and Slash commands."""
+
     params = []
 
+
+
     # Handle Prefix/Hybrid Commands
+
     if isinstance(command, commands.Command):
+
         for name, param in command.clean_params.items():
+
             params.append(
+
                 {
+
                     "name": name,
+
                     "required": param.default is param.empty,
+
                     "type": (
+
                         str(param.annotation.__name__)
+
                         if hasattr(param.annotation, "__name__")
+
                         else "Any"
+
                     ),
+
                 }
+
             )
 
+
+
     # Handle Slash Commands (App Commands)
+
     elif isinstance(command, discord.app_commands.Command):
+
         for param in command.parameters:
+
             params.append(
+
                 {
+
                     "name": param.name,
+
                     "required": param.required,
+
                     "type": (
+
                         str(param.type.name) if hasattr(param.type, "name") else "Any"
+
                     ),
+
                 }
+
             )
+
+
 
     return params
 
 
+
+
+
 def process_commands(cmds: Iterable[Any], is_tree: bool = False) -> list[dict]:
+
     """Recursively processes commands and subcommands."""
+
     cmd_list = list(cmds)
+
     extracted = []
 
+
+
     for cmd in sorted(cmd_list, key=lambda x: x.name):
+
         if not is_tree and getattr(cmd, "hidden", False):
+
             continue
 
+
+
         entry = {
+
             "name": cmd.name,
+
             "qualified_name": cmd.qualified_name,
+
             "description": getattr(cmd, "help", getattr(cmd, "description", ""))
+
             or "No description provided.",
+
         }
 
+
+
         if not is_tree:
+
             entry["aliases"] = list(getattr(cmd, "aliases", []))
+
             entry["is_hybrid"] = isinstance(cmd, commands.HybridCommand)
+
+
 
         entry["parameters"] = get_params(cmd)
 
+
+
         # Check for subcommands
+
         children = []
+
         if is_tree and hasattr(cmd, "commands"):  # Slash Groups
+
             children = cmd.commands
+
         elif not is_tree and isinstance(cmd, commands.Group):  # Prefix Groups
+
             children = list(cmd.commands)
 
+
+
         if children:
+
             entry["children"] = process_commands(children, is_tree)
 
+
+
         extracted.append(entry)
+
+
 
     return extracted
 
 
+
+
+
 async def main() -> None:
+
     config = load_config()
+
     prefix = str(config.get("prefix", "~"))
 
+
+
     intents = discord.Intents.none()
+
     bot = PreviewBot(command_prefix=prefix, intents=intents)
 
+
+
     enabled_modules = load_enabled_modules(config)
+
     extensions = CORE_EXTENSIONS + [
+
         ext for name, ext in OPTIONAL_MODULES.items() if enabled_modules.get(name, True)
+
     ]
+
+
 
     bot.remove_command("help")
 
+
+
     loaded_successfully = []
+
     failed_extensions = []
+
     for ext in extensions:
+
         try:
+
             await bot.load_extension(ext)
+
             loaded_successfully.append(ext)
+
         except commands.ExtensionError as e:
+
             failed_extensions.append({"extension": ext, "error": str(e)})
+
             logger.debug(f"Failed to load {ext}: {e}")
 
+
+
     report = {
+
         "bot_info": {
+
             "prefix": prefix,
+
             "extension_count": len(loaded_successfully),
+
             "loaded_extensions": loaded_successfully,
+
             "modules": {
+
                 module_name: enabled_modules.get(module_name, True)
+
                 for module_name in sorted(OPTIONAL_MODULES)
+
             },
+
             "failed_extensions": failed_extensions,
+
         },
+
         "prefix_commands": process_commands(bot.commands, is_tree=False),
+
         "slash_commands": process_commands(bot.tree.get_commands(), is_tree=True),
+
     }
 
+
+
     # Use sort_keys=False to preserve the order we built
+
     print(yaml.dump(report, sort_keys=False, allow_unicode=True, indent=2))
+
+
 
     await bot.close()
 
 
+
+
+
 if __name__ == "__main__":
+
     asyncio.run(main())
+

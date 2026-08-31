@@ -1,4 +1,8 @@
+#!/usr/bin/env python3
+
 # utils/persona.py: Persona data layer, modals, and /setpersona command group.
+
+
 
 import json
 import logging
@@ -11,486 +15,971 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+
 logger = logging.getLogger("FreesonaBot")
 
+
+
 AI_PERSONA_PATH = os.getenv("AI_PERSONA_FILE", "persona.txt")
+
 AI_PERSONA_JSON_PATH = os.getenv("AI_PERSONA_JSON_FILE", "persona.json")
+
 PERSONAS_PATH = os.getenv("AI_PERSONAS_FILE", "personas.json")
 
+
+
 PERSONA_FIELDS = [
+
     "core_personality",
+
     "background",
+
     "beliefs",
+
     "language",
+
     "system_instructions",
+
     "temperature",
+
 ]
+
+
 
 PERSONA_LABELS = {
+
     "core_personality": "Core Personality & Traits",
+
     "background": "Background & History",
+
     "beliefs": "Beliefs, Likes & Dislikes",
+
     "language": "Language & Communication Style",
+
     "system_instructions": "System Instructions",
+
     "temperature": "Temperature (0.0-2.0)",
+
 }
 
+
+
 ASSEMBLY_ORDER = [
+
     "system_instructions",
+
     "core_personality",
+
     "background",
+
     "beliefs",
+
     "language",
+
     "temperature",
+
 ]
 
+
+
 # ---------------------------------------------------------------------------
+
 # Runtime state (module-level globals, mutated by modals and commands)
+
 # ---------------------------------------------------------------------------
+
+
 
 PERSONA_DATA: dict = {}
+
 CURRENT_PERSONA: str = ""
+
 CURRENT_PERSONA_ID: str = ""
+
 PERSONA_LOCKED: bool = False
+
 LEGACY_DETECTED: bool = False
 
+
+
 # ---------------------------------------------------------------------------
+
 # Data helpers
+
 # ---------------------------------------------------------------------------
+
+
+
 
 
 def default_persona_json() -> dict:
+
     return {f: "" for f in PERSONA_FIELDS}
 
 
+
+
+
 def load_persona_json() -> dict:
+
     if os.path.exists(AI_PERSONA_JSON_PATH):
+
         try:
+
             with open(AI_PERSONA_JSON_PATH, "r", encoding="utf-8") as f:
+
                 data = json.load(f)
+
                 for field_name in PERSONA_FIELDS:
+
                     if field_name not in data:
+
                         data[field_name] = ""
+
                 return data
+
         except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
+
             logger.error(f"Persona JSON load error: {e}")
+
     return default_persona_json()
 
 
+
+
+
 def save_persona_json(data: dict):
+
     os.makedirs(
+
         (
+
             os.path.dirname(AI_PERSONA_JSON_PATH)
+
             if os.path.dirname(AI_PERSONA_JSON_PATH)
+
             else "."
+
         ),
+
         exist_ok=True,
+
     )
+
     with open(AI_PERSONA_JSON_PATH, "w", encoding="utf-8") as f:
+
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+
+
+
 def assemble_persona(data: dict) -> str:
+
     xml_tags = {
+
         "system_instructions": "system_instructions",
+
         "core_personality": "role",
+
         "background": "background",
+
         "beliefs": "beliefs",
+
         "language": "language",
+
         "temperature": "temperature",
+
     }
+
     parts = []
+
     for f in ASSEMBLY_ORDER:
+
         tag = xml_tags[f]
+
         value = data.get(f, "").strip()
+
         if value:
+
             parts.append(f"<{tag}>\n{value}\n</{tag}>")
+
     return "\n\n".join(parts)
 
 
+
+
+
 def load_legacy_persona() -> str | None:
+
     if os.path.exists(AI_PERSONA_PATH):
+
         try:
+
             with open(AI_PERSONA_PATH, "r", encoding="utf-8") as f:
+
                 data = f.read().strip()
+
                 if data:
+
                     return data
+
         except (OSError, UnicodeDecodeError) as e:
+
             logger.error(f"Legacy persona load error: {e}")
+
     return None
 
 
+
+
+
 def load_profiles() -> dict:
+
     if os.path.exists(PERSONAS_PATH):
+
         try:
+
             with open(PERSONAS_PATH, "r", encoding="utf-8") as f:
+
                 return json.load(f)
+
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+
             pass
+
     return {}
 
 
+
+
+
 def save_profiles(profiles: dict):
+
     os.makedirs(
+
         (
+
             os.path.dirname(PERSONAS_PATH)
+
             if os.path.dirname(PERSONAS_PATH)
+
             else "."
+
         ),
+
         exist_ok=True,
+
     )
+
     with open(PERSONAS_PATH, "w", encoding="utf-8") as f:
+
         json.dump(profiles, f, indent=2, ensure_ascii=False)
 
 
+
+
+
 def _load_and_assemble_persona() -> tuple[str, bool, dict]:
+
     """Load persona from JSON file or legacy file.
 
+
+
     Returns (assembled_persona, legacy_detected, persona_data).
+
     """
+
     if os.path.exists(AI_PERSONA_JSON_PATH):
+
         persona_data = load_persona_json()
+
         current_persona = assemble_persona(persona_data)
+
         legacy_detected = False
+
     else:
+
         legacy = load_legacy_persona()
+
         if legacy:
+
             persona_data = default_persona_json()
+
             current_persona = legacy
+
             legacy_detected = True
+
         else:
+
             persona_data = default_persona_json()
+
             current_persona = os.getenv(
+
                 "AI_PERSONA", "You are a helpful assistant."
+
             )
+
             legacy_detected = False
+
     return current_persona, legacy_detected, persona_data
 
 
+
+
+
 def init_persona():
+
     global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
+
     CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = (
+
         _load_and_assemble_persona()
+
     )
+
+
+
 
 
 def reload_persona() -> tuple[str, bool]:
+
     """Reload persona from JSON file.
 
+
+
     Returns (assembled_persona, legacy_detected).
+
     """
+
     global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
+
     CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = (
+
         _load_and_assemble_persona()
+
     )
+
     return CURRENT_PERSONA, LEGACY_DETECTED
 
 
+
+
+
 # Run on import
+
 init_persona()
 
+
+
 # ---------------------------------------------------------------------------
+
 # Modals
+
 # ---------------------------------------------------------------------------
+
+
+
 
 
 class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
+
     core_personality = ui.TextInput(
+
         label="Core Personality & Traits",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
         placeholder=(
+
             "Describe the bot's personality, identity, and core traits."
+
         ),
+
     )
+
     background = ui.TextInput(
+
         label="Background & History",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
         placeholder="Origin, backstory, relevant history.",
+
     )
+
     temperature = ui.TextInput(
+
         label="Temperature (0.0-2.0)",
+
         style=discord.TextStyle.short,
+
         required=False,
+
         max_length=4,
+
         placeholder="0.7",
+
     )
+
+
 
     def __init__(self, data: dict):
+
         super().__init__()
+
         self.core_personality.default = data.get("core_personality", "")
+
         self.background.default = data.get("background", "")
+
         self.temperature.default = str(data.get("temperature", ""))
 
+
+
     async def on_submit(self, interaction: discord.Interaction):
+
         global CURRENT_PERSONA
+
         if PERSONA_LOCKED:
+
             await interaction.response.send_message(
+
                 "Persona is locked. Use `/personaunlock` first.",
+
                 ephemeral=True,
+
             )
+
             return
+
         PERSONA_DATA["core_personality"] = self.core_personality.value.strip()
+
         PERSONA_DATA["background"] = self.background.value.strip()
+
         temp_val = self.temperature.value.strip()
+
         if temp_val:
+
             try:
+
                 PERSONA_DATA["temperature"] = float(temp_val)
+
             except ValueError:
+
                 PERSONA_DATA["temperature"] = 0.7
+
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
+
         try:
+
             save_persona_json(PERSONA_DATA)
+
             await interaction.response.send_message(
+
                 "✅ Core & Background saved. Use `/setpersona style` "
+
                 "for the remaining fields.",
+
                 ephemeral=True,
+
             )
+
         except (OSError, TypeError, UnicodeEncodeError) as e:
+
             await interaction.response.send_message(
+
                 f"Save failed: {e}", ephemeral=True
+
             )
+
+
+
 
 
 class PersonaStyleModal(ui.Modal, title="Persona: Style & Instructions"):
+
     beliefs = ui.TextInput(
+
         label="Beliefs, Likes & Dislikes",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
         placeholder="Values, opinions, preferences, things they love or hate.",
+
     )
+
     language = ui.TextInput(
+
         label="Language & Communication Style",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
         placeholder="Primary language, tone, slang, formality level.",
+
     )
+
     system_instructions = ui.TextInput(
+
         label="System Instructions",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
         placeholder="Advanced rules, constraints, or override behavior.",
+
     )
+
+
 
     def __init__(self, data: dict):
+
         super().__init__()
+
         self.beliefs.default = data.get("beliefs", "")
+
         self.language.default = data.get("language", "")
+
         self.system_instructions.default = data.get("system_instructions", "")
 
+
+
     async def on_submit(self, interaction: discord.Interaction):
+
         global CURRENT_PERSONA
+
         if PERSONA_LOCKED:
+
             await interaction.response.send_message(
+
                 "Persona is locked. Use `/personaunlock` first.",
+
                 ephemeral=True,
+
             )
+
             return
+
         PERSONA_DATA["beliefs"] = self.beliefs.value.strip()
+
         PERSONA_DATA["language"] = self.language.value.strip()
+
         PERSONA_DATA["system_instructions"] = (
+
             self.system_instructions.value.strip()
+
         )
+
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
+
         try:
+
             save_persona_json(PERSONA_DATA)
+
             await interaction.response.send_message(
+
                 "✅ Style & Instructions saved.", ephemeral=True
+
             )
+
         except (OSError, TypeError, UnicodeEncodeError) as e:
+
             await interaction.response.send_message(
+
                 f"Save failed: {e}", ephemeral=True
+
             )
 
 
+
+
+
 # ---------------------------------------------------------------------------
+
 # Panel UI  (/setpersona opens this; SetPersonaGroup slash subcommands removed)
+
 # ---------------------------------------------------------------------------
+
+
+
 
 
 class PersonaFullModal(ui.Modal, title="Persona Editor"):
+
     core_personality = ui.TextInput(
+
         label="Core Personality & Traits",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
     )
+
     background = ui.TextInput(
+
         label="Background & History",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
     )
+
     beliefs = ui.TextInput(
+
         label="Beliefs, Likes & Dislikes",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
     )
+
     language = ui.TextInput(
+
         label="Language & Communication Style",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
     )
+
     system_instructions = ui.TextInput(
+
         label="System Instructions",
+
         style=discord.TextStyle.paragraph,
+
         required=False,
+
         max_length=1024,
+
     )
+
+
 
     def __init__(self, data: dict):
+
         super().__init__()
+
         for field_name in PERSONA_FIELDS:
+
             if field_name == "temperature":
+
                 # Temperature is edited in the core modal; skip here (Discord
+
                 # limit: 5 components max)
+
                 continue
+
             value = data.get(field_name, "")
+
             getattr(self, field_name).default = (
+
                 str(value) if value is not None else ""
+
             )
 
+
+
     async def on_submit(self, interaction: discord.Interaction):
+
         global CURRENT_PERSONA
+
         if PERSONA_LOCKED:
+
             await interaction.response.send_message(
+
                 "Persona is locked. Use `/personaunlock` first.",
+
                 ephemeral=True,
+
             )
+
             return
+
         for field_name in PERSONA_FIELDS:
+
             if field_name == "temperature":
+
                 continue  # Temperature edited in core modal
+
             PERSONA_DATA[field_name] = getattr(self, field_name).value.strip()
+
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
+
         try:
+
             save_persona_json(PERSONA_DATA)
+
             await interaction.response.send_message(
+
                 "Persona saved. (Temperature is edited in Core & "
+
                 "Background modal)",
+
                 ephemeral=True,
+
             )
+
         except (OSError, TypeError, UnicodeEncodeError) as e:
+
             await interaction.response.send_message(
+
                 f"Save failed: {e}", ephemeral=True
+
             )
+
+
+
 
 
 class PersonaPanelView(ui.View):
+
     def __init__(self, bot: commands.Bot):
+
         super().__init__(timeout=300)
+
         self.bot = bot
 
+
+
     async def interaction_check(
+
         self, interaction: discord.Interaction
+
     ) -> bool:
+
         if not await self.bot.is_owner(interaction.user):
+
             await interaction.response.send_message(
+
                 "Owner only.", ephemeral=True
+
             )
+
             return False
+
         return True
 
+
+
     @ui.button(
+
         label="Edit Persona", style=discord.ButtonStyle.primary, emoji="✏️"
+
     )
+
     async def edit_persona(
+
         self, interaction: discord.Interaction, button: ui.Button
+
     ):
+
         await interaction.response.send_modal(PersonaFullModal(PERSONA_DATA))
 
+
+
     @ui.button(
+
         label="Preview Prompt", style=discord.ButtonStyle.secondary, emoji="📄"
+
     )
+
     async def preview_prompt(
+
         self, interaction: discord.Interaction, button: ui.Button
+
     ):
+
         persona = CURRENT_PERSONA.strip() or "*(no persona assembled yet)*"
+
         # Chunk to 4000 chars to stay within embed description limit
+
         embed = discord.Embed(
+
             title="Assembled Persona Prompt",
+
             description=f"```{persona[:3900]}```",
+
             color=discord.Color.yellow(),
+
         )
+
         if len(persona) > 3900:
+
             embed.set_footer(text=f"Truncated — full prompt is {
+
                 len(persona)} chars.")
+
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 
     @ui.button(label="Debug", style=discord.ButtonStyle.secondary, emoji="🔍")
+
     async def debug_persona(
+
         self, interaction: discord.Interaction, button: ui.Button
+
     ):
+
         locked = "🔒 Locked" if PERSONA_LOCKED else "🔓 Unlocked"
+
         legacy = "Yes — migrate via `/setpersona`" if LEGACY_DETECTED else "No"
+
         filled = sum(
+
             1 for f in PERSONA_FIELDS if PERSONA_DATA.get(f, "").strip()
+
         )
+
         embed = discord.Embed(
+
             title="Persona Debug", color=discord.Color.og_blurple()
+
         )
+
         embed.add_field(name="Lock State", value=locked, inline=True)
+
         embed.add_field(name="Legacy Mode", value=legacy, inline=True)
+
         embed.add_field(
+
             name="Fields Filled",
+
             value=f"{filled}/{len(PERSONA_FIELDS)}",
+
             inline=True,
+
         )
+
         embed.add_field(name="Prompt Length", value=f"{
+
             len(CURRENT_PERSONA)} chars", inline=True)
+
         for field_name in ASSEMBLY_ORDER:
+
             value = PERSONA_DATA.get(field_name, "").strip()
+
             embed.add_field(
+
                 name=PERSONA_LABELS[field_name],
+
                 value=(value[:512] or "*(empty)*"),
+
                 inline=False,
+
             )
+
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+
+
     @ui.button(
+
         label="Lock / Unlock", style=discord.ButtonStyle.danger, emoji="🔐"
+
     )
+
     async def toggle_lock(
+
         self, interaction: discord.Interaction, button: ui.Button
+
     ):
+
         global PERSONA_LOCKED
+
         PERSONA_LOCKED = not PERSONA_LOCKED
+
         state = "🔒 locked" if PERSONA_LOCKED else "🔓 unlocked"
+
         await interaction.response.send_message(
+
             f"Persona is now **{state}**.", ephemeral=True
+
         )
+
+
+
 
 
 async def open_persona_panel(interaction: discord.Interaction):
+
     bot = interaction.client
+
     if not isinstance(bot, commands.Bot):
+
         await interaction.response.send_message(
+
             "Owner check failed.", ephemeral=True
+
         )
+
         return
+
     if not await bot.is_owner(interaction.user):
+
         await interaction.response.send_message("Owner only.", ephemeral=True)
+
         return
+
     locked = "🔒 Locked" if PERSONA_LOCKED else "🔓 Unlocked"
+
     embed = discord.Embed(
+
         title="Persona Editor",
+
         description="Use the buttons below to manage the active persona.",
+
         color=discord.Color.yellow(),
+
     )
+
     embed.add_field(name="Lock State", value=locked, inline=True)
+
     embed.add_field(
+
         name="Fields",
+
         value="\n".join(f"• {PERSONA_LABELS[f]}" for f in PERSONA_FIELDS),
+
         inline=False,
+
     )
+
     await interaction.response.send_message(
+
         embed=embed, view=PersonaPanelView(bot), ephemeral=True
+
     )
+

@@ -333,12 +333,7 @@ if kb_context:
 
 | Location                | Issue                                                                                 |
 |-------------------------|---------------------------------------------------------------------------------------|
-| `generation.py:412`     | `if provider_name != "gemini"` branch                                                 |
-| `generation.py:417–429` | Gemini Interactions API with `previous_interaction_id`                                |
-| `providers.py:128–140`  | Gemini uses `genai.Client` + `system_instruction` config; others use chat completions |
-| `providers.py:179–188`  | NIM model-specific `extra_payload`                                                    |
-| `search.py`             | Only Gemini Grounding API                                                             |
-| `memory.py:139–146`     | Fact extraction uses Gemini Interactions API directly                                 |
+| `generation.py` | Provider‑specific continuity logic removed; no Gemini‑only branches remain |
 
 **Required:** `Provider` protocol with `generate()`, `generate_stream()`, `supports_continuity()`, `supports_multimodal()`.
 

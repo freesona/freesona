@@ -1,4 +1,8 @@
+#!/usr/bin/env python3
+
 # cogs/system/help.py: Help index with interactive button-based navigation.
+
+
 
 import logging
 import os
@@ -11,398 +15,795 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+
 BOT_NAME = os.getenv("BOT_NAME", "Bot")
+
 logger = logging.getLogger(__name__)
 
 
+
+
+
 def _split_embed_text(text: str, limit: int = 1024) -> list[str]:
+
     """Split long help text into Discord-safe chunks."""
+
     lines = text.splitlines()
+
     chunks = []
+
     current = ""
 
+
+
     for line in lines:
+
         candidate = f"{current}\n{line}" if current else line
+
         if len(candidate) > limit:
+
             if current:
+
                 chunks.append(current)
+
                 current = line
+
             else:
+
                 chunks.append(candidate[:limit])
+
                 current = candidate[limit:]
+
                 current = current.removeprefix("\n")
+
         else:
+
             current = candidate
 
+
+
     if current:
+
         chunks.append(current)
+
+
 
     return chunks or [text[:limit]]
 
 
+
+
+
 class HelpView(discord.ui.View):
+
     def __init__(self, bot, ctx, categories, prefix):
+
         super().__init__(timeout=None)
+
         self.bot = bot
+
         self.ctx = ctx
+
         self.categories = categories
+
         self.prefix = prefix
+
         self.current_category = None
+
         self.page_index = 0
 
+
+
     async def update_help(
+
         self, interaction: discord.Interaction, category: str, page: int = 0
+
     ):
+
         try:
+
             await interaction.response.defer()
 
+
+
             embed = discord.Embed(
+
                 title=f"{category} Commands",
+
                 description=(
+
                     f"Detailed help for {BOT_NAME}'s "
+
                     f"{category.lower()} features."
+
                 ),
+
                 color=discord.Color.blue(),
+
             )
+
+
 
             user = getattr(self.bot, "user", None)
+
             avatar = getattr(
+
                 getattr(user, "display_avatar", None), "url", None
+
             )
+
             if avatar:
+
                 embed.set_thumbnail(url=avatar)
 
+
+
             content = self.categories.get(category, "No commands found.")
+
             chunks = _split_embed_text(content)
+
             self.current_category = category
+
             self.page_index = max(0, min(page, len(chunks) - 1))
 
+
+
             embed.add_field(
+
                 name="Commands", value=chunks[self.page_index], inline=False
+
             )
+
             if len(chunks) > 1:
+
                 embed.set_footer(
+
                     text=(
+
                         f"Page {self.page_index + 1}/{len(chunks)} "
+
                         f"• Use {self.prefix}help <command> for specifics."
+
                     )
+
                 )
+
             else:
+
                 embed.set_footer(
+
                     text=f"Use {self.prefix}help <command> for specifics."
+
                 )
+
+
 
             self.prev_button.disabled = self.page_index == 0
+
             self.next_button.disabled = self.page_index >= len(chunks) - 1
 
+
+
             message = interaction.message
+
             if message is not None:
+
                 await message.edit(embed=embed, view=self)
+
             else:
+
                 await interaction.followup.send(embed=embed, view=self)
+
         except Exception:
+
             logger.exception(
+
                 "Help button interaction failed for category %s", category
+
             )
+
             if not interaction.response.is_done():
+
                 await interaction.response.send_message(
+
                     "The help panel could not be updated right now.",
+
                     ephemeral=True,
+
                 )
 
+
+
     @discord.ui.button(
+
         label="AI & Persona", style=discord.ButtonStyle.primary, emoji="🤖"
+
     )
+
     async def ai_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         await view.update_help(interaction, "AI Persona")
 
+
+
     @discord.ui.button(
+
         label="Media", style=discord.ButtonStyle.secondary, emoji="📥"
+
     )
+
     async def media_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         await view.update_help(interaction, "Media")
 
+
+
     @discord.ui.button(
+
         label="News/RSS", style=discord.ButtonStyle.secondary, emoji="📰"
+
     )
+
     async def news_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         await view.update_help(interaction, "News")
 
+
+
     @discord.ui.button(
+
         label="Utility", style=discord.ButtonStyle.secondary, emoji="🔧"
+
     )
+
     async def util_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         await view.update_help(interaction, "Utility")
 
+
+
     @discord.ui.button(
+
         label="Fun", style=discord.ButtonStyle.success, emoji="🎲"
+
     )
+
     async def fun_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         await view.update_help(interaction, "Fun")
 
+
+
     @discord.ui.button(
+
         label="Moderation", style=discord.ButtonStyle.danger, emoji="🛡️"
+
     )
+
     async def mod_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         await view.update_help(interaction, "Moderation")
 
+
+
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=1)
+
     async def prev_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         if view.current_category and view.page_index > 0:
+
             await view.update_help(
+
                 interaction, view.current_category, view.page_index - 1
+
             )
 
+
+
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=1)
+
     async def next_button(
+
         self, interaction: discord.Interaction, button: discord.ui.Button
+
     ):
+
         _ = button
+
         view = cast("HelpView", self)
+
         if view.current_category:
+
             content = view.categories.get(view.current_category, "")
+
             total_pages = len(_split_embed_text(content))
+
             if view.page_index < total_pages - 1:
+
                 await view.update_help(
+
                     interaction, view.current_category, view.page_index + 1
+
                 )
+
+
+
 
 
 class HelpCog(commands.Cog):
+
     def __init__(self, bot):
+
         self.bot = bot
 
+
+
         self.ai_commands = {
+
             "write",
+
             "ask",
+
             "search",
+
             "personalock",
+
             "personaunlock",
+
             "personasave",
+
             "personaload",
+
             "personalist",
+
             "personadelete",
+
             "debugpersona",
+
             "setchannel",
+
             "clearchannel",
+
             "clearmemory",
+
             "memorylist",
+
             "memorydelete",
+
             "memoryclear",
+
             "migrate",
+
             "chatmode",
+
             "botwhitelist",
+
             "autonomy",
+
             "setpersona",
+
         }
 
+
+
     def get_command_category(self, cmd):
+
         # 1. Check for registered cog category
+
         if cmd.cog and hasattr(cmd.cog, "help_category"):
+
             return cmd.cog.help_category
 
+
+
         # 2. Hardcoded fallback (maintaining current behavior)
+
         if cmd.name in [
+
             "hello",
+
             "randommember",
+
             "coinflip",
+
             "roll",
+
             "pick",
+
         ]:
+
             return "Fun"
+
         elif cmd.name in [
+
             "kick",
+
             "purge",
+
             "removetimeout",
+
             "timeout",
+
             "ban",
+
             "unban",
+
             "softban",
+
             "warn",
+
             "warns",
+
             "delwarn",
+
             "clearwarns",
+
             "warnthresholds",
+
             "slowmode",
+
             "lock",
+
             "unlock",
+
         ]:
+
             return "Moderation"
+
         elif cmd.name in ["math", "plot", "help", "ping"]:
+
             return "Utility"
+
         elif cmd.name in ["download", "audio", "separate"]:
+
             return "Media"
+
         elif cmd.name == "rss":
+
             return "News"
+
         elif cmd.name in self.ai_commands:
+
             return "AI Persona"
+
+
 
         return "Utility" # Default fallback
 
+
+
     @commands.hybrid_command(
+
         name="help", help="Shows help information for commands."
+
     )
+
     @app_commands.describe(
+
         command_name=(
+
             "The name of the command you want details for."
+
         )
+
     )
+
     async def help_cmd(self, ctx, *, command_name: str | None = None):
+
         raw_prefix = self.bot.command_prefix
+
         if callable(raw_prefix):
+
             raw_prefix = raw_prefix(self.bot, ctx.message)
+
         if isinstance(raw_prefix, (list, tuple)):
+
             prefix = str(raw_prefix[0]) if raw_prefix else "~"
+
         else:
+
             prefix = str(raw_prefix)
 
+
+
         if not command_name:
+
             cats = {
+
                 "Fun": [],
+
                 "Moderation": [],
+
                 "Utility": [],
+
                 "Media": [],
+
                 "AI Persona": [],
+
                 "News": [],
+
             }
+
+
 
             for cmd in self.bot.commands:
+
                 if cmd.hidden:
+
                     continue
 
+
+
                 category = self.get_command_category(cmd)
+
                 if category not in cats:
+
                     cats[category] = []
 
+
+
                 entry = f"`{cmd.name}` - {cmd.help or 'No description'}"
+
                 cats[category].append(entry)
 
+
+
             # Special additions to formatted strings
+
             formatted_cats = {
+
                 k: "\n".join(v) if v else "None" for k, v in cats.items()
+
             }
 
+
+
             if "AI Persona" in formatted_cats:
+
                 formatted_cats["AI Persona"] += (
+
                     "\n`/setpersona` — Persona editor\n"
+
                     "`/autonomy` — Auto-mode\n"
+
                     "`/botwhitelist` — Manage bot whitelist"
+
                 )
+
             if "News" in formatted_cats:
+
                 formatted_cats["News"] = (
+
                     "`/rss list` — List feeds\n"
+
                     "`/rss latest <name>` — Fetch articles\n"
+
                     "`/rss add <name> <url>` — Add feed\n"
+
                     "`/rss setchannel <#ch>` — Auto-post"
+
                 )
+
+
 
             embed = discord.Embed(
+
                 title=f"{BOT_NAME} Help Menu",
+
                 description=(
+
                     "Click the buttons below to see commands.\n\n"
+
                     f"**Current Prefix:** `{prefix}`"
+
                 ),
+
                 color=discord.Color.blue(),
+
             )
+
             bot_user = self.bot.user
+
             if bot_user is not None:
+
                 embed.set_thumbnail(url=bot_user.display_avatar.url)
 
+
+
             view = HelpView(self.bot, ctx, formatted_cats, prefix)
+
             await ctx.send(embed=embed, view=view)
 
+
+
         else:
+
             search_name = command_name.lower().lstrip("/")
+
             command = self.bot.get_command(search_name)
+
             if command and not command.hidden:
+
                 was_alias = search_name != command.name
+
                 title = f"Help: `{prefix}{command.name}`"
+
                 if was_alias:
+
                     title += f" (alias: `{prefix}{search_name}`)"
 
+
+
                 embed = discord.Embed(
+
                     title=title,
+
                     description=command.help or "No description provided.",
+
                     color=discord.Color.green(),
+
                 )
+
                 if command.usage:
+
                     embed.add_field(
+
                         name="Usage",
+
                         value=(
+
                             f"`{prefix}{command.name} "
+
                             f"{command.usage}`"
+
                         ),
+
                         inline=False,
+
                     )
+
                 if command.aliases:
+
                     embed.add_field(
+
                         name="Aliases",
+
                         value=", ".join(
+
                             f"`{prefix}{a}`" for a in command.aliases
+
                         ),
+
                         inline=False,
+
                     )
+
                 await ctx.send(embed=embed)
+
                 return
 
+
+
             app_command = self.find_app_command(search_name)
+
             if app_command:
+
                 app_command_name = getattr(app_command, "name", search_name)
+
                 app_command_description = getattr(
+
                     app_command, "description", None
+
                 )
+
                 embed = discord.Embed(
+
                     title=f"Help: `/{app_command_name}`",
+
                     description=app_command_description
+
                     or "No description provided.",
+
                     color=discord.Color.green(),
+
                 )
+
                 await ctx.send(embed=embed)
+
                 return
+
+
 
             await ctx.send(f"No command named `{command_name}` found.")
 
+
+
     def find_app_command(self, name: str):
+
         name = name.lstrip("/").lower()
+
         tree = self.bot.tree
+
         walker = getattr(tree, "walk_commands", None)
+
         if walker is not None:
+
             for cmd in tree.walk_commands():
+
                 if cmd.name == name:
+
                     return cmd
+
         commands_map = getattr(tree, "_commands", None)
+
         if isinstance(commands_map, dict):
+
             return commands_map.get(name)
+
         return None
 
 
+
+
+
 async def setup(bot):
+
     await bot.add_cog(HelpCog(bot))
+
