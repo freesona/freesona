@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 load_env_defaults() {
-  python - <<'PY'
+  python3 - <<'PY'
 import re
 from pathlib import Path
 
@@ -258,7 +258,7 @@ echo ""
 # Ensure config.json exists with default values
 if [ ! -f config.json ]; then
     echo "Creating default config.json..."
-    python - <<'PY'
+    python3 - <<'PY'
 import sys
 sys.path.insert(0, '.')
 from utils.config import save_config, DEFAULT_CONFIG
@@ -293,8 +293,8 @@ if [ ! -d .venv ]; then
 fi
 
 source .venv/bin/activate
-python -m pip install --upgrade pip >/dev/null
-python -m pip install -r requirements.txt >/dev/null
+python3 -m pip install --upgrade pip >/dev/null
+python3 -m pip install -r requirements.txt >/dev/null
 
 # Optional delphitools CLI installation
 read -p "Do you want to install delphitools CLI (requires Rust)? [y/N] " install_dt
@@ -308,11 +308,11 @@ fi
 
 echo ""
 echo "Running project checks..."
-python scripts/check_project.py
+python3 scripts/check_project.py
 
 echo ""
 echo "====================================================="
 echo "         Setup complete! Starting Freesona...        "
 echo "====================================================="
 echo ""
-python main.py
+python3 main.py
