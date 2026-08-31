@@ -293,8 +293,18 @@ if [ ! -d .venv ]; then
 fi
 
 source .venv/bin/activate
-python -m pip install --upgrade pip >/dev/null
-python -m pip install -r requirements.txt >/dev/null
+PYTHON=${VIRTUAL_ENV}/bin/python3
+if [ ! -x "$PYTHON" ]; then
+    echo "Error: Python executable not found in virtual environment."
+    exit 1
+fi
+# Ensure pip is available in the virtual environment
+if ! "$PYTHON" -m pip --version >/dev/null 2>&1; then
+    "$PYTHON" -m ensurepip --upgrade >/dev/null
+fi
+# Upgrade pip and install requirements using the virtual environment's python
+"$PYTHON" -m pip install --upgrade pip >/dev/null
+"$PYTHON" -m pip install -r requirements.txt >/dev/null
 
 # Optional delphitools CLI installation
 read -p "Do you want to install delphitools CLI (requires Rust)? [y/N] " install_dt
@@ -308,11 +318,11 @@ fi
 
 echo ""
 echo "Running project checks..."
-python scripts/check_project.py
+$PYTHON scripts/check_project.py
 
 echo ""
 echo "====================================================="
 echo "         Setup complete! Starting Freesona...        "
 echo "====================================================="
 echo ""
-python main.py
+$PYTHON main.py
