@@ -4,6 +4,39 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+load_env_defaults() {
+  python - <<'PY'
+import re
+from pathlib import Path
+
+env_path = Path('.env')
+
+for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith('#'):
+        continue
+
+    if line.startswith('export '):
+        line = line[7:].lstrip()
+
+    if '=' not in line:
+        continue
+
+    key, value = line.split('=', 1)
+    key = key.strip()
+    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', key):
+        continue
+
+    value = value.strip()
+    if value[:1] in {'"', "'"} and value[-1:] == value[:1]:
+        value = value[1:-1]
+    else:
+        value = re.split(r'#(?=\s)', value, maxsplit=1)[0].rstrip()
+
+    print(f'{key}={value}')
+PY
+}
+
 # ASCII Art Banner
 print_banner() {
 cat << 'EOF'
@@ -40,9 +73,9 @@ echo ""
 
 # If .env exists, load it for defaults
 if [ -f .env ]; then
-  set -a
-  source .env
-  set +a
+  while IFS= read -r assignment; do
+    export "$assignment"
+  done < <(load_env_defaults)
 fi
 
 # Interactive prompts for required values

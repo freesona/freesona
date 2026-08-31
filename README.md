@@ -122,8 +122,10 @@ CHANNEL_ID=YOUR_LOG_CHANNEL_ID
 BOT_NAME=Freesona
 
 # AI Provider
-AI_PROVIDER=          # gemini | openai | ollama | nim | azure | groq | openrouter | custom
-AI_PROVIDER_MODEL=          # override the default model for the chosen provider
+# AI_PROVIDER: gemini | openai | ollama | nim | azure | groq | openrouter | custom
+AI_PROVIDER=
+# AI_PROVIDER_MODEL: override the default model for the chosen provider
+AI_PROVIDER_MODEL=
 MODEL_NAME=gemini-flash-lite-latest
 GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
 
@@ -134,13 +136,16 @@ GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
 # NVIDIA_API_KEY=
 # NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1/chat/completions
 # AZURE_AI_KEY=
-# AZURE_AI_BASE_URL=        # your Azure AI Foundry endpoint
+# AZURE_AI_BASE_URL: your Azure AI Foundry endpoint
+# AZURE_AI_BASE_URL=
 # GROQ_API_KEY=
 # OPENROUTER_API_KEY=
 # OPENROUTER_SITE_URL=
 # OPENROUTER_SITE_NAME=Freesona
-# CUSTOM_API_BASE_URL=          # full OpenAI-compatible chat-completions URL
-# CUSTOM_API_KEY=               # optional; omitted for unauthenticated local endpoints
+# CUSTOM_API_BASE_URL: full OpenAI-compatible chat-completions URL
+# CUSTOM_API_BASE_URL=
+# CUSTOM_API_KEY: optional; omitted for unauthenticated local endpoints
+# CUSTOM_API_KEY=
 
 # ChromaDB (optional — required for knowledge base retrieval)
 CHROMA_COLLECTION=freesona

@@ -91,3 +91,5 @@ e501.txt
 test_*.txt
 .serena/*
 .serena/project.yml
+.junie/demo.md
+.junie/vms/template-vm/Dockerfile

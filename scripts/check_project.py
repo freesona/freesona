@@ -543,13 +543,28 @@ def check_env_sample() -> None:
 
     keys = set()
 
-    for line in sample.read_text(encoding="utf-8").splitlines():
+    for line_number, line in enumerate(
+        sample.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
 
         line = line.strip()
 
         if not line or line.startswith("#") or "=" not in line:
 
             continue
+
+        _, value = line.split("=", 1)
+
+        if "#" in value:
+
+            raise CheckFailure(
+
+                ".env.sample contains an inline comment on an active assignment "
+
+                f"at line {line_number}; move the comment to its own line"
+
+            )
 
         keys.add(line.split("=", 1)[0])
 
