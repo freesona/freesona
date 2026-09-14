@@ -34,10 +34,6 @@ from utils.modules import (
 
 load_dotenv(Path(__file__).resolve().with_name(".env"))
 
-
-
-
-
 # Initial basic logging until setup_logging is called
 
 logging.basicConfig(
