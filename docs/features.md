@@ -589,3 +589,13 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 ```
 
 Values are validated and type-converted based on their default types (int, float, bool, or string). Invalid values are rejected with an error message.
+
+## Structured Knowledge Base authoring
+
+Knowledge entries are validated before Chroma ingestion. Each entry must include
+`persona`, `source`, `source_type`, `entry_type`, `topics`, and `content`;
+`canon_level` defaults to `canon` and `revision` defaults to `1`. Supported
+entry types are `dialogue`, `narration`, `event`, `relationship`, and
+`description`. Normalize source text and use stable topic names so repeated
+ingestion produces the same record identity. Chroma remains an optional index;
+structured records are retained in SQLite when vector indexing is unavailable.

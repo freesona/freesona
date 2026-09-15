@@ -48,6 +48,34 @@ The `/kbadd` command opens a modal with the following fields:
 | Canon Level | `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` | `canon` |
 | Tags | Comma-separated additional tags | `canon, emotional, key_moment` |
 
+Knowledge Base records are normalized and validated by the shared service before
+they are stored. Valid `entry_type` values are `dialogue`, `narration`, `event`,
+`relationship`, and `description`; valid `source_type` values are `anime`,
+`novel`, `manga`, `game`, `guidebook`, `interview`, `website`, and `other`.
+Repeated ingestion of the same canonical record is idempotent. SQLite remains the
+source of truth when Chroma is unavailable.
+
+## FastAPI Admin Surface
+
+The optional FastAPI server keeps the existing health and webhook endpoints and
+adds a small admin surface:
+
+| Route | Action |
+|:------|:-------|
+| `GET /admin/status` | Return redacted runtime status |
+| `GET /admin/config` | Return redacted configuration values |
+| `PUT /admin/config/{key}` | Validate and persist a non-secret configuration value |
+| `GET /admin/modules` | List configured optional module states |
+| `PUT /admin/modules/{name}` | Persist a module state for the next reload |
+| `POST /admin/knowledge` | Validate and ingest a structured record |
+| `GET /admin/knowledge` | List structured records |
+| `DELETE /admin/knowledge/{id}` | Delete a structured record |
+
+Send `Authorization: Bearer <ADMIN_API_TOKEN>` with every admin request. The token
+is configured in `.env`; it is never returned in status data or written to logs.
+Module changes are persisted and require a bot reload to take effect. The dashboard
+does not permit changing secret configuration values.
+
 ---
 
 ## RSS / News

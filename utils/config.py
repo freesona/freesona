@@ -30,11 +30,23 @@ DEFAULT_CONFIG = {
 
     ),
 
+    "knowledge_base_database": os.getenv("KNOWLEDGE_BASE_DATABASE", "knowledge.db"),
+
     "debounce_seconds": 1.2,
 
     "autonomy_cooldown_seconds": 120,
 
     "autonomy_user_cooldown": 60,
+
+    "message_claim_database": os.getenv("MESSAGE_CLAIM_DATABASE", "memory.db"),
+
+    "message_claim_lease_seconds": float(
+        os.getenv("MESSAGE_CLAIM_LEASE_SECONDS", "300")
+    ),
+
+    "message_claim_instance_id": os.getenv("MESSAGE_CLAIM_INSTANCE_ID", ""),
+
+    "admin_api_token": os.getenv("ADMIN_API_TOKEN", ""),
 
     # MVSEP (music separation)
 
@@ -183,6 +195,42 @@ def save_config(data: dict):
     with open(CONFIG_PATH, "w") as f:
 
         json.dump(data, f, indent=2)
+
+
+def update_config_value(key: str, value: object) -> object:
+    """Validate, persist, and return a configuration value.
+
+    Values are converted to the type of their configured default so adapters
+    can use one consistent configuration mutation path.
+    """
+    if key not in DEFAULT_CONFIG:
+        raise ValueError(f"Unknown configuration key: {key}")
+    default = DEFAULT_CONFIG[key]
+    if isinstance(default, bool):
+        if not isinstance(value, bool):
+            raise ValueError(f"{key} must be a boolean")
+    elif isinstance(default, int) and not isinstance(default, bool):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"{key} must be an integer")
+    elif isinstance(default, float):
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise ValueError(f"{key} must be a number")
+        value = float(value)
+    elif not isinstance(value, str):
+        raise ValueError(f"{key} must be a string")
+    config = load_config()
+    config[key] = value
+    save_config(config)
+    return value
+
+
+def configuration_summary() -> dict[str, object]:
+    """Return configured values suitable for an administrative response."""
+    return {
+        key: value
+        for key, value in load_config().items()
+        if not any(marker in key.lower() for marker in ("token", "key", "secret", "password"))
+    }
 
 
 

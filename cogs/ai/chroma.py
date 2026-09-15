@@ -13,7 +13,6 @@ from discord import app_commands, ui
 from discord.ext import commands
 
 from utils.chroma import (
-    VALID_CANON_LEVELS,
     add_knowledge,
     delete_knowledge,
     extract_text_from_bytes,
@@ -21,40 +20,14 @@ from utils.chroma import (
     list_knowledge,
     query_knowledge,
 )
-
-VALID_SOURCE_TYPES = {
-
-    "anime",
-
-    "novel",
-
-    "manga",
-
-    "game",
-
-    "guidebook",
-
-    "interview",
-
-    "website",
-
-    "other",
-
-}
-
-VALID_ENTRY_TYPES = {
-
-    "dialogue",
-
-    "narration",
-
-    "event",
-
-    "relationship",
-
-    "description",
-
-}
+from utils.config import load_config
+from utils.knowledge_base import (
+    KnowledgeBaseService,
+    VALID_CANON_LEVELS,
+    VALID_ENTRY_TYPES,
+    VALID_SOURCE_TYPES,
+    validate_entry,
+)
 
 
 
@@ -392,43 +365,29 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
 
             ]
 
-
-
-        # Add to knowledge base
-
-        doc_id = await asyncio.to_thread(
-
-            add_knowledge,
-
-            self.document,
-
-            source="discord",
-
-            title=self.document_title.strip() if self.document_title else None,
-
-            metadata=metadata,
-
-        )
-
-
-
-        if not doc_id:
-
+        try:
+            entry_data = {**metadata, "content": self.document}
+            validate_entry(entry_data)
+        except ValueError as exc:
             await interaction.followup.send(
-
-                "ChromaDB is not available or could not initialize the collection.",
-
-                ephemeral=True,
-
+                f"Invalid knowledge entry: {exc}", ephemeral=True
             )
-
             return
+
+
+
+        config = load_config()
+        service = KnowledgeBaseService(
+            str(config.get("knowledge_base_database", "knowledge.db"))
+        )
+        await service.initialize()
+        entry = await service.ingest(entry_data)
 
 
 
         await interaction.followup.send(
 
-            f"Added knowledge entry with ID `{doc_id}` "
+            f"Added knowledge entry with ID `{entry.id}` "
 
             f"for persona `{metadata['persona']}`.",
 
@@ -445,6 +404,27 @@ class ChromaCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
 
         self.bot = bot
+
+    async def _knowledge_entries(self, persona: str | None, limit: int) -> list[dict]:
+        """Return structured records in the legacy command display shape."""
+        service = KnowledgeBaseService(
+            str(load_config().get("knowledge_base_database", "knowledge.db"))
+        )
+        await service.initialize()
+        entries = await service.list_entries(persona)
+        return [
+            {
+                "id": entry.id,
+                "document": entry.content,
+                "metadata": {
+                    "persona": entry.persona,
+                    "source": entry.source,
+                    "entry_type": entry.entry_type,
+                    **(entry.metadata or {}),
+                },
+            }
+            for entry in entries[:limit]
+        ]
 
 
 
@@ -736,19 +716,7 @@ class ChromaCog(commands.Cog):
 
 
 
-        if persona:
-
-            # Run disk lookup off-thread
-
-            entries = await asyncio.to_thread(
-
-                get_knowledge_by_persona, persona, limit=limit
-
-            )
-
-        else:
-
-            entries = await asyncio.to_thread(list_knowledge, limit=limit)
+        entries = await self._knowledge_entries(persona, limit)
 
 
 
@@ -834,7 +802,11 @@ class ChromaCog(commands.Cog):
 
 
 
-        success = await asyncio.to_thread(delete_knowledge, entry_id)
+        service = KnowledgeBaseService(
+            str(load_config().get("knowledge_base_database", "knowledge.db"))
+        )
+        await service.initialize()
+        success = await service.delete_entry(entry_id)
 
         if success:
 
@@ -872,11 +844,7 @@ class ChromaCog(commands.Cog):
 
 
 
-        entries = await asyncio.to_thread(
-
-            get_knowledge_by_persona, persona, limit=limit
-
-        )
+        entries = await self._knowledge_entries(persona, limit)
 
         if not entries:
 

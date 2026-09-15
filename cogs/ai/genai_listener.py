@@ -7,6 +7,8 @@
 
 
 import asyncio
+import os
+import socket
 import time
 from typing import TypeAlias, TypedDict
 
@@ -19,6 +21,7 @@ from utils.generation import extract_attachments, safe_generate, send_response
 from utils.guild_world import DiscordGuildWorldAccessor
 from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
 from utils.memory import extract_and_store_fact
+from utils.message_claims import MessageClaimRepository
 from utils.persona import CURRENT_PERSONA, CURRENT_PERSONA_ID
 from utils.roles import resolve_message_role
 
@@ -251,6 +254,15 @@ class GenAIListenerCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
 
         self.bot = bot
+        config = load_config()
+        configured_owner = config.get("message_claim_instance_id")
+        self.claim_owner = str(
+            configured_owner or f"{socket.gethostname()}:{os.getpid()}"
+        )
+        self.claims = MessageClaimRepository(
+            str(config.get("message_claim_database", "memory.db")),
+            float(config.get("message_claim_lease_seconds", 300)),
+        )
 
 
 
@@ -262,11 +274,16 @@ class GenAIListenerCog(commands.Cog):
 
         await init_db()
 
+        await self.claims.initialize()
+
+        self._claim_cleanup_task = asyncio.create_task(self._cleanup_claims())
+
         await start_cleanup_task()
 
 
 
     async def cog_unload(self):
+        self._claim_cleanup_task.cancel()
 
         for task in _pending_responses.values():
 
@@ -275,6 +292,15 @@ class GenAIListenerCog(commands.Cog):
         _pending_responses.clear()
 
         await stop_cleanup_task()
+
+    async def _cleanup_claims(self) -> None:
+        """Periodically remove expired and completed message claims."""
+        while True:
+            await asyncio.sleep(3600)
+            try:
+                await self.claims.cleanup()
+            except (OSError, RuntimeError) as exc:
+                logger.warning("Message claim cleanup failed: %s", exc)
 
 
 
@@ -450,15 +476,26 @@ class GenAIListenerCog(commands.Cog):
 
 
 
-                    async with channel_snapshot.typing():
+                    claim_key = (
+                        f"{guild_id_snapshot}:{channel_snapshot.id}:"
+                        f"{message_snapshot.id}"
+                    )
+                    claim = await self.claims.acquire(
+                        claim_key, self.claim_owner
+                    )
+                    if claim is None:
+                        return
 
-                        attachments = await extract_attachments(
+                    try:
+                        async with channel_snapshot.typing():
 
-                            message_snapshot
+                            attachments = await extract_attachments(
 
-                        )
+                                message_snapshot
 
-                        response = await safe_generate(
+                            )
+
+                            response = await safe_generate(
 
                             payload,
 
@@ -486,17 +523,23 @@ class GenAIListenerCog(commands.Cog):
 
                         )
 
-                        reply_target = get_reply_target(
+                            reply_target = get_reply_target(
 
                             message_snapshot, self.bot.user
 
                         )
 
-                        await send_response(
+                            await send_response(
 
                             response, channel_snapshot, reply_to=reply_target
 
                         )
+
+                        if not await self.claims.complete(claim.claim_key, self.claim_owner):
+                            logger.warning("Message claim completion failed for %s", claim.claim_key)
+                    except BaseException:
+                        await self.claims.release(claim.claim_key, self.claim_owner)
+                        raise
 
 
 
@@ -658,12 +701,6 @@ class GenAIListenerCog(commands.Cog):
 
                 ):
 
-                    _autonomy_cooldown[message.channel.id] = now
-
-                    _autonomy_user_cooldown[message.author.id] = now
-
-
-
                     autonomy_payload = build_payload(
 
                         message, role, bot_id
@@ -672,11 +709,25 @@ class GenAIListenerCog(commands.Cog):
 
 
 
-                    async with message.channel.typing():
+                    claim_key = (
+                        f"{message.guild.id}:{message.channel.id}:{message.id}"
+                    )
+                    claim = await self.claims.acquire(
+                        claim_key, self.claim_owner
+                    )
+                    if claim is None:
+                        return
 
-                        attachments = await extract_attachments(message)
+                    _autonomy_cooldown[message.channel.id] = now
 
-                        response = await safe_generate(
+                    _autonomy_user_cooldown[message.author.id] = now
+
+                    try:
+                        async with message.channel.typing():
+
+                            attachments = await extract_attachments(message)
+
+                            response = await safe_generate(
 
                             autonomy_payload,
 
@@ -704,13 +755,19 @@ class GenAIListenerCog(commands.Cog):
 
                         )
 
-                        reply_target = get_reply_target(message, self.bot.user)
+                            reply_target = get_reply_target(message, self.bot.user)
 
-                        await send_response(
+                            await send_response(
 
                             response, message.channel, reply_to=reply_target
 
                         )
+
+                        if not await self.claims.complete(claim.claim_key, self.claim_owner):
+                            logger.warning("Message claim completion failed for %s", claim.claim_key)
+                    except BaseException:
+                        await self.claims.release(claim.claim_key, self.claim_owner)
+                        raise
 
 
 

@@ -69,6 +69,22 @@ Freesona/
 
 All cogs depend on `utils/`. Cogs do not import from each other, except that `mvsep.py` calls `ytdlp.py` via `bot.get_cog("YtDlp")` (not a direct import) to download platform audio before submitting to MVSEP.
 
+The message listener uses `utils/message_claims.py` before generation. A claim is a
+durable SQLite lease keyed by the deployment-relevant message identity. The lease
+stores its owner and expiry time, so one instance processes a message while another
+instance can recover it after expiry. Successful work completes the lease; handled
+failures release it for retry.
+
+The structured Knowledge Base service in `utils/knowledge_base.py` validates and
+canonicalizes records before storing them in SQLite. Chroma indexing is optional and
+is treated as a secondary index. Discord commands and FastAPI routes call this
+service instead of implementing validation or persistence in adapter code.
+
+The FastAPI admin surface is an adapter over shared services. Administrative routes
+require the configured `ADMIN_API_TOKEN` bearer token and return redacted status data.
+The dashboard does not replace Discord commands and Discord does not call the
+dashboard over HTTP.
+
 ---
 
 ## Message Lifecycle

@@ -444,6 +444,8 @@ async def get_memories(
 
     """Retrieve character memories for a scope, ordered by importance."""
 
+    await init_db()
+
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
 
         db.row_factory = aiosqlite.Row

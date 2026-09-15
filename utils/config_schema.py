@@ -22,6 +22,12 @@ CONFIG_CATEGORIES = {
 
         "debounce_seconds",
 
+        "message_claim_database",
+
+        "message_claim_lease_seconds",
+
+        "message_claim_instance_id",
+
     ],
 
     "AI Provider": [
@@ -39,6 +45,8 @@ CONFIG_CATEGORIES = {
         "chroma_collection",
 
         "chroma_persist_directory",
+
+        "knowledge_base_database",
 
     ],
 
@@ -170,6 +178,14 @@ CONFIG_DESCRIPTIONS = {
 
     "debounce_seconds": "Message debounce time in seconds (default: 1.2)",
 
+    "message_claim_database": "SQLite database shared by message-processing instances (default: memory.db)",
+
+    "message_claim_lease_seconds": "Message-claim lease duration in seconds (default: 300)",
+
+    "message_claim_instance_id": "Unique owner identifier for this bot instance (default: hostname and process ID)",
+
+    "knowledge_base_database": "SQLite database for structured Knowledge Base records (default: knowledge.db)",
+
     "autonomy_cooldown_seconds": (
 
         "Cooldown between autonomous actions in seconds "
@@ -290,6 +306,12 @@ CONFIG_KEY_ORDER = [
 
     "debounce_seconds",
 
+    "message_claim_database",
+
+    "message_claim_lease_seconds",
+
+    "message_claim_instance_id",
+
     "provider",
 
     "provider_model",
@@ -299,6 +321,8 @@ CONFIG_KEY_ORDER = [
     "chroma_collection",
 
     "chroma_persist_directory",
+
+    "knowledge_base_database",
 
     "autonomy_cooldown_seconds",
 

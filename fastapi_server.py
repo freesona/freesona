@@ -5,10 +5,17 @@
 import asyncio
 import json
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse
+
+from utils.config import configuration_summary, load_config, update_config_value
+from utils.knowledge_base import KnowledgeBaseService
+from utils.modules import OPTIONAL_MODULES, load_enabled_modules, normalized_module_name, save_module_state
+from utils.config import save_config
 
 logger = logging.getLogger("FreesonaBot")
 
@@ -47,6 +54,21 @@ async def lifespan(fastapi_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+def _admin_token() -> str:
+    """Return the configured dashboard token without exposing it in responses."""
+    return str(load_config().get("admin_api_token", ""))
+
+
+def _require_admin(authorization: str | None) -> None:
+    """Require a configured bearer token for administrative endpoints."""
+    token = _admin_token()
+    scheme, _, supplied = authorization.partition(" ") if authorization else ("", "", "")
+    if scheme.lower() != "bearer":
+        supplied = ""
+    if not token or not secrets.compare_digest(supplied, token):
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+
+
 
 
 
@@ -67,6 +89,112 @@ async def root():
 async def health():
 
     return {"status": "ok"}
+
+
+@app.get("/admin/status")
+async def admin_status(authorization: str | None = Header(default=None)):
+    """Return a redacted runtime summary for authenticated administrators."""
+    _require_admin(authorization)
+    config = load_config()
+    return {
+        "status": "ok",
+        "provider": config.get("provider"),
+        "provider_model": config.get("provider_model"),
+        "admin_api_token_configured": bool(_admin_token()),
+    }
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard(authorization: str | None = Header(default=None)):
+    """Render a minimal authenticated administration landing page."""
+    _require_admin(authorization)
+    return "<html><body><h1>Freesona administration</h1><p>Use the /admin API routes to manage this instance.</p></body></html>"
+
+
+@app.get("/admin/config")
+async def admin_config(authorization: str | None = Header(default=None)):
+    """Return a redacted configuration summary."""
+    _require_admin(authorization)
+    return configuration_summary()
+
+
+@app.put("/admin/config/{key}")
+async def admin_update_config(
+    key: str, value: Any, authorization: str | None = Header(default=None)
+):
+    """Validate and persist one non-secret configuration value."""
+    _require_admin(authorization)
+    if any(marker in key.lower() for marker in ("token", "key", "secret", "password")):
+        raise HTTPException(status_code=403, detail="Sensitive configuration cannot be changed through this route")
+    try:
+        saved = update_config_value(key, value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"key": key, "value": saved}
+
+
+@app.get("/admin/modules")
+async def admin_modules(authorization: str | None = Header(default=None)):
+    """Return configured optional module states."""
+    _require_admin(authorization)
+    return load_enabled_modules(load_config())
+
+
+@app.put("/admin/modules/{name}")
+async def admin_update_module(
+    name: str, enabled: bool, authorization: str | None = Header(default=None)
+):
+    """Persist an optional module state for the next bot reload."""
+    _require_admin(authorization)
+    key = normalized_module_name(name)
+    if key not in OPTIONAL_MODULES:
+        raise HTTPException(status_code=422, detail="Unknown module")
+    config = load_config()
+    save_module_state(config, key, enabled)
+    save_config(config)
+    return {"name": key, "enabled": enabled, "restart_required": True}
+
+
+def _knowledge_base_service() -> KnowledgeBaseService:
+    """Create the configured structured Knowledge Base service."""
+    return KnowledgeBaseService(str(load_config().get("knowledge_base_database", "knowledge.db")))
+
+
+@app.post("/admin/knowledge")
+async def admin_knowledge(
+    payload: dict[str, Any], authorization: str | None = Header(default=None)
+):
+    """Validate and persist one structured Knowledge Base entry."""
+    _require_admin(authorization)
+    service = _knowledge_base_service()
+    await service.initialize()
+    try:
+        entry = await service.ingest(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"id": entry.id, "persona": entry.persona, "revision": entry.revision}
+
+
+@app.get("/admin/knowledge")
+async def admin_list_knowledge(authorization: str | None = Header(default=None)):
+    """List structured Knowledge Base records."""
+    _require_admin(authorization)
+    service = _knowledge_base_service()
+    await service.initialize()
+    return [entry.__dict__ for entry in await service.list_entries()]
+
+
+@app.delete("/admin/knowledge/{entry_id}")
+async def admin_delete_knowledge(
+    entry_id: str, authorization: str | None = Header(default=None)
+):
+    """Delete one structured Knowledge Base record."""
+    _require_admin(authorization)
+    service = _knowledge_base_service()
+    await service.initialize()
+    if not await service.delete_entry(entry_id):
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+    return {"id": entry_id, "deleted": True}
 
 
 
