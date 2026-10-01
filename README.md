@@ -208,7 +208,7 @@ Without a persistent volume on cloud hosts, file changes won't survive a redeplo
 | `persona.json`        | Active persona fields                                                                                                            |
 | `personas.json`       | Saved persona presets                                                                                                            |
 | `memory.db`           | Long-term user facts, keyed by `guild_id + user_id` for provider-neutral memory injection                                        |
-| `knowledge.db`        | Structured Knowledge Base records and Chroma index identifiers                                                                    |
+| `knowledge.db`        | Structured Knowledge Base records and Chroma index identifiers                                                                   |
 | `character_memory.db` | Character Memory — shared experiences, promises, recurring jokes, relationship progression (per guild/user/persona)              |
 | `canon.db`            | Canon Framework — modular immutable identity components (identity, beliefs, motivations, rules, world assumptions, explanations) |
 | `warnings.db`         | Per-guild moderation warnings with hex IDs and timestamps                                                                        |

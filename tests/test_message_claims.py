@@ -32,7 +32,8 @@ class TestMessageClaimRepository(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(first)
         await asyncio.sleep(0.06)
         second = await self.repository.acquire("message", "two")
-        self.assertIsNotNone(second)
+        if second is None:
+            self.fail("Reacquisition should succeed after expiry")
         self.assertEqual(second.owner, "two")
 
     async def test_completion_and_release_require_owner(self) -> None:
