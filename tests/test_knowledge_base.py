@@ -32,7 +32,8 @@ class TestKnowledgeBase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.service = KnowledgeBaseService(
-            str(Path(self.tempdir.name) / "knowledge.db"), indexer=lambda *args, **kwargs: "indexed"
+            str(Path(self.tempdir.name) / "knowledge.db"),
+            indexer=lambda *args, **kwargs: "indexed",
         )
         await self.service.initialize()
 
@@ -54,7 +55,9 @@ class TestKnowledgeBase(unittest.IsolatedAsyncioTestCase):
     async def test_ingestion_is_idempotent_and_survives_index_failure(self):
         service = KnowledgeBaseService(
             self.service.database_path,
-            indexer=lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("offline")),
+            indexer=lambda *args, **kwargs: (_ for _ in ()).throw(
+                RuntimeError("offline")
+            ),
         )
         first = await service.ingest(entry())
         second = await service.ingest(entry())

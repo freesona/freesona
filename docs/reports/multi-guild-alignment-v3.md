@@ -2,8 +2,8 @@
 
 This document follows ASD-STE100 Simplified Technical English.
 
-**Status**: Alignment Review  
-**Date**: 2026-07-18  
+**Status**: Alignment Review
+**Date**: 2026-07-18
 **Related**: ADR-0003 (Context Semantics), architecture.md, architecture-review-v2.md
 
 ---
@@ -23,7 +23,7 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ### 2.1 Canon is Global and Immutable ✅ ALIGNED
 
 | Philosophy Requirement | Architecture Implementation | Status |
-|:---|:---|:---|
+| :--- | :--- | :--- |
 | Single canonical identity across all guilds | `PersonaContextProvider` (priority 20, IMMUTABLE) uses `persona_data` only — no guild/channel/user context | ✅ |
 | Immutable — changes only via admin action | `Mutability.IMMUTABLE` classification; cached aggressively | ✅ |
 | Persona Knowledge Base is global to the persona | `PersonaKnowledgeBaseProvider` (priority 60, IMMUTABLE) filtered by `persona_id` only | ✅ |
@@ -36,7 +36,7 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ### 2.2 Conversation History is Local to Guild/Channel ✅ ALIGNED
 
 | Philosophy Requirement | Architecture Implementation | Status |
-|:---|:---|:---|
+| :--- | :--- | :--- |
 | Per-guild, per-channel, per-user | `ConversationManager` key: `(guild_id, channel_id, user_id)` | ✅ |
 | No cross-guild leakage | Separate `ConversationState` per key; no shared state | ✅ |
 | Provider-agnostic (not Gemini-specific) | `ConversationHistoryProvider` injects via system prompt for ALL providers | ✅ |
@@ -49,7 +49,7 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ### 2.3 Character Memory is Local to Guild (and User/Persona) 🟡 PARTIAL ALIGNMENT
 
 | Philosophy Requirement | Architecture Implementation (ADR-0003) | Gap |
-|:---|:---|:---|
+| :--- | :--- | :--- |
 | Local to current guild | ADR-0003 defines scope: `(guild_id, channel_id, user_id, persona_id)` | **Scope includes `channel_id`** — philosophy says "local to guild", ADR says per-channel |
 | User/persona scope as designed | Includes `user_id` and `persona_id` | ✅ |
 | Never stores canonical facts | ADR-0003 Boundaries: "MUST NOT store canonical facts (PKB)" | ✅ |
@@ -66,7 +66,7 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ### 2.4 Guild/Town Context is Purely Environmental and Request-Scoped ✅ ALIGNED
 
 | Philosophy Requirement | Architecture Implementation (ADR-0003) | Status |
-|:---|:---|:---|
+| :--- | :--- | :--- |
 | Environmental context (server name, channel context, local norms) | `GuildWorldContextProvider` (priority 55, MUTABLE) | ✅ Planned |
 | Request-scoped (fetched fresh each generation) | ADR-0003: "Lifetime: Request-scoped (fetched fresh each generation)" | ✅ |
 | Not memory — no persistence | ADR-0003: "MUST NOT store history... This is *environment*, not *memory*" | ✅ |
@@ -79,7 +79,7 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ### 2.5 Cross-Guild Isolation: No Automatic Leakage ✅ ALIGNED
 
 | Philosophy Requirement | Architecture Enforcement |
-|:---|:---|
+| :--- | :--- |
 | Conversation from Guild A never appears in Guild B | Separate `ConversationState` keys per `(guild_id, ...)` |
 | User facts from Guild A never appear in Guild B | `UserMemoryProvider` queries `WHERE guild_id = ? AND user_id = ?` |
 | Character memories from Guild A never appear in Guild B | CharacterMemoryProvider will scope by `guild_id` (per above fix) |
@@ -93,7 +93,7 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ### 2.6 Discord-First Philosophy: Character as Guild Member ✅ ALIGNED
 
 | Philosophy Requirement | Architecture Support |
-|:---|:---|
+| :--- | :--- |
 | Not an omniscient AI treating Discord as one giant chat log | Context providers are explicitly scoped; no global conversation aggregation |
 | No passive surveillance | ConversationManager only tracks channels where bot is addressed (via `on_message` filters in genai.py) |
 | No DM-only relationships | Architecture assumes guild context (`guild_id` required for most providers); DMs not in current scope |
@@ -105,7 +105,7 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ## 3. Scope Comparison Matrix
 
 | Context Source | Mutability | Current Scope Key | Philosophy Scope | Aligned? |
-|:---|:---|:---|:---|:---|
+| :--- | :--- | :--- | :--- | :--- |
 | **System Instructions** | IMMUTABLE | `persona_id` | Global (persona) | ✅ |
 | **Persona Definition** | IMMUTABLE | `persona_id` | Global (persona) | ✅ |
 | **Canon Framework** | IMMUTABLE | `persona_id` | Global (persona) | 🟡 Planned |
@@ -122,12 +122,14 @@ This report evaluates the current Freesona architecture against the **Multi-Guil
 ### 4.1 Character Memory Scope (ADR-0003 Update Required)
 
 **Current ADR-0003 Definition** (Section 3.6):
+
 ```
 Lifetime: Persistent (new storage); per (guild_id, channel_id, user_id, persona_id) quadruple
 Input: PromptBuildContext.guild_id, channel_id, user_id, persona_id → CharacterMemoryStore.get_context()
 ```
 
 **Required Change**: Remove `channel_id` from the scope key.
+
 ```
 Lifetime: Persistent (new storage); per (guild_id, user_id, persona_id) triple
 Input: PromptBuildContext.guild_id, user_id, persona_id → CharacterMemoryStore.get_context()
@@ -135,7 +137,8 @@ Input: PromptBuildContext.guild_id, user_id, persona_id → CharacterMemoryStore
 
 **Rationale**: A character's relationship with a user (promises, shared experiences, recurring jokes) should persist across channels within the same guild. A real Discord user doesn't "reset" their relationship when moving from #general to #roleplay.
 
-**Impact**: 
+**Impact**:
+
 - `PromptBuildContext` already has `guild_id`, `user_id`, `persona_id` — no new fields needed
 - `CharacterMemoryProvider.build()` signature unchanged (just doesn't use `channel_id`)
 - Storage schema: `PRIMARY KEY (guild_id, user_id, persona_id, memory_id)`
@@ -153,6 +156,7 @@ ADR-0003 correctly identifies that `GuildWorldContextProvider` needs Discord gui
 ### 4.3 Token Budget Priority Order (ADR-0003 Section 7)
 
 Current drop order for MUTABLE blocks (reverse priority):
+
 1. Guild World Context (55) — dropped first
 2. Character Memory (50)
 3. User Memory (40)
@@ -167,7 +171,7 @@ This aligns with philosophy: **Conversation History** (most immediate context) s
 The philosophy requires: *"Context providers should define their own scope and boundaries, allowing future extensions without changing the architecture."*
 
 | Provider | Defines Own Scope? | Hardcoded in PromptBuilder? | Hardcoded in Generation? |
-|:---|:---|:---|:---|
+| :--- | :--- | :--- | :--- |
 | SystemContextProvider | ✅ (`persona_id` only) | ❌ | ❌ |
 | PersonaContextProvider | ✅ (`persona_id` only) | ❌ | ❌ |
 | CanonContextProvider | ✅ (planned, `persona_id` only) | ❌ | ❌ |
@@ -184,7 +188,7 @@ The philosophy requires: *"Context providers should define their own scope and b
 ## 6. Risk Assessment for Character Memory Implementation
 
 | Risk | Likelihood | Impact | Mitigation |
-|:---|:---|:---|:---|
+| :--- | :--- | :--- | :--- |
 | Character Memory accidentally leaks across guilds | Low | High | Scope key explicitly includes `guild_id`; unit tests for cross-guild isolation |
 | Character Memory becomes a "second user memory" | Medium | High | ADR-0003 Boundaries are explicit; code review enforcement |
 | Character Memory extraction pipeline reads PKB/Canon | Low | Medium | Extraction pipeline only consumes `ConversationManager` output |
@@ -219,6 +223,7 @@ The current architecture **strongly aligns** with the Multi-Guild Identity philo
 **One material change required**: Character Memory scope should be **per-guild** `(guild_id, user_id, persona_id)`, not per-channel. This aligns with the philosophy that "the character has one persistent identity, but participates in multiple independent communities" — and a relationship with a user persists across channels within a community.
 
 Once ADR-0003 is updated, the architecture is ready for:
+
 1. **Step 3**: Character Memory ADR + Implementation (guild-scoped)
 2. **Step 4**: Canon Framework (global, immutable)
 3. **Step 5**: GuildWorldContextProvider (environmental, request-scoped)

@@ -2,8 +2,6 @@
 
 # cogs/ai/genai.py: Aggregate AI extension loader for split command-type cogs.
 
-
-
 from utils.persona import LEGACY_DETECTED  # noqa: F401
 
 from .genai_autonomy import GenAIAutonomyCog
@@ -18,21 +16,10 @@ from .genai_persona import GenAIPersonaCog
 
 GenAICog = GenAIListenerCog
 
-
-
-
-
 async def setup(bot):
-
     await bot.add_cog(GenAIListenerCog(bot))
-
     await bot.add_cog(GenAIGenerationCog(bot))
-
     await bot.add_cog(GenAIPersonaCog(bot))
-
     await bot.add_cog(GenAIMemoryCog(bot))
-
     await bot.add_cog(GenAIChannelCog(bot))
-
     await bot.add_cog(GenAIAutonomyCog(bot))
-

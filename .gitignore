@@ -17,6 +17,12 @@ ENV/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
 
 # User/private notes
 persona.txt
@@ -27,6 +33,7 @@ ATTRIBUTION_FIXES.md
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.cache/
 
 # Logs
 logs/
@@ -62,6 +69,16 @@ debug.log
 commands_dump.yaml
 .continue/mcpServers/new-mcp-server.yaml
 pyright_output.json
+coverage.xml
+*.trace
+*.prof
+*.pstats
+
+# Temporary editor and scratch files
+*.bak
+*.tmp
+*.swp
+*.swo
 
 # Junie
 .junie/plans/

@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 
-
-
 # scripts/check_project.py: Python module.
 
 """Project checks that can run before pushing without editor tooling."""
-
-
 
 from __future__ import annotations
 
@@ -15,6 +11,7 @@ import importlib
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,77 +22,87 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 SKIP_DIRS = {".git", "__pycache__", "venv", ".venv"}
 
-
-
-
-
 class CheckFailure(Exception):
-
     pass
 
+OBSOLETE_REQUIREMENTS = {
+    "google",
+    "google-generativeai",
+    "youtube-dl",
+}
 
+def declared_requirement_names(path: pathlib.Path) -> list[str]:
+    names: list[str] = []
 
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
 
+        if not line or line.startswith(("-r", "--")):
+            continue
+
+        match = re.match(r"([A-Za-z0-9][A-Za-z0-9._-]*)", line)
+
+        if match:
+            names.append(match.group(1).lower().replace("_", "-"))
+
+    return names
+
+def check_requirements() -> None:
+    requirements = ROOT / "requirements.txt"
+    names = declared_requirement_names(requirements)
+    declared = set(names)
+    obsolete = sorted(declared & OBSOLETE_REQUIREMENTS)
+
+    if obsolete:
+        raise CheckFailure(
+            "Obsolete or conflicting requirements declared: " + ", ".join(obsolete)
+        )
+
+    duplicates = sorted(name for name in declared if names.count(name) > 1)
+
+    if duplicates:
+        raise CheckFailure("Duplicate requirements declared: " + ", ".join(duplicates))
+
+    if "google-genai" not in declared:
+        raise CheckFailure("google-genai is required for the Gemini provider")
 
 def iter_python_files() -> list[pathlib.Path]:
 
     files: list[pathlib.Path] = []
 
     for path in ROOT.rglob("*.py"):
-
         if SKIP_DIRS.intersection(path.relative_to(ROOT).parts):
-
             continue
 
         files.append(path)
 
     return sorted(files)
 
-
-
-
-
 def check_python_syntax() -> None:
 
     errors: list[str] = []
 
     for path in iter_python_files():
-
         try:
-
             ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
         except SyntaxError as exc:
-
             rel = path.relative_to(ROOT)
 
             errors.append(f"{rel}:{exc.lineno}:{exc.offset}: {exc.msg}")
 
-
-
     if errors:
-
         raise CheckFailure("Python syntax errors:\n" + "\n".join(errors))
-
-
-
-
 
 def reload_local_module(name: str) -> ModuleType:
 
     if str(ROOT) not in sys.path:
-
         sys.path.insert(0, str(ROOT))
 
     if name in sys.modules:
-
         del sys.modules[name]
 
     return importlib.import_module(name)
-
-
-
-
 
 def check_config_round_trip() -> None:
 
@@ -105,28 +112,18 @@ def check_config_round_trip() -> None:
 
     old_path = os.environ.get("CONFIG_FILE_PATH")
 
-
-
     try:
-
         os.environ["CONFIG_FILE_PATH"] = path
 
         config = reload_local_module("utils.config")
 
         config.save_config(
-
             {
-
                 "prefix": "!",
-
                 "chat_channel_id": 123,
-
                 "autonomy": True,
-
                 "model_name": "test-model",
-
             }
-
         )
 
         loaded = config.load_config()
@@ -134,20 +131,15 @@ def check_config_round_trip() -> None:
         model_name = config.get_model_name()
 
     finally:
-
         if old_path is None:
-
             os.environ.pop("CONFIG_FILE_PATH", None)
 
         else:
-
             os.environ["CONFIG_FILE_PATH"] = old_path
 
         pathlib.Path(path).unlink(missing_ok=True)
 
         sys.modules.pop("utils.config", None)
-
-
 
     assert loaded["prefix"] == "!"
 
@@ -156,10 +148,6 @@ def check_config_round_trip() -> None:
     assert loaded["autonomy"] is True
 
     assert model_name == "test-model"
-
-
-
-
 
 def check_public_url_guard() -> None:
 
@@ -179,10 +167,6 @@ def check_public_url_guard() -> None:
 
     assert not security.is_public_http_url("http://169.254.1.1/file.mp3")
 
-
-
-
-
 def check_provider_helpers() -> None:
 
     providers = reload_local_module("utils.providers")
@@ -190,21 +174,13 @@ def check_provider_helpers() -> None:
     provider_name = providers.get_provider_name()
 
     assert provider_name in {
-
         "gemini",
-
         "openai",
-
         "ollama",
-
         "nim",
-
         "azure",
-
         "groq",
-
         "openrouter",
-
     }
 
     assert providers.get_provider_model() is not None
@@ -215,93 +191,54 @@ def check_provider_helpers() -> None:
 
     assert providers.normalize_provider_name("groqcloud") == "groq"
 
-
-
-
-
 def check_openai_compatible_providers() -> None:
 
     providers = reload_local_module("utils.providers")
 
     calls = []
 
-
-
     class Response:
-
         def raise_for_status(self) -> None:
 
             return None
-
-
 
         def json(self) -> dict:
 
             return {"choices": [{"message": {"content": "ok"}}]}
 
-
-
     def fake_post(url, *, headers=None, json=None, timeout=None):
 
-        calls.append(
-
-            {"url": url, "headers": headers, "json": json, "timeout": timeout}
-
-        )
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
 
         return Response()
-
-
 
     old_post = providers.requests.post
 
     old_env = os.environ.copy()
 
     try:
-
         providers.requests.post = fake_post
 
         os.environ.update(
-
             {
-
                 "GROQ_API_KEY": "groq-key",
-
                 "OPENROUTER_API_KEY": "openrouter-key",
-
                 "OPENROUTER_SITE_URL": "https://example.com",
-
                 "OPENROUTER_SITE_NAME": "Freesona",
-
             }
-
         )
 
-
-
         result = providers.generate_text(
-
             "hello",
-
             system_prompt="system",
-
             provider="groq",
-
             model="llama-3.3-70b-versatile",
-
             max_output_tokens=32,
-
         )
 
         assert result[0] == "ok"
 
-        assert (
-
-            calls[-1]["url"]
-
-            == "https://api.groq.com/openai/v1/chat/completions"
-
-        )
+        assert calls[-1]["url"] == "https://api.groq.com/openai/v1/chat/completions"
 
         assert calls[-1]["headers"]["Authorization"] == "Bearer groq-key"
 
@@ -309,27 +246,16 @@ def check_openai_compatible_providers() -> None:
 
         assert "max_tokens" not in calls[-1]["json"]
 
-
-
         result = providers.generate_text(
-
             "hello",
-
             provider="open-router",
-
             model="meta-llama/llama-3.3-70b-instruct:free",
-
             max_output_tokens=64,
-
         )
 
         assert result[0] == "ok"
 
-        assert (
-
-            calls[-1]["url"] == "https://openrouter.ai/api/v1/chat/completions"
-
-        )
+        assert calls[-1]["url"] == "https://openrouter.ai/api/v1/chat/completions"
 
         assert calls[-1]["headers"]["Authorization"] == "Bearer openrouter-key"
 
@@ -342,16 +268,11 @@ def check_openai_compatible_providers() -> None:
         assert "max_tokens" not in calls[-1]["json"]
 
     finally:
-
         providers.requests.post = old_post
 
         os.environ.clear()
 
         os.environ.update(old_env)
-
-
-
-
 
 def load_mvsep_helpers() -> dict:
 
@@ -361,59 +282,30 @@ def load_mvsep_helpers() -> dict:
 
     keep: list[ast.stmt] = []
 
-
-
     for node in module.body:
-
         if isinstance(node, ast.Assign):
-
             names = {
-
-                target.id
-
-                for target in node.targets
-
-                if isinstance(target, ast.Name)
-
+                target.id for target in node.targets if isinstance(target, ast.Name)
             }
 
             if names & {"DIRECT_AUDIO_EXTS", "YTDLP_DOMAINS"}:
-
                 keep.append(node)
 
         elif isinstance(node, ast.FunctionDef) and node.name in {
-
             "is_direct_audio_url",
-
             "should_download_with_ytdlp",
-
             "stem_label",
-
         }:
-
             keep.append(node)
-
-
 
     namespace = {"urlparse": urlparse}
 
     exec(  # noqa: S102 – dev script: executes AST-extracted helpers in sandboxed namespace
-
-        compile(
-
-            ast.Module(body=keep, type_ignores=[]), "cogs/mvsep.py", "exec"
-
-        ),
-
+        compile(ast.Module(body=keep, type_ignores=[]), "cogs/mvsep.py", "exec"),
         namespace,
-
     )
 
     return namespace
-
-
-
-
 
 def check_mvsep_url_routing() -> None:
 
@@ -422,8 +314,6 @@ def check_mvsep_url_routing() -> None:
     should_ytdlp = helpers["should_download_with_ytdlp"]
 
     is_direct_audio = helpers["is_direct_audio_url"]
-
-
 
     assert should_ytdlp("https://www.youtube.com/watch?v=abc")
 
@@ -443,30 +333,18 @@ def check_mvsep_url_routing() -> None:
 
     assert helpers["stem_label"]({"name": "vocals.mp3"}, 1) == "Vocals"
 
-
-
-
-
 def check_module_registry() -> None:
 
     modules = reload_local_module("utils.modules")
 
     enabled = modules.load_enabled_modules(
-
         {
-
             "enabled_modules": {
-
                 "genai": False,
-
                 "mvsep": True,
-
                 "unknown": False,
-
             }
-
         }
-
     )
 
     assert enabled["genai"] is False
@@ -480,10 +358,6 @@ def check_module_registry() -> None:
     assert modules.module_extension("news") == "cogs.system.news"
 
     assert modules.module_extension("missing") is None
-
-
-
-
 
 def check_rss_parser() -> None:
 
@@ -501,45 +375,28 @@ def check_rss_parser() -> None:
 
     assert "Hello" in items[0].summary
 
-
-
-
-
 def check_json_files() -> None:
 
     for rel in ("config.json",):
-
         path = ROOT / rel
 
         if not path.exists():
-
             continue
 
         try:
-
             json.loads(path.read_text(encoding="utf-8"))
 
         except json.JSONDecodeError as exc:
-
-            raise CheckFailure(f"{rel} is invalid JSON: line {
-
-                exc.lineno}, column {
-
-                exc.colno}")
-
-
-
-
+            raise CheckFailure(
+                f"{rel} is invalid JSON: line {exc.lineno}, column {exc.colno}"
+            )
 
 def check_env_sample() -> None:
 
     sample = ROOT / ".env.sample"
 
     if not sample.exists():
-
         raise CheckFailure(".env.sample is missing")
-
-
 
     keys = set()
 
@@ -547,150 +404,81 @@ def check_env_sample() -> None:
         sample.read_text(encoding="utf-8").splitlines(),
         start=1,
     ):
-
         line = line.strip()
 
         if not line or line.startswith("#") or "=" not in line:
-
             continue
 
         _, value = line.split("=", 1)
 
         if "#" in value:
-
             raise CheckFailure(
-
                 ".env.sample contains an inline comment on an active assignment "
-
                 f"at line {line_number}; move the comment to its own line"
-
             )
 
         keys.add(line.split("=", 1)[0])
 
-
-
     required = {
-
         "BOT_TOKEN",
-
         "CHANNEL_ID",
-
         "GOOGLE_API_KEY",
-
         "MODEL_NAME",
-
         "CONFIG_FILE_PATH",
-
         "MEMORY_FILE_PATH",
-
     }
 
     missing = sorted(required - keys)
 
     if missing:
-
-        raise CheckFailure(
-
-            ".env.sample is missing keys: " + ", ".join(missing)
-
-        )
-
-
-
-
+        raise CheckFailure(".env.sample is missing keys: " + ", ".join(missing))
 
 def check_secret_files_not_tracked() -> None:
 
     try:
-
         result = subprocess.run(
-
             [
-
                 "git",
-
                 "ls-files",
-
                 ".env",
-
                 "persona.txt",
-
                 "persona.json",
-
                 "memory.json",
-
                 "kb.json",
-
             ],
-
             cwd=ROOT,
-
             text=True,
-
             capture_output=True,
-
             check=True,
-
         )
 
     except (FileNotFoundError, subprocess.CalledProcessError):
-
         return
-
-
 
     tracked = [line for line in result.stdout.splitlines() if line.strip()]
 
     if tracked:
-
-        raise CheckFailure(
-
-            "Secret/runtime files are tracked: " + ", ".join(tracked)
-
-        )
-
-
-
-
+        raise CheckFailure("Secret/runtime files are tracked: " + ", ".join(tracked))
 
 def check_unit_tests() -> None:
 
     res = subprocess.run(
-
         [
-
             sys.executable,
-
             "-m",
-
             "unittest",
-
             "discover",
-
             "-s",
-
             str(ROOT / "tests"),
-
         ],
-
         cwd=ROOT,
-
         capture_output=True,
-
         text=True,
-
         check=False,
-
     )
 
     if res.returncode != 0:
-
         raise CheckFailure(f"Unit tests failed:\n{res.stderr}\n{res.stdout}")
-
-
-
-
 
 def run_check(name: str, func) -> None:
 
@@ -700,67 +488,38 @@ def run_check(name: str, func) -> None:
 
     print("ok")
 
-
-
-
-
 def main() -> int:
 
     checks = [
-
         ("python syntax", check_python_syntax),
-
+        ("requirements", check_requirements),
         ("config round trip", check_config_round_trip),
-
         ("public URL guard", check_public_url_guard),
-
         ("MVSEP URL routing", check_mvsep_url_routing),
-
         ("module registry", check_module_registry),
-
         ("provider helpers", check_provider_helpers),
-
         ("OpenAI-compatible providers", check_openai_compatible_providers),
-
         ("RSS parser", check_rss_parser),
-
         ("JSON files", check_json_files),
-
         (".env.sample", check_env_sample),
-
         ("tracked secrets", check_secret_files_not_tracked),
-
         ("unit tests", check_unit_tests),
-
     ]
 
-
-
     try:
-
         for name, func in checks:
-
             run_check(name, func)
 
     except (AssertionError, CheckFailure) as exc:
-
         print("failed")
 
         print(f"\nERROR: {exc}")
 
         return 1
 
-
-
     print("\nAll checks passed.")
 
     return 0
 
-
-
-
-
 if __name__ == "__main__":
-
     raise SystemExit(main())
-

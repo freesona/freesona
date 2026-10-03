@@ -4,7 +4,7 @@ description: Rules for modifying Freesona's Discord integration layer.
 ---
 # Freesona Discord Integration
 
-This skill governs your changes to how Freesona implements `discord.py`. Inspect the `dev` branch to verify your integration architecture before you make changes.
+This skill governs your changes to how Freesona implements `discord.py`. Inspect the current branch to verify your integration architecture before you make changes.
 
 ## Your Inspection Requirements
 Before you modify Discord code, locate:

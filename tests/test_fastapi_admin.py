@@ -23,7 +23,14 @@ async def test_admin_status_redacts_sensitive_configuration():
     """Expose only the documented status fields after authorization."""
     with (
         patch("fastapi_server._admin_token", return_value="secret"),
-        patch("fastapi_server.load_config", return_value={"provider": "test", "provider_model": "model", "api_key": "hidden"}),
+        patch(
+            "fastapi_server.load_config",
+            return_value={
+                "provider": "test",
+                "provider_model": "model",
+                "api_key": "hidden",
+            },
+        ),
     ):
         response = await fastapi_server.admin_status("Bearer secret")
     assert response == {
@@ -37,7 +44,9 @@ async def test_admin_status_redacts_sensitive_configuration():
 @pytest.mark.asyncio
 async def test_admin_knowledge_rejects_invalid_entries_before_persistence():
     """Translate structured Knowledge Base validation into an HTTP error."""
-    with patch("fastapi_server._admin_token", return_value="secret"):
-        with pytest.raises(HTTPException) as error:
-            await fastapi_server.admin_knowledge({}, "Bearer secret")
+    with (
+        patch("fastapi_server._admin_token", return_value="secret"),
+        pytest.raises(HTTPException) as error,
+    ):
+        await fastapi_server.admin_knowledge({}, "Bearer secret")
     assert error.value.status_code == 422
