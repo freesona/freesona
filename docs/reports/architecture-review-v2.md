@@ -1,5 +1,7 @@
 # Architectural Review Report — Post ConversationManager Implementation
 
+This document follows ASD-STE100 Simplified Technical English.
+
 **Date**: 2026-07-17  
 **Status**: Post-Step 1 (PromptBuilder) + Step 2 (ConversationManager) Implementation  
 **Baseline**: `docs/reports/architecture-audit-v1.md`
@@ -26,9 +28,9 @@ These must be resolved before Character Memory (Step 3) to prevent compounding t
 
 ### Current State (architecture.md — *outdated*)
 
-> **Short-term (provider continuity, in-session)**
+> **Short-term (ConversationManager)**
 >
-> Conversation history is managed **server-side** by Gemini's Interactions API via `previous_interaction_id` when the active provider supports it. The bot stores continuity per `(guild_id, channel_id, user_id)` rather than one global ID per channel, which keeps user-specific threads isolated. Non-Gemini providers do not assume this continuity path. Cleared via `/clearmemory` or on restart.
+> The bot now uses the `ConversationManager` for short‑term memory, storing recent messages per `(guild_id, channel_id, user_id)` and injecting them via `ConversationHistoryProvider`. All providers are stateless and no longer rely on provider‑specific continuity APIs.
 
 ### Required Rewrite
 

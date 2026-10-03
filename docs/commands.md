@@ -1,5 +1,7 @@
 # Command Reference
 
+This document follows ASD-STE100 Simplified Technical English.
+
 Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as both prefix and slash commands. `/setpersona` and `/autonomy` are slash-only because they use Discord UI interactions.
 
 ## AI Commands

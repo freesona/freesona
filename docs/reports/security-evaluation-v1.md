@@ -1,5 +1,7 @@
 # Freesona v1.0 Security Evaluation Report
 
+This document follows ASD-STE100 Simplified Technical English.
+
 > **Status**: Release-blocking audit for v1.0  
 > **Date**: 2026-07-18  
 > **Auditor**: Junie (JetBrains Autonomous Agent)  

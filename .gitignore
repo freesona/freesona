@@ -71,3 +71,25 @@ diags.txt
 /part_class.txt
 out.txt
 memory.json
+!.junie/skills/*
+.junie/mcp/mcp.json
+audit_findings.md
+
+# Local test/report artifacts
+full_test.txt
+test_output.txt
+test_pb.txt
+test_results.txt
+e501_current.txt
+flake8_current.txt
+flake8_results.txt
+
+# misc
+test_nitter2.py
+e501.txt
+*_test.txt
+test_*.txt
+.serena/*
+.serena/project.yml
+.junie/demo.md
+.junie/vms/template-vm/Dockerfile

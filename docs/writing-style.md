@@ -1,7 +1,8 @@
 # Documentation writing style
 
-Use this style for all project documentation. It applies the practical rules
-of ASD-STE100 Simplified Technical English to Freesona documentation.
+Use this style for all project documentation. All repository documentation must
+adhere to ASD-STE100 Simplified Technical English. This guide applies the
+practical rules of ASD-STE100 to Freesona documentation.
 
 ## Purpose
 
@@ -32,7 +33,7 @@ Write `The ConversationManager stores recent messages.` Do not write
 Prefer common technical words with one meaning. Use these forms in new text:
 
 | Prefer | Avoid |
-|---|---|
+| :----- | :---- |
 | `use` | `utilize`, `leverage` |
 | `start` | `launch`, `initiate` |
 | `stop` | `terminate` |

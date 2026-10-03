@@ -1,5 +1,7 @@
 # `utils/`
 
+This document follows ASD-STE100 Simplified Technical English.
+
 The `utils/` directory contains shared Freesona logic. Cogs import modules
 from this directory. Cogs do not import other cogs directly.
 
