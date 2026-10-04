@@ -160,7 +160,7 @@ The authoritative provider ordering is declared in `utils/prompt_builder.py::_ge
 | **Mutability**     | IMMUTABLE at query time — KB entries are authored/ingested, not generated                                                                                   |
 | **Lifetime**       | Persistent (ChromaDB); per `persona` (collection filter)                                                                                                    |
 | **Authority**      | Canonical truth about the persona's source material                                                                                                         |
-| **Ownership**      | `utils/chroma.py` (storage & retrieval), `utils/generation.py` (retrieve_knowledge_context), `utils/prompt_builder_providers.py` (provider)                 |
+| **Ownership**      | `utils/knowledge_base.py` (SQLite storage and indexing), `utils/chroma.py` (secondary index), `utils/prompt_builder_providers.py` (retrieval provider) |
 | **Boundaries**     | MUST NOT include conversation history. MUST NOT include user facts. MUST NOT include character memories. Retrieval is *passive* — no LLM calls in provider. |
 
 ---
@@ -337,41 +337,3 @@ LOGGER_SECTION_MAP = {
 
 This ensures predictable section assignment for all current and future loggers.
 
----
-
-## 12. Guild World Context Channel Enumeration (`utils/guild_world.py`)
-
-The `GuildWorldAccessor` protocol includes a `get_guild_channels(guild_id)` method that returns a list of `GuildChannelInfo` dataclasses. This enables KB 2.0 and other features to understand server structure without persisting it as memory.
-
-### GuildChannelInfo Fields
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | `int` | Channel snowflake ID |
-| `name` | `str` | Channel name |
-| `type` | `str` | Channel type (`text`, `voice`, `category`, `stage`, `forum`, `thread`) |
-| `topic` | `Optional[str]` | Channel topic/description |
-| `position` | `int` | Channel position in the list |
-| `category_id` | `Optional[int]` | Parent category ID |
-| `nsfw` | `bool` | Whether channel is marked NSFW |
-
-### Design Principles
-
-- **Not memory** — Channel list is fetched fresh from Discord's cache on each request
-- **No persistence** — No database writes, no history, no cross-guild awareness
-- **Protocol-based** — `GuildWorldAccessor` is a Protocol; `DiscordGuildWorldAccessor` is the Discord.py implementation; `NullGuildWorldAccessor` provides safe defaults for testing
-- **KB 2.0 ready** — Enables tagging knowledge to specific channels, understanding server structure, and letting the persona reference other channels by name
-
-### Usage
-
-```python
-from utils.guild_world import DiscordGuildWorldAccessor, GuildChannelInfo
-
-accessor = DiscordGuildWorldAccessor(bot)
-channels: list[GuildChannelInfo] = await accessor.get_guild_channels(guild_id)
-
-for ch in channels:
-    print(
-        ch.format_for_prompt()
-    )  # e.g., "#general (General chat)", "#voice-chat [voice]"
-```

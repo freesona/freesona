@@ -12,8 +12,8 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, Response
 
-from utils.chroma import _validate_metadata, add_knowledge
 from utils.config import load_config
+from utils.knowledge_base import KnowledgeBaseService, validate_entry
 
 logger = logging.getLogger("FreesonaBot")
 
@@ -92,20 +92,19 @@ async def admin_knowledge(
     if not isinstance(metadata, dict):
         raise HTTPException(status_code=422, detail="metadata is required")
 
-    valid, reason = _validate_metadata(metadata)
-    if not valid:
-        raise HTTPException(status_code=422, detail=reason)
-
-    document_id = add_knowledge(
-        document,
-        source=str(payload.get("source", "admin")),
-        title=payload.get("title"),
-        collection_name=payload.get("collection_name"),
-        metadata=metadata,
-    )
-    if not document_id:
-        raise HTTPException(status_code=503, detail="Knowledge base is unavailable")
-    return {"id": document_id}
+    entry_data = {**metadata, "content": document}
+    if "source" not in entry_data:
+        entry_data["source"] = str(payload.get("source", "admin"))
+    if payload.get("title") is not None:
+        entry_data["title"] = payload["title"]
+    try:
+        validate_entry(entry_data)
+        service = KnowledgeBaseService("knowledge.db")
+        await service.initialize()
+        entry = await service.ingest(entry_data)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"id": entry.id}
 
 
 @app.get("/")

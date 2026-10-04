@@ -1029,7 +1029,7 @@ def list_knowledge(
     collection_name: str | None = None,
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Return all knowledgeB entries in the collection.
+    """Return all knowledge entries in the collection.
 
 
 

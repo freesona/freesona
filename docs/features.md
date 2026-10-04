@@ -134,23 +134,9 @@ The character exists *through* Discord, not inside a single guild. Guild World C
 
 The same persona naturally adapts its wording to different servers without changing who it is. Guilds represent different communities, not different characters.
 
-**Channel Enumeration (KB 2.0 Support):**
-
-The `GuildWorldAccessor` protocol and its `DiscordGuildWorldAccessor` implementation provide a `get_guild_channels(guild_id)` method that returns a list of `GuildChannelInfo` objects. Each contains:
-
-- `id` — Channel snowflake ID
-- `name` — Channel name
-- `type` — Channel type (`text`, `voice`, `category`, `stage`, `forum`, `thread`)
-- `topic` — Channel topic/description (if applicable)
-- `position` — Channel position in the list
-- `category_id` — Parent category ID
-- `nsfw` — Whether the channel is marked NSFW
-
-This enables KB 2.0 to tag knowledge to specific channels, understand server structure, and let the persona reference other channels by name — all without persisting this data as memory. The channel list is fetched fresh from Discord's cache on each request.
-
 ---
 
-## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/generation.py`)
+## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/prompt_builder_providers.py`)
 
 ### Definition
 
@@ -336,7 +322,8 @@ This invariant prevents **canon drift** — the gradual corruption of character 
 
 ### Retrieval & Context Construction
 
-The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `utils/generation.py`:
+`PersonaKnowledgeBaseProvider` in `utils/prompt_builder_providers.py` retrieves
+knowledge through `query_knowledge` in `utils/chroma.py`:
 
 1. Embeds the user's message
 2. Queries ChromaDB with **metadata filtering (by `persona`) occurring before or alongside vector search** to reduce the candidate set
@@ -374,6 +361,17 @@ The knowledge base:
 - Stores embeddings in ChromaDB (local or remote)
 - Provides identical retrieval behavior across all providers
 - Is fully **persona-agnostic** — adding a new persona requires only source material + metadata, no code changes
+
+---
+
+## Conversion and Utility Commands (`cogs/conversion/delphitools.py`)
+
+The optional `conversion` module provides Discord commands backed by the
+`delphitools` CLI. It supports image conversion, text watermarks, palette
+generation, color-blindness simulation, QR and barcode generation, unit
+conversion, Base64/hex/URL encoding and decoding, and MD5/SHA-1/SHA-256 hashes.
+Commands enforce a subprocess timeout and the Discord upload-size limit. The
+module requires the `dt` executable.
 
 ### Configuration
 

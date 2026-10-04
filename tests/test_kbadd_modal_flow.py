@@ -7,7 +7,7 @@ import pytest
 from cogs.ai.chroma import ChromaCog
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_kbadd_opens_modal_without_prerequisite_followup_message():
     cog = ChromaCog(bot=MagicMock())
     ctx = MagicMock()

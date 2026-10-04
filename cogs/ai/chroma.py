@@ -2,6 +2,7 @@
 # cogs/ai/chroma.py: ChromaDB Cog for Discord bot to manage a local
 # knowledge base.
 import asyncio
+import logging
 
 import discord
 from discord import app_commands, ui
@@ -9,31 +10,17 @@ from discord.ext import commands
 
 from utils.chroma import (
     VALID_CANON_LEVELS,
-    add_knowledge,
+    VALID_ENTRY_TYPES,
+    VALID_SOURCE_TYPES,
     delete_knowledge,
     extract_text_from_bytes,
     get_knowledge_by_persona,
     list_knowledge,
     query_knowledge,
 )
+from utils.knowledge_base import KnowledgeBaseService
 
-VALID_SOURCE_TYPES = {
-    "anime",
-    "novel",
-    "manga",
-    "game",
-    "guidebook",
-    "interview",
-    "website",
-    "other",
-}
-VALID_ENTRY_TYPES = {
-    "dialogue",
-    "narration",
-    "event",
-    "relationship",
-    "description",
-}
+log = logging.getLogger(__name__)
 
 
 class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
@@ -42,14 +29,14 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=True,
         max_length=100,
-        placeholder="e.g., chisato_nishikigi",
+        placeholder="e.g., character_name",
     )
     source = ui.TextInput(
         label="Source",
         style=discord.TextStyle.short,
         required=True,
         max_length=200,
-        placeholder="e.g., Episode 06",
+        placeholder="e.g., Episode 01",
     )
     source_type = ui.TextInput(
         label="Source Type",
@@ -70,7 +57,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=True,
         max_length=200,
-        placeholder="e.g., friendship, optimism, coffee",
+        placeholder="e.g., friendship, loyalty, humor",
     )
     # Optional fields
     scene = ui.TextInput(
@@ -78,21 +65,21 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=False,
         max_length=200,
-        placeholder="e.g., Aquarium visit",
+        placeholder="e.g., rooftop conversation",
     )
     speaker = ui.TextInput(
         label="Speaker (optional)",
         style=discord.TextStyle.short,
         required=False,
         max_length=100,
-        placeholder="e.g., Chisato",
+        placeholder="e.g., Protagonist",
     )
     episode = ui.TextInput(
         label="Episode (optional)",
         style=discord.TextStyle.short,
         required=False,
         max_length=50,
-        placeholder="e.g., 06",
+        placeholder="e.g., 01",
     )
     chapter = ui.TextInput(
         label="Chapter (optional)",
@@ -106,7 +93,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=False,
         max_length=50,
-        placeholder="e.g., 2023-01-15 or S01E06 12:34",
+        placeholder="e.g., 2024-01-01 or S01E01 12:34",
     )
     canon_level = ui.TextInput(
         label="Canon Level (optional)",
@@ -196,22 +183,25 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
             metadata["tags"] = [
                 t.strip() for t in self.tags.value.split(",") if t.strip()
             ]
-        # Add to knowledge base
-        doc_id = await asyncio.to_thread(
-            add_knowledge,
-            self.document,
-            source="discord",
-            title=self.document_title.strip() if self.document_title else None,
-            metadata=metadata,
-        )
-        if not doc_id:
+        service = KnowledgeBaseService("knowledge.db")
+        try:
+            await service.initialize()
+            entry = await service.ingest(
+                {
+                    **metadata,
+                    "content": self.document,
+                    "title": self.document_title.strip() if self.document_title else "",
+                }
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            log.exception("Failed to persist knowledge entry from Discord")
             await interaction.followup.send(
-                "ChromaDB is not available or could not initialize the collection.",
+                f"Could not add the knowledge entry: {exc}",
                 ephemeral=True,
             )
             return
         await interaction.followup.send(
-            f"Added knowledge entry with ID `{doc_id}` "
+            f"Added knowledge entry with ID `{entry.id}` "
             f"for persona `{metadata['persona']}`.",
             ephemeral=True,
         )

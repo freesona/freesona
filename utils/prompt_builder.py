@@ -542,7 +542,7 @@ class ProviderPriority:
 
     CHARACTER_MEMORY = 50
 
-    GUILD_WORLD = 55  # Planned for Phase 3
+    GUILD_WORLD = 55
 
     PERSONA_KNOWLEDGE_BASE = 60
 
