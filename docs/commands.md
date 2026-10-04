@@ -148,11 +148,13 @@ Commands are organized by granular system cogs (`cogs/system/*.py`). All are own
 
 ### Core System Commands (`cogs/system/core.py`)
 
-| Command       | Action                                                                                     | Permissions |
-| :------------ | :----------------------------------------------------------------------------------------- | :---------- |
-| `/sync`       | Sync global slash commands                                                                 | Bot Owner   |
-| `/reboot`     | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart. | Bot Owner   |
-| `/dumpconfig` | Dump current `config.json` contents                                                        | Bot Owner   |
+| Command                                               | Action                                                                                     | Permissions |
+| :---------------------------------------------------- | :----------------------------------------------------------------------------------------- | :---------- |
+| `/sync`                                               | Sync global slash commands                                                                 | Bot Owner   |
+| `/reboot`                                             | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart. | Bot Owner   |
+| `/dumpconfig`                                         | Dump current `config.json` contents                                                        | Bot Owner   |
+| `/docs`                                               | Open the Freesona documentation website                                                    | Anyone      |
+| `/personareload` (`~personareload`, alias `~preload`) | Reload persona from JSON file without rebooting                                            | Bot Owner   |
 
 ### Configuration Management (`cogs/system/config.py`)
 
@@ -228,7 +230,6 @@ Warn thresholds support `timeout <duration>`, `kick`, and `ban` actions triggere
 | `~help [command]`               | Show help for commands                              | Anyone           |
 | `~prefix <symbol>`              | Change command prefix                               | Administrator    |
 | `~math <equation>`              | Solve an equation via Wolfram\|Alpha                | Anyone           |
-| `~plot <function>`              | Generate a 2D plot of a mathematical function       | Anyone           |
 | `~download <url>` (`~dl`)       | Download a video (1080p → 720p → 480p → compressed) | Anyone           |
 | `~audio <url>` (`~mp3`)         | Download audio as MP3                               | Anyone           |
 | `~ping`                         | Show bot and Discord API latency                    | Anyone           |

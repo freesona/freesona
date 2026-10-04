@@ -229,7 +229,7 @@ class HelpCog(commands.Cog):
             "unlock",
         ]:
             return "Moderation"
-        elif cmd.name in ["math", "plot", "help", "ping"]:
+        elif cmd.name in ["math", "help", "ping", "docs"]:
             return "Utility"
         elif cmd.name in ["download", "audio", "separate"]:
             return "Media"

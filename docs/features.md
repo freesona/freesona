@@ -9,7 +9,7 @@ Freesona assembles prompts using a modular **PromptBuilder** system with indepen
 **Provider Priority Order:**
 
 | Priority | Provider               | Mutability | Description                                                                                  |
-|:---------|:-----------------------|:-----------|:---------------------------------------------------------------------------------------------|
+| :------- | :--------------------- | :--------- | :------------------------------------------------------------------------------------------- |
 | 10       | System                 | IMMUTABLE  | Model behavior constraints, safety, format                                                   |
 | 20       | Persona                | IMMUTABLE  | Structured persona fields (core, background, beliefs, style, instructions)                   |
 | 25       | Canon                  | IMMUTABLE  | Modular canon blocks: identity, beliefs, motivations, rules, world assumptions, explanations |
@@ -26,7 +26,7 @@ Freesona assembles prompts using a modular **PromptBuilder** system with indepen
 Freesona's persona is split into five structured fields edited through a button-based `/setpersona` panel — no restart required.
 
 | Field                          | Edited via    |
-|:-------------------------------|:--------------|
+| :----------------------------- | :------------ |
 | Core Personality & Traits      | `/setpersona` |
 | Background & History           | `/setpersona` |
 | Beliefs, Likes & Dislikes      | `/setpersona` |
@@ -98,7 +98,7 @@ Every message payload is tied to a stable Discord `user_id` before reaching the 
 
 ## Canon Framework (`utils/canon.py`)
 
-The **Canon Framework** replaces the monolithic persona prompt with modular, immutable components that explain *why* a character behaves as they do, not merely *what* they do. It is the authoritative source of canonical truth alongside the PKB.
+The **Canon Framework** replaces the monolithic persona prompt with modular, immutable components that explain _why_ a character behaves as they do, not merely _what_ they do. It is the authoritative source of canonical truth alongside the PKB.
 
 **Six component types:**
 
@@ -121,7 +121,7 @@ The **Canon Framework** replaces the monolithic persona prompt with modular, imm
 
 ## Guild World Context (`utils/guild_world.py`)
 
-The character exists *through* Discord, not inside a single guild. Guild World Context provides **environmental grounding** — the "where" of the current interaction — without storing it as memory.
+The character exists _through_ Discord, not inside a single guild. Guild World Context provides **environmental grounding** — the "where" of the current interaction — without storing it as memory.
 
 **Supplies per request:**
 
@@ -133,6 +133,20 @@ The character exists *through* Discord, not inside a single guild. Guild World C
 **Scope:** Per `(guild_id, channel_id)` — request-scoped, no persistence, no history, no cross-guild awareness.
 
 The same persona naturally adapts its wording to different servers without changing who it is. Guilds represent different communities, not different characters.
+
+**Channel Enumeration (KB 2.0 Support):**
+
+The `GuildWorldAccessor` protocol and its `DiscordGuildWorldAccessor` implementation provide a `get_guild_channels(guild_id)` method that returns a list of `GuildChannelInfo` objects. Each contains:
+
+- `id` — Channel snowflake ID
+- `name` — Channel name
+- `type` — Channel type (`text`, `voice`, `category`, `stage`, `forum`, `thread`)
+- `topic` — Channel topic/description (if applicable)
+- `position` — Channel position in the list
+- `category_id` — Parent category ID
+- `nsfw` — Whether the channel is marked NSFW
+
+This enables KB 2.0 to tag knowledge to specific channels, understand server structure, and let the persona reference other channels by name — all without persisting this data as memory. The channel list is fetched fresh from Discord's cache on each request.
 
 ---
 
@@ -231,7 +245,7 @@ Each knowledge entry represents **one semantic unit** (atomic chunk):
 Knowledge entries include version metadata so future migrations remain manageable:
 
 | Field             | Description                                 |
-|:------------------|:--------------------------------------------|
+| :---------------- | :------------------------------------------ |
 | `schema_version`  | Schema version of the entry (default: `1`)  |
 | `embedding_model` | Embedding model used to generate the vector |
 
@@ -261,7 +275,7 @@ These inferences belong to the language model during generation. Storing them in
 #### Required Metadata Fields
 
 | Field         | Description                                                                                 |
-|:--------------|:--------------------------------------------------------------------------------------------|
+| :------------ | :------------------------------------------------------------------------------------------ |
 | `persona`     | Persona identifier (e.g., `chisato_nishikigi`)                                              |
 | `source`      | Original source reference (e.g., `Episode 06`, `Chapter 12`)                                |
 | `source_type` | Media type: `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` |
@@ -271,7 +285,7 @@ These inferences belong to the language model during generation. Storing them in
 #### Optional Metadata Fields
 
 | Field         | Description                                                                  |
-|:--------------|:-----------------------------------------------------------------------------|
+| :------------ | :--------------------------------------------------------------------------- |
 | `episode`     | Episode number                                                               |
 | `chapter`     | Chapter number                                                               |
 | `scene`       | Scene description                                                            |
@@ -294,7 +308,7 @@ Each stage is deterministic and can be tested independently.
 
 ### Canonical Truth Invariant
 
-**Architectural Principle**: *No context provider may establish canonical truth about the character.*
+**Architectural Principle**: _No context provider may establish canonical truth about the character._
 
 Only two sources are authorized to define objective facts about the persona:
 
@@ -304,13 +318,13 @@ Only two sources are authorized to define objective facts about the persona:
 All other context providers are **strictly descriptive** and must never define what the character "is" or "believes" in a canonical sense:
 
 | Provider                      | Authority               | What It May Describe                                                                                    |
-|:------------------------------|:------------------------|:--------------------------------------------------------------------------------------------------------|
+| :---------------------------- | :---------------------- | :------------------------------------------------------------------------------------------------------ |
 | `SystemContextProvider`       | Hard constraints        | Model behavior constraints (safety, format, reasoning)                                                  |
-| `PersonaContextProvider`      | Identity expression     | Role, background, beliefs, language style (the *what*)                                                  |
-| `ConversationHistoryProvider` | Session continuity      | *What was said* in this conversation                                                                    |
-| `UserMemoryProvider`          | User facts              | *What the persona knows about the user* across sessions                                                 |
-| `CharacterMemoryProvider`     | Relationship history    | *What they've experienced together*: promises, shared events, recurring jokes, relationship progression |
-| `GuildWorldContextProvider`   | Environmental grounding | *Where they are*: server name, channel context, local norms                                             |
+| `PersonaContextProvider`      | Identity expression     | Role, background, beliefs, language style (the _what_)                                                  |
+| `ConversationHistoryProvider` | Session continuity      | _What was said_ in this conversation                                                                    |
+| `UserMemoryProvider`          | User facts              | _What the persona knows about the user_ across sessions                                                 |
+| `CharacterMemoryProvider`     | Relationship history    | _What they've experienced together_: promises, shared events, recurring jokes, relationship progression |
+| `GuildWorldContextProvider`   | Environmental grounding | _Where they are_: server name, channel context, local norms                                             |
 
 **Enforcement**:
 
@@ -411,7 +425,7 @@ This is like a real Discord user: they participate in many servers, naturally co
 Freesona routes generation through a provider abstraction so the same commands can target different backends without changing command code. Supported providers:
 
 | Provider         | Key env var                         |
-|:-----------------|:------------------------------------|
+| :--------------- | :---------------------------------- |
 | Gemini (default) | `GOOGLE_API_KEY`                    |
 | OpenAI           | `OPENAI_API_KEY`                    |
 | Ollama           | `OLLAMA_BASE_URL`                   |
@@ -429,7 +443,7 @@ Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching crede
 When enabled, the bot can join an active conversation unprompted. It uses a confidence-scored intent evaluator (`utils/intent.py`) rather than a random dice roll:
 
 | Signal                                           | Score |
-|:-------------------------------------------------|:------|
+| :----------------------------------------------- | :---- |
 | Direct mention or reply to bot                   | +0.90 |
 | Attachment present                               | +0.50 |
 | Code block present                               | +0.40 |
@@ -509,36 +523,34 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 
 ### Configurable Values
 
-| Key                                      | Type   | Default      | Description                                           |
-|:-----------------------------------------|:-------|:-------------|:------------------------------------------------------|
-| `mvsep_poll_interval`                    | int    | 5            | Seconds between MVSEP API polling checks              |
-| `mvsep_poll_timeout`                     | int    | 300          | Max seconds to wait for MVSEP task completion         |
-| `ytdlp_subprocess_timeout`               | int    | 300          | Max seconds for yt-dlp subprocess to complete         |
-| `ytdlp_compress_target_mb`               | float  | 9.5          | Target size in MB for video compression               |
-| `generation_split_min_length`            | int    | 1900         | Minimum message length before splitting into segments |
-| `generation_split_delay_base`            | float  | 0.5          | Base delay in seconds between message segments        |
-| `generation_split_delay_per_char`        | float  | 0.001        | Additional delay per character in segment             |
-| `generation_split_delay_max`             | float  | 3.0          | Maximum delay between segments in seconds             |
-| `generation_rate_limit`                  | float  | 1.0          | Minimum seconds between AI generation calls           |
-| `conversation_max_messages`              | int    | 20           | Max messages per conversation scope                   |
-| `conversation_token_budget`              | int    | 4000         | Approximate token budget for conversation context     |
-| `conversation_ttl_seconds`               | int    | 3600         | Time-to-live for conversations (seconds)              |
-| `conversation_summary_threshold`         | int    | 15           | Message count before summarization                    |
-| `character_memory_max_memories`          | int    | 50           | Max memories per (guild, user, persona) scope         |
-| `character_memory_min_importance`        | float  | 0.3          | Minimum importance score for memory retention         |
-| `character_memory_extraction_interval`   | int    | 300          | Seconds between extraction runs                       |
-| `character_memory_extraction_batch_size` | int    | 10           | Conversations to process per extraction run           |
-| `canon_version`                          | string | "1.0.0"      | Current canon version                                 |
-| `canon_file_path`                        | string | "./canon.db" | Path to canon database                                |
+| Key                               | Type  | Default | Description                                           |
+| :-------------------------------- | :---- | :------ | :---------------------------------------------------- |
+| `mvsep_poll_interval`             | int   | 10      | Seconds between MVSEP API polling checks              |
+| `mvsep_poll_timeout`              | int   | 600     | Max seconds to wait for MVSEP task completion         |
+| `ytdlp_subprocess_timeout`        | int   | 300     | Max seconds for yt-dlp subprocess to complete         |
+| `ytdlp_compress_target_mb`        | float | 9.5     | Target size in MB for video compression               |
+| `generation_split_min_length`     | int   | 280     | Minimum message length before splitting into segments |
+| `generation_split_delay_base`     | float | 1.2     | Base delay in seconds between message segments        |
+| `generation_split_delay_per_char` | float | 0.012   | Additional delay per character in segment             |
+| `generation_split_delay_max`      | float | 3.5     | Maximum delay between segments in seconds             |
+| `generation_rate_limit`           | float | 5       | Minimum seconds between AI generation calls           |
+| `model_temperature`               | float | 0.7     | Sampling temperature for AI generation                |
+| `debounce_seconds`                | float | 1.2     | Debounce time for message processing in seconds       |
+| `autonomy_cooldown_seconds`       | int   | 120     | Cooldown between autonomous actions in seconds        |
+| `autonomy_user_cooldown`          | int   | 60      | Per-user cooldown for autonomous actions in seconds   |
 
 ### Commands
 
-| Command                     | Action                                            | Permissions |
-|:----------------------------|:--------------------------------------------------|:------------|
-| `/config show [key]`        | Show all runtime config values, or a specific key | Bot Owner   |
-| `/config list`              | List all configurable keys with descriptions      | Bot Owner   |
-| `/config set <key> <value>` | Set a config value (auto type-converted)          | Bot Owner   |
-| `/config reset <key>`       | Reset a config key to its default value           | Bot Owner   |
+| Command                     | Action                                                     | Permissions |
+| :-------------------------- | :--------------------------------------------------------- | :---------- |
+| `/config show [key]`        | Show all runtime config values, or a specific key          | Bot Owner   |
+| `/config list`              | List all configurable keys with descriptions               | Bot Owner   |
+| `/config set <key> <value>` | Set a config value (type-converted)                        | Bot Owner   |
+| `/config reset <key>`       | Reset a config key to its default value                    | Bot Owner   |
+| `/config edit`              | Open interactive button panel to edit config via modal     | Bot Owner   |
+| `/config view`              | Open interactive dropdown to view a config value in detail | Bot Owner   |
+| `/config reset-interactive` | Open interactive dropdown to reset a config key to default | Bot Owner   |
+| `/config dump`              | Dump the current `config.json` contents                    | Bot Owner   |
 
 ### Example Usage
 
