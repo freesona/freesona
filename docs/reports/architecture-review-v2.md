@@ -2,8 +2,8 @@
 
 This document follows ASD-STE100 Simplified Technical English.
 
-**Date**: 2026-07-17  
-**Status**: Post-Step 1 (PromptBuilder) + Step 2 (ConversationManager) Implementation  
+**Date**: 2026-07-17
+**Status**: Post-Step 1 (PromptBuilder) + Step 2 (ConversationManager) Implementation
 **Baseline**: `docs/reports/architecture-audit-v1.md`
 
 ---
@@ -52,11 +52,11 @@ These must be resolved before Character Memory (Step 3) to prevent compounding t
 
 | Responsibility                  | Implementation                                                          | Status |
 |:--------------------------------|:------------------------------------------------------------------------|:-------|
-| Storing conversation state      | `ConversationState` with `deque[ConversationMessage]`                   | ✅      |
-| Pruning conversation history    | `_enforce_limits()` — message count + token budget                      | ✅      |
-| Enforcing token/message budgets | Config-driven: `conversation_max_messages`, `conversation_token_budget` | ✅      |
-| Exposing conversation context   | `build_conversation_context()` returns formatted string                 | ✅      |
-| Expiration/cleanup              | `cleanup_expired_conversations()` + periodic task                       | ✅      |
+| Storing conversation state      | `ConversationState` with `deque[ConversationMessage]`                   | ✅     |
+| Pruning conversation history    | `_enforce_limits()` — message count + token budget                      | ✅     |
+| Enforcing token/message budgets | Config-driven: `conversation_max_messages`, `conversation_token_budget` | ✅     |
+| Exposing conversation context   | `build_conversation_context()` returns formatted string                 | ✅     |
+| Expiration/cleanup              | `cleanup_expired_conversations()` + periodic task                       | ✅     |
 
 ### ❌ Responsibility Violations Found
 
@@ -81,10 +81,10 @@ These must be resolved before Character Memory (Step 3) to prevent compounding t
 
 | Provider                     | Knows About Other Providers? | Communicates With Others? | Only Produces Own Context? |
 |:-----------------------------|:----------------------------:|:-------------------------:|:--------------------------:|
-| SystemContextProvider        |              ❌               |             ❌             |             ✅              |
-| PersonaContextProvider       |              ❌               |             ❌             |             ✅              |
+| SystemContextProvider        |              ❌               |             ❌        |             ✅              |
+| PersonaContextProvider       |              ❌               |             ❌          |             ✅              |
 | ConversationHistoryProvider  |              ❌               |             ❌             |             ✅              |
-| UserMemoryProvider           |              ❌               |             ❌             |             ✅              |
+| UserMemoryProvider           |              ❌               |             ❌          |             ✅              |
 | CharacterMemoryProvider      |              ❌               |             ❌             |      ✅ (placeholder)       |
 | PersonaKnowledgeBaseProvider |              ❌               |             ❌             |             ✅              |
 

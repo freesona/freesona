@@ -25,6 +25,7 @@ CONFIG_CATEGORIES = {
     "ChromaDB": [
         "chroma_collection",
         "chroma_persist_directory",
+        "knowledge_base_database",
     ],
     "Autonomy": [
         "autonomy_cooldown_seconds",
@@ -83,6 +84,7 @@ CONFIG_DESCRIPTIONS = {
         "ChromaDB collection name for embeddings (default: freesona)"
     ),
     "chroma_persist_directory": ("ChromaDB persistence directory (default: ./.chroma)"),
+    "knowledge_base_database": "SQLite database for structured knowledge records (default: knowledge.db)",
     "debounce_seconds": "Message debounce time in seconds (default: 1.2)",
     "autonomy_cooldown_seconds": (
         "Cooldown between autonomous actions in seconds (default: 120)"

@@ -388,7 +388,7 @@ def _generate_implicit_plot(func_str: str) -> io.BytesIO:
         f = sympy.lambdify((x_sym, y_sym), implicit_expr, "numpy")
         # Create grid
         x = np.linspace(-10, 10, 400)
-        y = np.linspace(-10, 10, 400)
+        y = np.linspace(-10, 10, 400, retstep=False)
         x_grid, y_grid = np.meshgrid(x, y)
         with np.errstate(divide="ignore", invalid="ignore"):
             z_grid = f(x_grid, y_grid)

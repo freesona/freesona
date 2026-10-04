@@ -2,10 +2,10 @@
 
 This document follows ASD-STE100 Simplified Technical English.
 
-> **Status**: Release-blocking audit for v1.0  
-> **Date**: 2026-07-18  
-> **Auditor**: Junie (JetBrains Autonomous Agent)  
-> **Scope**: Full codebase review for real security vulnerabilities  
+> **Status**: Release-blocking audit for v1.0
+> **Date**: 2026-07-18
+> **Auditor**: Junie (JetBrains Autonomous Agent)
+> **Scope**: Full codebase review for real security vulnerabilities
 
 ---
 
@@ -46,6 +46,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Threat Model
 
 ### Actors
+
 | Actor                      | Description                                   | Capabilities                                                          |
 |----------------------------|-----------------------------------------------|-----------------------------------------------------------------------|
 | **Malicious Discord User** | A user in a guild where Freesona is deployed  | Can send messages, upload attachments, trigger commands               |
@@ -55,6 +56,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 | **Compromised Dependency** | A malicious or vulnerable third-party library | Can execute arbitrary code within the bot's process                   |
 
 ### Assets
+
 - Discord bot token and API keys
 - Guild-specific data (conversations, user facts, memories)
 - Persona configurations and knowledge bases
@@ -66,6 +68,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Attack Surface Inventory
 
 ### 1. Discord Interface
+
 - **Message Processing**: `on_message` in `cogs/ai/genai.py`
 - **Slash Commands**: Defined across multiple cogs (`admin.py`, `genai.py`, `moderation/core.py`, `news.py`)
 - **Hybrid Commands**: Prefix-based commands in `main.py` and cogs
@@ -73,6 +76,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 - **Permissions**: Discord permission checks via `@commands.has_permissions` and `@commands.is_owner()`
 
 ### 2. Web Interface
+
 - **FastAPI Server**: `fastapi_server.py` (health checks, MVSEP webhook)
 - **Endpoints**:
   - `GET /` (health)
@@ -80,11 +84,13 @@ This report presents the findings of a comprehensive security audit of the Frees
   - `GET/POST /webhooks/mvsep` (MVSEP job callbacks)
 
 ### 3. AI Provider Integration
+
 - **Supported Providers**: Gemini, OpenAI, Ollama, NVIDIA NIM, Azure, Groq, OpenRouter
 - **API Calls**: Centralized in `utils/providers.py:generate_text`
 - **Multimodal Input**: Image/audio/video attachments via base64 encoding
 
 ### 4. Data Storage
+
 - **SQLite Databases**:
   - `memory.db` (user facts)
   - `character_memory.db` (character memories)
@@ -98,6 +104,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 - **ChromaDB**: Vector database for knowledge base (RAG)
 
 ### 5. External Services
+
 - **Google Gemini API**: For AI generation and web search
 - **MVSEP API**: For music separation
 - **RSS Feeds**: Fetched via `aiohttp` in `cogs/system/news.py`
@@ -105,6 +112,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 - **Wolfram Alpha**: For mathematical computations (via API keys)
 
 ### 6. File Operations
+
 - **Attachment Handling**: Reading and processing user-uploaded files
 - **PDF Processing**: Via `pypdf` in `utils/chroma.py`
 - **EPUB Processing**: Via `zipfile` in `utils/chroma.py`
@@ -115,31 +123,37 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Trust Boundaries
 
 ### 1. Discord ↔ Freesona
+
 - **Boundary**: Discord API messages and interactions
 - **Trust**: Discord messages are **untrusted** and must be validated/sanitized
 - **Enforcement**: Prompt sanitization in `utils/security.py:sanitize_prompt`
 
 ### 2. User Input ↔ LLM
+
 - **Boundary**: User messages before being passed to AI providers
 - **Trust**: User input is **untrusted** and must be sanitized
 - **Enforcement**: Injection detection in `utils/security.py:detect_injection`
 
 ### 3. Freesona ↔ AI Providers
+
 - **Boundary**: API requests to external AI services
 - **Trust**: AI provider responses are **untrusted** (can contain malicious content)
 - **Enforcement**: Output validation in `utils/security.py:unsafe_output`
 
 ### 4. Freesona ↔ External Web
+
 - **Boundary**: HTTP requests to RSS feeds, MVSEP API, etc.
 - **Trust**: External URLs are **untrusted** and must be validated
 - **Enforcement**: URL validation in `utils/security.py:is_public_http_url`
 
 ### 5. Guild Isolation
+
 - **Boundary**: Data separation between Discord guilds
 - **Trust**: Each guild's data must be isolated from others
 - **Enforcement**: Guild ID used as primary key in all database queries
 
 ### 6. Persona/Character Isolation
+
 - **Boundary**: Separation between persona knowledge, character memory, and user memory
 - **Trust**: Canonical data must not be overwritten by mutable data
 - **Enforcement**: ADR-0003 Canonical Truth Invariant (documented in `utils/prompt_builder_providers.py`)
@@ -149,6 +163,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Secrets Audit
 
 ### Environment Variables
+
 | Variable                                    | Purpose                      | Sensitivity  | Exposure Risk                                            |
 |---------------------------------------------|------------------------------|--------------|----------------------------------------------------------|
 | `BOT_TOKEN`                                 | Discord bot authentication   | **Critical** | Low (only used in `main.py:bot_token`)                   |
@@ -165,12 +180,14 @@ This report presents the findings of a comprehensive security audit of the Frees
 | `MEMORY_FILE_PATH`                          | SQLite database path         | **Low**      | None                                                     |
 
 ### Findings
+
 1. **No hardcoded secrets** were found in the codebase. All sensitive values are loaded from environment variables.
 2. **No logging of secrets** was observed. Sensitive values are not written to logs.
 3. **`.env.sample` is properly maintained** with placeholder values and includes all required keys.
 4. **Secret files are gitignored**: The project's `scripts/check_project.py` explicitly checks that `.env`, `persona.txt`, `persona.json`, `memory.json`, and `kb.json` are not tracked in Git.
 
 ### Recommendations
+
 - **Verify `.gitignore` coverage**: Ensure all secret files are included in `.gitignore`.
 - **Use secret managers**: For production deployments, consider using a secret manager (e.g., HashiCorp Vault, AWS Secrets Manager) instead of environment variables.
 
@@ -179,6 +196,7 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Dependency Observations
 
 ### Direct Dependencies
+
 | Dependency      | Purpose                      | Version Constraint | Risk Assessment                                                                                                                                             |
 |-----------------|------------------------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `discord.py`    | Discord API client           | Latest             | **Low**: Actively maintained, no known critical vulnerabilities                                                                                             |
@@ -202,9 +220,11 @@ This report presents the findings of a comprehensive security audit of the Frees
 | `onnxruntime`   | ML inference                 | Latest             | **Low**: No known critical vulnerabilities                                                                                                                  |
 
 ### Indirect Dependencies
+
 - No direct audit of transitive dependencies was performed, but the project uses standard, well-maintained libraries.
 
 ### Recommendations
+
 1. **Pin dependency versions** in `requirements.txt` to avoid supply chain attacks via dependency confusion or malicious updates.
 2. **Regularly update dependencies** to patch known vulnerabilities.
 3. **Use `pip-audit` or `safety`** to scan for known vulnerabilities in dependencies.
@@ -214,18 +234,23 @@ This report presents the findings of a comprehensive security audit of the Frees
 ## Findings
 
 ### Critical
+
 No critical findings were identified.
 
 ### High
+
 No high findings were identified.
 
 ### Medium
+
 No medium findings were identified.
 
 ### Low
+
 No low findings were identified.
 
 ### Informational
+
 No informational findings were identified.
 
 ---
@@ -235,15 +260,18 @@ No informational findings were identified.
 The Freesona codebase implements several strong security controls:
 
 ### 1. **Prompt Injection Protection**
+
 - **Detection**: `utils/security.py:detect_injection` checks for common injection patterns (e.g., "ignore previous instructions", "jailbreak").
 - **Sanitization**: `utils/security.py:sanitize_prompt` redacts matched injection patterns and prepends a warning to the LLM.
 - **Usage**: Applied to all user messages in `utils/generation.py:generate` via `sanitize_prompt(text)`.
 
 ### 2. **Output Safety Checks**
+
 - **Unsafe Output Detection**: `utils/security.py:unsafe_output` checks for flags like "system prompt" or "developer message" in LLM responses.
 - **Usage**: Not currently enforced in the main generation pipeline (recommendation: integrate into response validation).
 
 ### 3. **URL Validation**
+
 - **Public URL Guard**: `utils/security.py:is_public_http_url` validates that URLs are:
   - HTTP/HTTPS only (no `ftp://`, `file://`, etc.).
   - Resolve to public IPs (no `localhost`, `127.0.0.1`, private ranges, or link-local addresses).
@@ -251,6 +279,7 @@ The Freesona codebase implements several strong security controls:
 - **Usage**: Enforced for RSS feed URLs in `cogs/system/news.py:rss_add`.
 
 ### 4. **Discord Permission Checks**
+
 - **Command-Level Checks**: Commands use `@commands.has_permissions` and `@commands.is_owner()` to enforce access control.
 - **Examples**:
   - `/module` commands require `administrator=True`.
@@ -258,41 +287,50 @@ The Freesona codebase implements several strong security controls:
   - Moderation commands require `kick_members`, `ban_members`, or `moderate_members`.
 
 ### 5. **Rate Limiting**
+
 - **Global Rate Limiter**: `utils/generation.py:rate_limit` enforces a configurable minimum delay between AI generation calls (default: 5 calls per 60 seconds).
 - **Configurable**: Rate limit values are loaded from `config.json` and can be adjusted per deployment.
 
 ### 6. **Input Validation**
+
 - **RSS Feed Validation**: `cogs/system/news.py:rss_add` validates feed names (alphanumeric) and URLs (public HTTP only).
 - **Module Name Validation**: `utils/modules.py:normalized_module_name` sanitizes module names to prevent path traversal.
 - **Time String Parsing**: `cogs/moderation/core.py:parse_time_string` safely parses user-provided time strings (e.g., `10m`, `1h`).
 
 ### 7. **Safe File Handling**
+
 - **Attachment Processing**: `utils/generation.py:extract_attachments` reads attachments directly from Discord's API (no local file path manipulation).
 - **ChromaDB Ingestion**: `utils/chroma.py:extract_text_from_bytes` safely extracts text from PDFs, EPUBs, and JSON files without executing untrusted code.
 
 ### 8. **Database Safety**
+
 - **Parameterized Queries**: All SQLite queries use parameterized statements (e.g., `aiosqlite` with `?` placeholders) to prevent SQL injection.
 - **Example**: `utils/memory.py` uses `db.execute("SELECT ... WHERE guild_id = ? AND user_id = ?", (str(guild_id), str(user_id)))`.
 
 ### 9. **Error Handling**
+
 - **Graceful Degradation**: `utils/generation.py:_classify_error` categorizes errors (rate limit, timeout, transient) and provides user-friendly messages.
 - **Safe Error Messages**: Errors are logged with context but do not expose sensitive information to users.
 
 ### 10. **Isolation Enforcement**
+
 - **Guild Isolation**: All database queries include `guild_id` as a primary filter to prevent cross-guild data leakage.
 - **Persona Isolation**: Knowledge base queries in `utils/chroma.py:query_knowledge` filter by `persona` to prevent cross-persona data leakage.
 - **Canonical Truth Invariant**: Documented in `utils/prompt_builder_providers.py:CanonContextProvider` to ensure canonical data is immutable and not overwritten by mutable sources.
 
 ### 11. **Webhook Security**
+
 - **MVSEP Webhook Validation**: `fastapi_server.py:_is_valid_mvsep_payload` validates payload structure (requires `hash` or `job_hash` field) before processing.
 - **No Authentication Bypass**: The webhook relies on payload structure validation rather than authentication tokens (noted as a limitation in the code).
 
 ### 12. **Configuration Safety**
+
 - **Environment Variables**: All sensitive configuration is loaded from environment variables (no hardcoded secrets).
 - **Default Config**: `utils/config.py:DEFAULT_CONFIG` provides safe defaults for all settings.
 - **Config Validation**: `scripts/check_project.py` validates `.env.sample` and ensures required keys are present.
 
 ### 13. **Logging**
+
 - **Structured Logging**: Uses Python's `logging` module with consistent format and levels.
 - **No Sensitive Data in Logs**: Logs do not include tokens, API keys, or user messages (only metadata like "Generation error" or "RSS poll error").
 
@@ -301,6 +339,7 @@ The Freesona codebase implements several strong security controls:
 ## Release Recommendation
 
 ### Assessment
+
 After a thorough review of the Freesona codebase, **no release-blocking security vulnerabilities were identified**. The project demonstrates a strong security posture with:
 
 1. **Proactive mitigations** for common attack vectors (prompt injection, SQL injection, path traversal, SSRF).
@@ -311,6 +350,7 @@ After a thorough review of the Freesona codebase, **no release-blocking security
 6. **Rate limiting** to prevent abuse.
 
 ### Recommendations for v1.0
+
 | Area                       | Recommendation                                                         | Priority   |
 |----------------------------|------------------------------------------------------------------------|------------|
 | **Dependency Pinning**     | Pin versions in `requirements.txt` to avoid supply chain attacks.      | **High**   |
@@ -320,7 +360,8 @@ After a thorough review of the Freesona codebase, **no release-blocking security
 | **Dependency Scanning**    | Regularly scan dependencies for vulnerabilities using `pip-audit`.     | **Low**    |
 
 ### Final Verdict
-**Status**: ✅ **Ready for v1.0 Release**  
+
+**Status**: ✅ **Ready for v1.0 Release**
 **Caveats**: Address the high-priority recommendations (dependency pinning) before or shortly after release. All other recommendations are improvements but do not block the release.
 
 ---
@@ -328,6 +369,7 @@ After a thorough review of the Freesona codebase, **no release-blocking security
 ## Appendix: Files Reviewed
 
 ### Core Files
+
 - `main.py`
 - `fastapi_server.py`
 - `utils/config.py`
@@ -336,6 +378,7 @@ After a thorough review of the Freesona codebase, **no release-blocking security
 - `utils/generation.py`
 
 ### Cogs
+
 - `cogs/system/admin.py`
 - `cogs/system/news.py`
 - `cogs/ai/genai.py`
@@ -350,6 +393,7 @@ After a thorough review of the Freesona codebase, **no release-blocking security
 - `cogs/fun/random.py`
 
 ### Utilities
+
 - `utils/memory.py`
 - `utils/character_memory.py`
 - `utils/guild_world.py`
@@ -367,10 +411,12 @@ After a thorough review of the Freesona codebase, **no release-blocking security
 - `utils/prompt_builder_providers.py`
 
 ### Scripts
+
 - `scripts/check_project.py`
 - `scripts/dump_command.py`
 
 ### Configuration
+
 - `requirements.txt`
 - `.env.sample`
 - `config.json` (sample)

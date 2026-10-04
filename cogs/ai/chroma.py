@@ -2,38 +2,24 @@
 # cogs/ai/chroma.py: ChromaDB Cog for Discord bot to manage a local
 # knowledge base.
 import asyncio
+import logging
 
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
 
 from utils.chroma import (
+    ChromaBackendError,
     VALID_CANON_LEVELS,
-    add_knowledge,
-    delete_knowledge,
+    VALID_ENTRY_TYPES,
+    VALID_SOURCE_TYPES,
     extract_text_from_bytes,
-    get_knowledge_by_persona,
-    list_knowledge,
     query_knowledge,
 )
+from utils.config import get_knowledge_base_database
+from utils.knowledge_base import KnowledgeBaseService
 
-VALID_SOURCE_TYPES = {
-    "anime",
-    "novel",
-    "manga",
-    "game",
-    "guidebook",
-    "interview",
-    "website",
-    "other",
-}
-VALID_ENTRY_TYPES = {
-    "dialogue",
-    "narration",
-    "event",
-    "relationship",
-    "description",
-}
+log = logging.getLogger(__name__)
 
 
 class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
@@ -42,14 +28,14 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=True,
         max_length=100,
-        placeholder="e.g., chisato_nishikigi",
+        placeholder="e.g., character_name",
     )
     source = ui.TextInput(
         label="Source",
         style=discord.TextStyle.short,
         required=True,
         max_length=200,
-        placeholder="e.g., Episode 06",
+        placeholder="e.g., Episode 01",
     )
     source_type = ui.TextInput(
         label="Source Type",
@@ -70,7 +56,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=True,
         max_length=200,
-        placeholder="e.g., friendship, optimism, coffee",
+        placeholder="e.g., friendship, loyalty, humor",
     )
     # Optional fields
     scene = ui.TextInput(
@@ -78,21 +64,21 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=False,
         max_length=200,
-        placeholder="e.g., Aquarium visit",
+        placeholder="e.g., rooftop conversation",
     )
     speaker = ui.TextInput(
         label="Speaker (optional)",
         style=discord.TextStyle.short,
         required=False,
         max_length=100,
-        placeholder="e.g., Chisato",
+        placeholder="e.g., Protagonist",
     )
     episode = ui.TextInput(
         label="Episode (optional)",
         style=discord.TextStyle.short,
         required=False,
         max_length=50,
-        placeholder="e.g., 06",
+        placeholder="e.g., 01",
     )
     chapter = ui.TextInput(
         label="Chapter (optional)",
@@ -106,7 +92,7 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=False,
         max_length=50,
-        placeholder="e.g., 2023-01-15 or S01E06 12:34",
+        placeholder="e.g., 2024-01-01 or S01E01 12:34",
     )
     canon_level = ui.TextInput(
         label="Canon Level (optional)",
@@ -196,23 +182,28 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
             metadata["tags"] = [
                 t.strip() for t in self.tags.value.split(",") if t.strip()
             ]
-        # Add to knowledge base
-        doc_id = await asyncio.to_thread(
-            add_knowledge,
-            self.document,
-            source="discord",
-            title=self.document_title.strip() if self.document_title else None,
-            metadata=metadata,
-        )
-        if not doc_id:
+        service = KnowledgeBaseService(get_knowledge_base_database())
+        try:
+            await service.initialize()
+            entry = await service.ingest(
+                {
+                    **metadata,
+                    "content": self.document,
+                    "title": self.document_title.strip() if self.document_title else "",
+                }
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            log.exception("Failed to persist knowledge entry from Discord")
             await interaction.followup.send(
-                "ChromaDB is not available or could not initialize the collection.",
+                f"Could not add the knowledge entry: {exc}",
                 ephemeral=True,
             )
             return
+        indexed = await service.indexed_id(entry.id)
+        status = "fully indexed in Chroma" if indexed else "saved but not indexed (Chroma unavailable)"
         await interaction.followup.send(
-            f"Added knowledge entry with ID `{doc_id}` "
-            f"for persona `{metadata['persona']}`.",
+            f"Added knowledge entry with ID `{entry.id}` for persona "
+            f"`{metadata['persona']}` ({status}).",
             ephemeral=True,
         )
 
@@ -238,9 +229,13 @@ class ChromaCog(commands.Cog):
     ):
         await ctx.defer(ephemeral=True)
         # Run ChromaDB query off-thread to prevent event loop blocking
-        matches = await asyncio.to_thread(
-            query_knowledge, query, limit=limit, persona=persona
-        )
+        try:
+            matches = await asyncio.to_thread(
+                query_knowledge, query, limit=limit, persona=persona
+            )
+        except ChromaBackendError:
+            await ctx.send("Knowledge base search is currently unavailable.", ephemeral=True)
+            return
         if not matches:
             await ctx.send("No knowledge base matches found.", ephemeral=True)
             return
@@ -250,11 +245,12 @@ class ChromaCog(commands.Cog):
             persona_name = meta.get("persona", "unknown")
             source = meta.get("source", "unknown")
             entry_type = meta.get("entry_type", "unknown")
+            structured_id = meta.get("structured_id", "unknown")
             snippet = item.get("document", "").strip().replace("\n", " ")
             if len(snippet) > 150:
                 snippet = snippet[:147] + "..."
             lines.append(
-                f"- **{persona_name}** ({entry_type}, {source}):\n    {snippet}"
+                f"- `{structured_id}` **{persona_name}** ({entry_type}, {source}):\n    {snippet}"
             )
         response_text = "\n".join(lines)
         # Ensure text fits within Discord's 2000-character limit
@@ -351,32 +347,28 @@ class ChromaCog(commands.Cog):
         limit: int = 15,
     ):
         await ctx.defer(ephemeral=True)
-        if persona:
-            # Run disk lookup off-thread
-            entries = await asyncio.to_thread(
-                get_knowledge_by_persona, persona, limit=limit
-            )
-        else:
-            entries = await asyncio.to_thread(list_knowledge, limit=limit)
+        service = KnowledgeBaseService(get_knowledge_base_database())
+        await service.initialize()
+        entries = (await service.list_entries(persona=persona))[:limit]
         if not entries:
             await ctx.send("No knowledge base entries found.", ephemeral=True)
             return
         lines = []
         for index, item in enumerate(entries, start=1):
-            meta = item.get("metadata", {})
+            meta = item.metadata or {}
             # Fallback chain for a clean title display
-            title = meta.get("title") or meta.get("filename") or item["id"]
-            persona_name = meta.get("persona", "unknown")
-            source = meta.get("source", "unknown")
-            entry_type = meta.get("entry_type", "unknown")
+            title = meta.get("title") or meta.get("filename") or item.id
+            persona_name = item.persona
+            source = item.source
+            entry_type = item.entry_type
             # If the title is a long file path, pull just the filename
             if "/" in title or "\\" in title:
                 title = title.replace("\\", "/").split("/")[-1]
-            snippet = item.get("document", "").strip().replace("\n", " ")
+            snippet = item.content.strip().replace("\n", " ")
             if len(snippet) > 80:
                 snippet = snippet[:77] + "..."
             lines.append(
-                f"**{index}.** [{persona_name}] {title} (`{item['id']}`)\n└ {
+                f"**{index}.** [{persona_name}] {title} (`{item.id}`)\n└ {
                     entry_type
                 } · {source} · *{snippet}*"
             )
@@ -392,7 +384,9 @@ class ChromaCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def kbdelete(self, ctx: commands.Context, entry_id: str):
         await ctx.defer(ephemeral=True)
-        success = await asyncio.to_thread(delete_knowledge, entry_id)
+        service = KnowledgeBaseService(get_knowledge_base_database())
+        await service.initialize()
+        success = await service.delete_entry(entry_id)
         if success:
             await ctx.send(f"Deleted knowledge entry `{entry_id}`.", ephemeral=True)
             return
@@ -409,9 +403,9 @@ class ChromaCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def kbpersona(self, ctx: commands.Context, persona: str, limit: int = 50):
         await ctx.defer(ephemeral=True)
-        entries = await asyncio.to_thread(
-            get_knowledge_by_persona, persona, limit=limit
-        )
+        service = KnowledgeBaseService(get_knowledge_base_database())
+        await service.initialize()
+        entries = (await service.list_entries(persona=persona))[:limit]
         if not entries:
             await ctx.send(
                 f"No knowledge base entries found for persona `{persona}`.",
@@ -420,16 +414,16 @@ class ChromaCog(commands.Cog):
             return
         lines = []
         for index, item in enumerate(entries, start=1):
-            meta = item.get("metadata", {})
-            source = meta.get("source", "unknown")
-            entry_type = meta.get("entry_type", "unknown")
+            meta = item.metadata or {}
+            source = item.source
+            entry_type = item.entry_type
             scene = meta.get("scene", "")
             scene_str = f" · {scene}" if scene else ""
-            snippet = item.get("document", "").strip().replace("\n", " ")
+            snippet = item.content.strip().replace("\n", " ")
             if len(snippet) > 100:
                 snippet = snippet[:97] + "..."
             lines.append(
-                f"**{index}.** `{item['id']}` [{entry_type}] "
+                f"**{index}.** `{item.id}` [{entry_type}] "
                 f"{source}{scene_str}\n└ *{snippet}*"
             )
         full_message = "\n".join(lines)

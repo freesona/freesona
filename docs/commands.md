@@ -14,7 +14,7 @@ AI commands are organized by command type in dedicated AI cog modules (`genai_ge
 | `~ask <question>` (`/ask`, alias `~a`)                    | Conversational response using active persona                                                  | Anyone        |
 | `~search <query>` (`/search`, alias `~s`)                 | Web search with AI summary                                                                    | Anyone        |
 | `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP                                                       | Anyone        |
-| `/kbsearch <query>`                                       | Search the local ChromaDB knowledge base                                                      | Anyone        |
+| `/kbsearch <query>`                                       | Search the local ChromaDB knowledge base                                                      | Administrator |
 | `/kbadd <title> [content] [attachment]`                   | Add text or a PDF/EPUB/TXT/JSON attachment to the local knowledge base (opens metadata modal) | Administrator |
 | `/kblist`                                                 | List the newest knowledge base entries                                                        | Administrator |
 | `/kbdelete <id>`                                          | Delete a knowledge base entry by ID                                                           | Administrator |
@@ -47,6 +47,31 @@ The `/kbadd` command opens a modal with the following fields:
 | Timestamp | Source timestamp | `2023-01-15` or `S01E06 12:34` |
 | Canon Level | `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` | `canon` |
 | Tags | Comma-separated additional tags | `canon, emotional, key_moment` |
+
+Knowledge Base records are validated and persisted by
+`utils/knowledge_base.py` in SQLite. New records are also indexed in ChromaDB
+as a secondary index; an unavailable index does not discard the SQLite record.
+
+## Conversion and Utility Commands
+
+The optional `conversion` module loads `cogs.conversion.delphitools` and calls the
+`delphitools` CLI. Commands are available as prefix and slash commands:
+
+| Command        | Action                                                                                    | Permissions |
+| :------------- | :---------------------------------------------------------------------------------------- | :---------- |
+| `~imgconvert`  | Convert an attached image to PNG, JPG, WebP, GIF, BMP, TIFF, or ICO, with optional resize | Anyone      |
+| `~watermark`   | Add text watermark to an attached image                                                   | Anyone      |
+| `~palette`     | Generate a color palette using a selected strategy                                        | Anyone      |
+| `~colorblind`  | Simulate protanopia, deuteranopia, tritanopia, or achromatopsia on an image               | Anyone      |
+| `~qrgen`       | Generate a QR code from text                                                              | Anyone      |
+| `~barcodegen`  | Generate a Code128, EAN13, or QR barcode                                                  | Anyone      |
+| `~unitconvert` | Convert a numeric value between units                                                     | Anyone      |
+| `~encode`      | Encode text as Base64, hexadecimal, or URL data                                           | Anyone      |
+| `~decode`      | Decode Base64, hexadecimal, or URL data                                                   | Anyone      |
+| `~hash`        | Generate an MD5, SHA-1, or SHA-256 hash                                                   | Anyone      |
+
+The module requires the `dt` executable. Each command applies the configured
+subprocess timeout and Discord upload-size limit.
 
 ---
 

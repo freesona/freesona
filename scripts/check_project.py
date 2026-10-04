@@ -12,6 +12,7 @@ import importlib
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -58,6 +59,38 @@ def check_python_syntax() -> None:
 
     if errors:
         raise CheckFailure("Python syntax errors:\n" + "\n".join(errors))
+
+
+def declared_requirement_names(path: pathlib.Path) -> list[str]:
+    """Return normalized package names from a pip requirements file."""
+    names: list[str] = []
+    requirement_name = re.compile(
+        r"^([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)"
+        r"(?:\[[A-Za-z0-9._,-]+\])?(?=\s*(?:[<>=!~;@]|$))"
+    )
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        requirement = line.partition(" #")[0].strip()
+        if not requirement or requirement.startswith("#") or requirement.startswith("-"):
+            continue
+        match = requirement_name.match(requirement)
+        if match is not None:
+            name = re.sub(r"[-_.]+", "-", match.group(1)).lower()
+            names.append(name)
+
+    return names
+
+
+def check_requirements() -> None:
+    requirements_path = ROOT / "requirements.txt"
+    if not requirements_path.is_file():
+        raise CheckFailure("requirements.txt is missing")
+
+    if "google" in declared_requirement_names(requirements_path):
+        raise CheckFailure(
+            "requirements.txt must not declare the standalone google package; "
+            "use google-genai for Gemini support"
+        )
 
 
 def reload_local_module(name: str) -> ModuleType:
@@ -477,6 +510,7 @@ def main() -> int:
 
     checks = [
         ("python syntax", check_python_syntax),
+        ("requirements audit", check_requirements),
         ("config round trip", check_config_round_trip),
         ("public URL guard", check_public_url_guard),
         ("MVSEP URL routing", check_mvsep_url_routing),

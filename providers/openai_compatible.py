@@ -6,7 +6,6 @@ from typing import Any
 from providers.base import BaseProvider
 from utils.providers import build_messages, post_chat_completion
 
-
 class OpenAICompatibleProvider(BaseProvider):
     def __init__(
         self,

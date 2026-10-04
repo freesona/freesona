@@ -150,7 +150,7 @@ This enables KB 2.0 to tag knowledge to specific channels, understand server str
 
 ---
 
-## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/generation.py`)
+## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/prompt_builder_providers.py`)
 
 ### Definition
 
@@ -336,7 +336,8 @@ This invariant prevents **canon drift** — the gradual corruption of character 
 
 ### Retrieval & Context Construction
 
-The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `utils/generation.py`:
+`PersonaKnowledgeBaseProvider` in `utils/prompt_builder_providers.py` retrieves
+knowledge through `query_knowledge` in `utils/chroma.py`:
 
 1. Embeds the user's message
 2. Queries ChromaDB with **metadata filtering (by `persona`) occurring before or alongside vector search** to reduce the candidate set
@@ -374,6 +375,17 @@ The knowledge base:
 - Stores embeddings in ChromaDB (local or remote)
 - Provides identical retrieval behavior across all providers
 - Is fully **persona-agnostic** — adding a new persona requires only source material + metadata, no code changes
+
+---
+
+## Conversion and Utility Commands (`cogs/conversion/delphitools.py`)
+
+The optional `conversion` module provides Discord commands backed by the
+`delphitools` CLI. It supports image conversion, text watermarks, palette
+generation, color-blindness simulation, QR and barcode generation, unit
+conversion, Base64/hex/URL encoding and decoding, and MD5/SHA-1/SHA-256 hashes.
+Commands enforce a subprocess timeout and the Discord upload-size limit. The
+module requires the `dt` executable.
 
 ### Configuration
 
@@ -550,3 +562,13 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 ```
 
 Values are validated and type-converted based on their default types (int, float, bool, or string). Invalid values are rejected with an error message.
+
+## Structured Knowledge Base authoring
+
+Knowledge entries are validated before Chroma ingestion. Each entry must include
+`persona`, `source`, `source_type`, `entry_type`, `topics`, and `content`;
+`canon_level` defaults to `canon` and `revision` defaults to `1`. Supported
+entry types are `dialogue`, `narration`, `event`, `relationship`, and
+`description`. Normalize source text and use stable topic names so repeated
+ingestion produces the same record identity. Chroma remains an optional index;
+structured records are retained in SQLite when vector indexing is unavailable.

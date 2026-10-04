@@ -8,7 +8,6 @@ from providers.nim import NimProvider
 from providers.ollama import OllamaProvider
 from providers.openai_compatible import OpenAICompatibleProvider
 
-
 def get_provider(provider_name: str) -> BaseProvider:
     """Return an instance of a concrete provider based on ``provider_name``.
 

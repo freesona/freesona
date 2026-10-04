@@ -18,7 +18,7 @@ def test_admin_requires_bearer_scheme_and_valid_token():
         fastapi_server._require_admin("Bearer secret")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_admin_status_redacts_sensitive_configuration():
     """Expose only the documented status fields after authorization."""
     with (
@@ -41,7 +41,7 @@ async def test_admin_status_redacts_sensitive_configuration():
     }
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_admin_knowledge_rejects_invalid_entries_before_persistence():
     """Translate structured Knowledge Base validation into an HTTP error."""
     with (

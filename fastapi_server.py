@@ -10,10 +10,10 @@ import secrets
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, Header, HTTPException, Request, Response
 
-from utils.chroma import _validate_metadata, add_knowledge
-from utils.config import load_config
+from utils.config import get_knowledge_base_database, load_config
+from utils.knowledge_base import KnowledgeBaseService, validate_entry
 
 logger = logging.getLogger("FreesonaBot")
 
@@ -52,7 +52,7 @@ def _require_admin(authorization: str | None) -> None:
     """Require a valid Bearer token for administrative endpoints."""
     configured_token = _admin_token()
     supplied_token = ""
-    if authorization and authorization.startswith("Bearer "):
+    if isinstance(authorization, str) and authorization.startswith("Bearer "):
         supplied_token = authorization.removeprefix("Bearer ").strip()
 
     if not configured_token or not secrets.compare_digest(
@@ -64,7 +64,9 @@ def _require_admin(authorization: str | None) -> None:
 
 
 @app.get("/admin/status")
-async def admin_status(authorization: str | None = None) -> dict[str, Any]:
+async def admin_status(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     """Return non-sensitive application configuration for administrators."""
     _require_admin(authorization)
     config = load_config()
@@ -78,7 +80,7 @@ async def admin_status(authorization: str | None = None) -> dict[str, Any]:
 
 @app.post("/admin/knowledge")
 async def admin_knowledge(
-    payload: dict[str, Any], authorization: str | None = None
+    payload: dict[str, Any], authorization: str | None = Header(default=None)
 ) -> dict[str, str]:
     """Add a validated knowledge entry through the administrative API."""
     _require_admin(authorization)
@@ -92,20 +94,19 @@ async def admin_knowledge(
     if not isinstance(metadata, dict):
         raise HTTPException(status_code=422, detail="metadata is required")
 
-    valid, reason = _validate_metadata(metadata)
-    if not valid:
-        raise HTTPException(status_code=422, detail=reason)
-
-    document_id = add_knowledge(
-        document,
-        source=str(payload.get("source", "admin")),
-        title=payload.get("title"),
-        collection_name=payload.get("collection_name"),
-        metadata=metadata,
-    )
-    if not document_id:
-        raise HTTPException(status_code=503, detail="Knowledge base is unavailable")
-    return {"id": document_id}
+    entry_data = {**metadata, "content": document}
+    if "source" not in entry_data:
+        entry_data["source"] = str(payload.get("source", "admin"))
+    if payload.get("title") is not None:
+        entry_data["title"] = payload["title"]
+    try:
+        validate_entry(entry_data)
+        service = KnowledgeBaseService(get_knowledge_base_database())
+        await service.initialize()
+        entry = await service.ingest(entry_data)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"id": entry.id}
 
 
 @app.get("/")

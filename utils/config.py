@@ -17,6 +17,7 @@ DEFAULT_CONFIG = {
     "provider_model": os.getenv("AI_PROVIDER_MODEL", ""),
     "chroma_collection": os.getenv("CHROMA_COLLECTION", "freesona"),
     "chroma_persist_directory": os.getenv("CHROMA_PERSIST_DIRECTORY", "./.chroma"),
+    "knowledge_base_database": os.getenv("KNOWLEDGE_BASE_DATABASE", "knowledge.db"),
     "debounce_seconds": 1.2,
     "autonomy_cooldown_seconds": 120,
     "autonomy_user_cooldown": 60,
@@ -149,6 +150,14 @@ def get_kb_top_k() -> int:
             pass
 
     return DEFAULT_KB_TOP_K
+
+
+def get_knowledge_base_database() -> str:
+    """Return the configured SQLite database for structured KB records."""
+    database = os.getenv("KNOWLEDGE_BASE_DATABASE") or load_config().get(
+        "knowledge_base_database", "knowledge.db"
+    )
+    return str(database).strip() or "knowledge.db"
 
 
 def get_prompt_token_budget() -> int:

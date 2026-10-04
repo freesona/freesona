@@ -84,6 +84,7 @@ OPTIONAL_METADATA_FIELDS = frozenset(
         "tags",
         "speaker",
         "title",
+        "structured_id",
     )
 )
 
@@ -926,6 +927,10 @@ def add_knowledge(
     return doc_id
 
 
+class ChromaBackendError(RuntimeError):
+    """Raised when Chroma cannot service a search request."""
+
+
 def delete_knowledge(doc_id: str, collection_name: str | None = None) -> bool:
     """Delete a knowledge entry from the Chroma collection.
 
@@ -987,7 +992,7 @@ def query_knowledge(
     collection = get_collection(collection_name)
 
     if collection is None:
-        return []
+        raise ChromaBackendError("Chroma backend is unavailable")
 
     try:
         where_clause = {"persona": persona} if persona else None
@@ -1021,15 +1026,14 @@ def query_knowledge(
 
     except (ValueError, RuntimeError, OSError) as exc:
         logger.error(f"Chroma query error: {exc}")
-
-        return []
+        raise ChromaBackendError("Chroma search failed") from exc
 
 
 def list_knowledge(
     collection_name: str | None = None,
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Return all knowledgeB entries in the collection.
+    """Return all knowledge entries in the collection.
 
 
 

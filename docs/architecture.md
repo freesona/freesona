@@ -20,13 +20,17 @@ Freesona/
 │   │   ├── genai_persona.py  # setpersona + persona profile/lock/debug commands
 │   │   ├── genai_memory.py   # conversation + long-term memory commands
 │   │   ├── genai_channel.py  # setchannel / clearchannel / chatmode
-│   │   └── genai_autonomy.py # autonomy + botwhitelist runtime controls
+│   │   ├── genai_autonomy.py # autonomy + botwhitelist runtime controls
+│   │   ├── chroma.py         # Knowledge base administration commands
+│   │   └── genai_common.py   # Shared AI cog helpers
 │   ├── media/
 │   │   ├── mvsep.py          # Audio stem separation via MVSEP API
 │   │   └── ytdlp.py          # Video/audio downloader via yt-dlp + ffmpeg
 │   ├── moderation/
 │   │   ├── core.py           # Kick, ban, timeout, purge
 │   │   └── warns.py          # Warn, delwarn, warnthresholds
+│   ├── conversion/
+│   │   └── delphitools.py    # File conversion and utility commands via delphitools
 │   ├── system/
 │   │   ├── system.py         # Aggregate system extension loader (registers split system cogs)
 │   │   ├── core.py           # Core commands: /sync, /reboot, /dumpconfig
@@ -53,8 +57,12 @@ Freesona/
     ├── conversation.py       # ConversationManager — short-term memory, budgets, context
     ├── generation.py         # Provider orchestration, PromptBuilder integration, send_response
     ├── guild_world.py        # Guild World Context — environmental grounding
+    ├── anniversaries_db.py   # Anniversary storage helpers
+    ├── ingest_pdf.py         # PDF knowledge-source ingestion helpers
     ├── intent.py             # Confidence-scored intent evaluator for autonomy
+    ├── knowledge_base.py     # Structured knowledge-base validation and storage
     ├── memory.py             # SQLite long-term facts (legacy interaction IDs deprecated)
+    ├── message_claims.py     # SQLite message-processing claim leases
     ├── modules.py            # Cog registry (OPTIONAL_MODULES, CORE_EXTENSIONS)
     ├── persona.py            # Persona data layer, /setpersona panel modals
     ├── prompt_builder.py     # PromptBuilder & ContextProvider architecture
@@ -68,6 +76,15 @@ Freesona/
 ```
 
 All cogs depend on `utils/`. Cogs do not import from each other, except that `mvsep.py` calls `ytdlp.py` via `bot.get_cog("YtDlp")` (not a direct import) to download platform audio before submitting to MVSEP.
+
+`utils/knowledge_base.py` provides structured validation and SQLite persistence.
+The Discord knowledge-base commands and FastAPI knowledge route use this service;
+new records are then indexed in ChromaDB as a secondary index.
+
+The FastAPI server currently provides health and MVSEP webhook endpoints plus
+`GET /admin/status` and `POST /admin/knowledge`. The other admin routes described
+in earlier documentation are not implemented. The dashboard does not replace
+Discord commands and Discord does not call the dashboard over HTTP.
 
 ---
 
@@ -205,7 +222,7 @@ The persona is stored as a structured JSON object with five fields:
 
 ---
 
-## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/generation.py`)
+## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/prompt_builder_providers.py`)
 
 ### Definition
 
@@ -389,7 +406,9 @@ This invariant prevents **canon drift** — the gradual corruption of character 
 
 ### Retrieval & Context Construction
 
-The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `utils/generation.py`:
+`PersonaKnowledgeBaseProvider` in `utils/prompt_builder_providers.py` retrieves
+knowledge for the prompt pipeline. It calls `query_knowledge` from
+`utils/chroma.py` with the active persona and configured top-k value:
 
 1. Embeds the user's message
 2. Queries ChromaDB with **metadata filtering (by `persona`) occurring before or alongside vector search** to reduce the candidate set
@@ -417,6 +436,7 @@ System (10) → Persona (20) → Canon (25) → Conversation History (30) → Us
 - **`/kbsearch`** — Semantic search with optional persona filter
 - **`/kblist`** — List recent entries
 - **`/kbdelete`** — Delete entry by ID
+- **`/kbpersona`** — List all knowledge entries for a specific persona
 
 ### Provider Independence
 
@@ -450,31 +470,38 @@ Cogs are split into **core** (always loaded) and **optional** (can be toggled at
 
 ```python
 CORE_EXTENSIONS = [
-    "cogs.system.core",
     "cogs.system.help",
+    "cogs.tools.ping",
     "cogs.system.status",
-    "cogs.system.config",
-    "cogs.system.module",
-    "cogs.system.model",
-    "cogs.system.provider",
-    "cogs.system.logging",
-    "cogs.system.timezone",
+    "cogs.system.system",
 ]
-OPTIONAL_MODULES = {
+BUILTIN_OPTIONAL_MODULES = {
+    "hello": "cogs.fun.hello",
+    "random": "cogs.fun.random",
+    "moderation": "cogs.moderation.core",
     "genai": "cogs.ai.genai",
     "math": "cogs.tools.math",
     "news": "cogs.system.news",
     "ytdlp": "cogs.media.ytdlp",
     "mvsep": "cogs.media.mvsep",
-    "moderation": "cogs.moderation.core",
     "warns": "cogs.moderation.warns",
-    "hello": "cogs.fun.hello",
-    "random": "cogs.fun.random",
+    "chroma": "cogs.ai.chroma",
+    "conversion": "cogs.conversion.delphitools",
+    "module": "cogs.system.system",
+    "model": "cogs.system.system",
+    "provider": "cogs.system.system",
+    "config": "cogs.system.system",
+    "logging": "cogs.system.system",
+    "core": "cogs.system.system",
 }
+OPTIONAL_MODULES = BUILTIN_OPTIONAL_MODULES.copy()
+# Entries in modules.local.json override or extend the built-in registry.
 ```
 
 `genai` maps to `cogs.ai.genai`, an aggregate extension that registers multiple AI cogs by command type.
-The core system cogs (`cogs.system.*`) are now granular modules — `system.py` is an aggregate extension that registers all split system cogs.
+`system.py` is an aggregate extension that registers the split system cogs. The
+system aliases in `BUILTIN_OPTIONAL_MODULES` keep the individual names visible
+to `/module list` without loading them twice.
 
 Enabled/disabled state persists in `config.json` under `"enabled_modules"`. The `/module enable`, `/module disable`, and `/module reload` commands call `bot.load_extension` / `unload_extension` / `reload_extension` at runtime and re-sync slash commands automatically.
 
@@ -654,6 +681,8 @@ Current endpoints:
 | `GET /`                | Heartbeat — returns `{"status": "ok"}` |
 | `GET /health`          | Health check for uptime monitors       |
 | `POST /webhooks/mvsep` | MVSEP separation result callback       |
+| `GET /admin/status`    | Redacted runtime status                |
+| `POST /admin/knowledge`| Add a knowledge-base record            |
 
 Future endpoints (planned in roadmap):
 
