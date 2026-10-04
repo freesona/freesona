@@ -179,7 +179,7 @@ ANNIVERSARIES_FILE_PATH=anniversaries.db
 ```
 
 | Environment | Path prefix | Notes                                     |
-|:------------|:------------|:------------------------------------------|
+| :---------- | :---------- | :---------------------------------------- |
 | **Local**   | `./`        | Files saved in project folder             |
 | **Railway** | `/data/`    | Requires volume mounted to `/data`        |
 | **Render**  | `/data/`    | Create files manually in environment page |
@@ -191,7 +191,7 @@ Without a persistent volume on cloud hosts, file changes won't survive a redeplo
 ## Persistence & Storage
 
 | File                  | What it stores                                                                                                                   |
-|:----------------------|:---------------------------------------------------------------------------------------------------------------------------------|
+| :-------------------- | :------------------------------------------------------------------------------------------------------------------------------- |
 | `config.json`         | Prefix, conversation channel, autonomy settings, module states                                                                   |
 | `persona.json`        | Active persona fields                                                                                                            |
 | `personas.json`       | Saved persona presets                                                                                                            |
@@ -225,8 +225,41 @@ The bot owner can switch providers and models without restarting, sync global sl
 /model show
 /model set <model>
 /model reset
+/model temperature <value>
+/model temperature_reset
+/provider show
+/provider set <name>
+/provider reset
 /sync
+/reboot
 /dumpconfig
+/docs
+```
+
+Runtime configuration is managed with `/config` commands:
+
+```text
+/config list
+/config show [key]
+/config set <key> <value>
+/config reset <key>
+/config edit
+/config view
+/config reset-interactive
+/config dump
+```
+
+Logging is controlled with `/logging` commands:
+
+```text
+/logging status
+/logging enable <section>
+/logging disable <section>
+/logging toggle <section>
+/logging setchannel <#ch>
+/logging clearchannel
+/logging setlevel <level>
+/logging test [message]
 ```
 
 Timezone and autonomy are also configurable at runtime:
@@ -313,4 +346,4 @@ Licensed under the **MIT License**. See [LICENSE](LICENSE).
 
 ### AI-assisted development notice
 
-- *This project is developed using AI coding assistants as part of the development workflow. AI is used to accelerate implementation, refactoring, testing, and documentation, while architectural decisions, project philosophy, and final code review remain under human control. Generated code is reviewed, tested, and may be modified before inclusion.*
+- _This project is developed using AI coding assistants as part of the development workflow. AI is used to accelerate implementation, refactoring, testing, and documentation, while architectural decisions, project philosophy, and final code review remain under human control. Generated code is reviewed, tested, and may be modified before inclusion._

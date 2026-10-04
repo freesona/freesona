@@ -9,7 +9,7 @@ Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as 
 AI commands are organized by command type in dedicated AI cog modules (`genai_generation`, `genai_persona`, `genai_memory`, `genai_channel`, `genai_autonomy`) and loaded through the aggregate `cogs.ai.genai` extension.
 
 | Command                                                   | Action                                                                                        | Permissions   |
-|:----------------------------------------------------------|:----------------------------------------------------------------------------------------------|:--------------|
+| :-------------------------------------------------------- | :-------------------------------------------------------------------------------------------- | :------------ |
 | `~write <prompt>` (`/write`, alias `~w`)                  | Structured output using active persona                                                        | Anyone        |
 | `~ask <question>` (`/ask`, alias `~a`)                    | Conversational response using active persona                                                  | Anyone        |
 | `~search <query>` (`/search`, alias `~s`)                 | Web search with AI summary                                                                    | Anyone        |
@@ -53,7 +53,7 @@ The `/kbadd` command opens a modal with the following fields:
 ## RSS / News
 
 | Command                      | Action                                          | Permissions   |
-|:-----------------------------|:------------------------------------------------|:--------------|
+| :--------------------------- | :---------------------------------------------- | :------------ |
 | `/rss latest <feed>`         | Show latest items from an RSS/Atom feed         | Anyone        |
 | `/rss list`                  | List configured RSS feeds and auto-post channel | Anyone        |
 | `/rss add <name> <url>`      | Add or update an RSS feed                       | Administrator |
@@ -64,7 +64,7 @@ The `/kbadd` command opens a modal with the following fields:
 ## Conversation Channel
 
 | Command                          | Action                                                  | Permissions   |
-|:---------------------------------|:--------------------------------------------------------|:--------------|
+| :------------------------------- | :------------------------------------------------------ | :------------ |
 | `/setchannel #channel`           | Set the AI conversation channel                         | Administrator |
 | `/clearchannel`                  | Remove the conversation channel                         | Administrator |
 | `/clearmemory`                   | Clear server-side conversation history for this channel | Administrator |
@@ -75,7 +75,7 @@ The bot responds to messages in the configured conversation channel. `all` repli
 ## Persona & Memory
 
 | Command                                                           | Action                                                                 | Permissions                |
-|:------------------------------------------------------------------|:-----------------------------------------------------------------------|:---------------------------|
+| :---------------------------------------------------------------- | :--------------------------------------------------------------------- | :------------------------- |
 | `/setpersona`                                                     | Open the button-based persona editor                                   | Bot Owner                  |
 | `/personalock` (`~personalock`, alias `~plock`)                   | Lock persona against changes                                           | Bot Owner                  |
 | `/personaunlock` (`~personaunlock`, alias `~pulock`)              | Unlock persona                                                         | Bot Owner                  |
@@ -96,78 +96,80 @@ Commands are organized by granular system cogs (`cogs/system/*.py`). All are own
 
 ### Module Management (`cogs/system/module.py`)
 
-| Command              | Action                                  | Permissions   |
-|:---------------------|:----------------------------------------|:--------------|
-| `/module list`       | List enabled/disabled modules with load state | Administrator |
-| `/module enable <name>` | Enable and load a module               | Administrator |
-| `/module disable <name>` | Disable and unload a module           | Administrator |
-| `/module reload <name>`  | Reload an enabled module               | Administrator |
+| Command                  | Action                                        | Permissions   |
+| :----------------------- | :-------------------------------------------- | :------------ |
+| `/module list`           | List enabled/disabled modules with load state | Administrator |
+| `/module enable <name>`  | Enable and load a module                      | Administrator |
+| `/module disable <name>` | Disable and unload a module                   | Administrator |
+| `/module reload <name>`  | Reload an enabled module                      | Administrator |
 
 ### Model Management (`cogs/system/model.py`)
 
-| Command                     | Action                                          | Permissions |
-|:----------------------------|:------------------------------------------------|:------------|
-| `/model show`               | Show the active provider and model              | Bot Owner   |
-| `/model set <name>`         | Set the active model (autocomplete)             | Bot Owner   |
-| `/model reset`              | Reset to the environment/default model          | Bot Owner   |
-| `/model temperature <value>`| Set model temperature (0.0–2.0)                 | Bot Owner   |
-| `/model temperature_reset`  | Reset temperature to default (0.7)              | Bot Owner   |
+| Command                      | Action                                 | Permissions |
+| :--------------------------- | :------------------------------------- | :---------- |
+| `/model show`                | Show the active provider and model     | Bot Owner   |
+| `/model set <name>`          | Set the active model (autocomplete)    | Bot Owner   |
+| `/model reset`               | Reset to the environment/default model | Bot Owner   |
+| `/model temperature <value>` | Set model temperature (0.0–2.0)        | Bot Owner   |
+| `/model temperature_reset`   | Reset temperature to default (0.7)     | Bot Owner   |
 
 ### Provider Management (`cogs/system/provider.py`)
 
-| Command           | Action                                                                     | Permissions |
-|:------------------|:---------------------------------------------------------------------------|:------------|
-| `/provider show`  | Show the active AI provider                                                | Bot Owner   |
-| `/provider set <name>` | Set the active provider (`gemini`, `openai`, `ollama`, `nim`, `azure`, `groq`, `openrouter`) | Bot Owner |
-| `/provider reset` | Reset provider to the environment/default                                  | Bot Owner   |
+| Command                | Action                                                                                       | Permissions |
+| :--------------------- | :------------------------------------------------------------------------------------------- | :---------- |
+| `/provider show`       | Show the active AI provider                                                                  | Bot Owner   |
+| `/provider set <name>` | Set the active provider (`gemini`, `openai`, `ollama`, `nim`, `azure`, `groq`, `openrouter`) | Bot Owner   |
+| `/provider reset`      | Reset provider to the environment/default                                                    | Bot Owner   |
 
 ### Core System Commands (`cogs/system/core.py`)
 
-| Command      | Action                                                                  | Permissions |
-|:-------------|:------------------------------------------------------------------------|:------------|
-| `/sync`      | Sync global slash commands                                              | Bot Owner   |
-| `/reboot`    | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart. | Bot Owner |
-| `/dumpconfig`| Dump current `config.json` contents                                     | Bot Owner   |
+| Command                                               | Action                                                                                     | Permissions |
+| :---------------------------------------------------- | :----------------------------------------------------------------------------------------- | :---------- |
+| `/sync`                                               | Sync global slash commands                                                                 | Bot Owner   |
+| `/reboot`                                             | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart. | Bot Owner   |
+| `/dumpconfig`                                         | Dump current `config.json` contents                                                        | Bot Owner   |
+| `/docs`                                               | Open the Freesona documentation website                                                    | Anyone      |
+| `/personareload` (`~personareload`, alias `~preload`) | Reload persona from JSON file without rebooting                                            | Bot Owner   |
 
 ### Configuration Management (`cogs/system/config.py`)
 
-| Command                       | Action                                                           | Permissions |
-|:------------------------------|:-----------------------------------------------------------------|:------------|
-| `/config show [key]`          | Show all runtime config values, or a specific key                | Bot Owner   |
-| `/config list`                | List all configurable keys with descriptions                     | Bot Owner   |
-| `/config set <key> <value>`   | Set a config value (type-converted)                              | Bot Owner   |
-| `/config reset <key>`         | Reset a config key to its default value                          | Bot Owner   |
-| `/config edit`                | Open interactive button panel to edit config via modal           | Bot Owner   |
-| `/config view`                | Open interactive dropdown to view a config value in detail       | Bot Owner   |
-| `/config reset-interactive`   | Open interactive dropdown to reset a config key to default       | Bot Owner   |
-| `/config dump`                | Dump the current `config.json` contents                          | Bot Owner   |
+| Command                     | Action                                                     | Permissions |
+| :-------------------------- | :--------------------------------------------------------- | :---------- |
+| `/config show [key]`        | Show all runtime config values, or a specific key          | Bot Owner   |
+| `/config list`              | List all configurable keys with descriptions               | Bot Owner   |
+| `/config set <key> <value>` | Set a config value (type-converted)                        | Bot Owner   |
+| `/config reset <key>`       | Reset a config key to its default value                    | Bot Owner   |
+| `/config edit`              | Open interactive button panel to edit config via modal     | Bot Owner   |
+| `/config view`              | Open interactive dropdown to view a config value in detail | Bot Owner   |
+| `/config reset-interactive` | Open interactive dropdown to reset a config key to default | Bot Owner   |
+| `/config dump`              | Dump the current `config.json` contents                    | Bot Owner   |
 
 ### Logging Configuration (`cogs/system/logging.py`)
 
-| Command                       | Action                                                           | Permissions |
-|:------------------------------|:-----------------------------------------------------------------|:------------|
-| `/logging status`             | Show current logging configuration and enabled sections          | Bot Owner   |
-| `/logging enable <section>`   | Enable a logging section (general, config, ai, memory, media, moderation, security, webhook) | Bot Owner |
-| `/logging disable <section>`  | Disable a logging section                                        | Bot Owner   |
-| `/logging toggle <section>`   | Toggle a logging section on/off                                  | Bot Owner   |
-| `/logging setchannel <#ch>`   | Set the Discord channel for log output                           | Bot Owner   |
-| `/logging clearchannel`       | Clear the Discord log channel setting                            | Bot Owner   |
-| `/logging setlevel <level>`   | Set log level (DEBUG, INFO, WARNING, ERROR)                      | Bot Owner   |
-| `/logging test [message]`     | Send a test log message to the configured channel                | Bot Owner   |
+| Command                      | Action                                                                                       | Permissions |
+| :--------------------------- | :------------------------------------------------------------------------------------------- | :---------- |
+| `/logging status`            | Show current logging configuration and enabled sections                                      | Bot Owner   |
+| `/logging enable <section>`  | Enable a logging section (general, config, ai, memory, media, moderation, security, webhook) | Bot Owner   |
+| `/logging disable <section>` | Disable a logging section                                                                    | Bot Owner   |
+| `/logging toggle <section>`  | Toggle a logging section on/off                                                              | Bot Owner   |
+| `/logging setchannel <#ch>`  | Set the Discord channel for log output                                                       | Bot Owner   |
+| `/logging clearchannel`      | Clear the Discord log channel setting                                                        | Bot Owner   |
+| `/logging setlevel <level>`  | Set log level (DEBUG, INFO, WARNING, ERROR)                                                  | Bot Owner   |
+| `/logging test [message]`    | Send a test log message to the configured channel                                            | Bot Owner   |
 
 ### Timezone (`cogs/system/timezone.py`)
 
-| Command              | Action                                                     | Permissions   |
-|:---------------------|:-----------------------------------------------------------|:--------------|
-| `/settimezone <tz>`  | Set the bot's timezone (IANA format, e.g. `Asia/Manila`)   | Administrator |
-| `/timezone`          | Show the bot's currently configured timezone               | Anyone        |
+| Command             | Action                                                   | Permissions   |
+| :------------------ | :------------------------------------------------------- | :------------ |
+| `/settimezone <tz>` | Set the bot's timezone (IANA format, e.g. `Asia/Manila`) | Administrator |
+| `/timezone`         | Show the bot's currently configured timezone             | Anyone        |
 
 Module and model names include slash-command autocomplete suggestions.
 
 ## Autonomy
 
 | Command                                  | Action                   | Permissions   |
-|:-----------------------------------------|:-------------------------|:--------------|
+| :--------------------------------------- | :----------------------- | :------------ |
 | `/autonomy on`                           | Enable autonomous mode   | Administrator |
 | `/autonomy off`                          | Disable autonomous mode  | Administrator |
 | `/autonomy frequency <low/default/high>` | Set confidence threshold | Administrator |
@@ -177,7 +179,7 @@ Autonomous mode uses a confidence-scored intent evaluator (not random chance). T
 ## Moderation
 
 | Command                                         | Action                                                      | Permissions      |
-|:------------------------------------------------|:------------------------------------------------------------|:-----------------|
+| :---------------------------------------------- | :---------------------------------------------------------- | :--------------- |
 | `~purge <limit>`                                | Delete messages (1–1000)                                    | Manage Messages  |
 | `~kick <member> [reason]`                       | Kick a member                                               | Kick Members     |
 | `~ban <user> [delete_messages] [reason]`        | Ban a user; optionally delete message history (e.g. `7d`)   | Ban Members      |
@@ -199,11 +201,10 @@ Warn thresholds support `timeout <duration>`, `kick`, and `ban` actions triggere
 ## Utility & Fun
 
 | Command                         | Action                                              | Permissions      |
-|:--------------------------------|:----------------------------------------------------|:-----------------|
+| :------------------------------ | :-------------------------------------------------- | :--------------- |
 | `~help [command]`               | Show help for commands                              | Anyone           |
 | `~prefix <symbol>`              | Change command prefix                               | Administrator    |
 | `~math <equation>`              | Solve an equation via Wolfram\|Alpha                | Anyone           |
-| `~plot <function>`              | Generate a 2D plot of a mathematical function       | Anyone           |
 | `~download <url>` (`~dl`)       | Download a video (1080p → 720p → 480p → compressed) | Anyone           |
 | `~audio <url>` (`~mp3`)         | Download audio as MP3                               | Anyone           |
 | `~ping`                         | Show bot and Discord API latency                    | Anyone           |

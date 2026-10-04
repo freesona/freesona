@@ -1,15 +1,33 @@
 #!/usr/bin/env python3
-# cogs/system/core.py: Core system commands (/sync, /reboot)
+# cogs/system/core.py: Core system commands (/sync, /reboot, /docs)
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+DOCS_URL = "https://docs.fs.soquincy.qzz.io"
+
 
 class CoreCog(commands.Cog):
-    """Cog for core system commands: /sync, /reboot."""
+    """Cog for core system commands: /sync, /reboot, /docs."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    @commands.hybrid_command(
+        name="docs", help="Open the Freesona documentation website."
+    )
+    async def docs_cmd(self, ctx: commands.Context):
+        embed = discord.Embed(
+            title="Freesona Documentation",
+            description=(
+                "Read the full documentation — setup guides, feature reference, "
+                "command listing, and more.\n\n"
+                f"[Open docs]({DOCS_URL})"
+            ),
+            color=discord.Color.blue(),
+        )
+        embed.set_footer(text="Freesona docs")
+        await ctx.send(embed=embed, ephemeral=bool(ctx.interaction))
 
     @commands.hybrid_command(
         name="sync", help="Sync all global slash commands (Owner only)."
