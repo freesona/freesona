@@ -20,7 +20,7 @@ from this directory. Cogs do not import other cogs directly.
 | `intent.py`                   | Scores autonomy signals, maps scores to thresholds, and defines `IntentResult`.                                                   |
 | `knowledge_base.py`           | KnowledgeBaseService — SQLite persistence and ChromaDB indexing for knowledge base entries.                                       |
 | `logging_utils.py`            | Structured logging setup with section-based filtering and Discord channel output.                                                 |
-| `message_claims.py`           | Message classification — identifies message types (user, bot, webhook) for conversation handling.                                  |
+| `message_claims.py`           | Message classification — identifies message types (user, bot, webhook) for conversation handling.                                 |
 | `memory.py`                   | Stores long-term user facts in SQLite, keyed by `guild_id + user_id`.                                                             |
 | `modules.py`                  | Defines the cog registry and manages optional modules.                                                                            |
 | `persona.py`                  | Manages persona data, structured fields, the `/setpersona` panel, and saved profiles.                                             |
