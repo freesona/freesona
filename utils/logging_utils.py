@@ -229,7 +229,6 @@ class MonthlyRotatingFileHandler(logging.handlers.BaseRotatingHandler):
 
     def shouldRollover(self, record: logging.LogRecord) -> bool:
         """Backward-compatible alias for Python 3.13's handler API."""
-
         return self.should_rollover(record)
 
     def do_rollover(self):

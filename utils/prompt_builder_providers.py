@@ -7,7 +7,6 @@
 # system prompt.
 
 
-
 from __future__ import annotations
 
 import asyncio
@@ -26,9 +25,6 @@ from utils.prompt_builder import (
 logger = logging.getLogger("FreesonaBot")
 
 
-
-
-
 # =============================================================================
 
 # System Context Provider (Priority 10) — IMMUTABLE
@@ -36,11 +32,7 @@ logger = logging.getLogger("FreesonaBot")
 # =============================================================================
 
 
-
-
-
 class SystemContextProvider(ContextProvider):
-
     """
 
     Provides system-level instructions. Currently, this extracts the
@@ -51,110 +43,66 @@ class SystemContextProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "system"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.SYSTEM
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.IMMUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Extract system_instructions from persona data
 
         system_instructions = context.persona_data.get(
-
             "system_instructions", ""
-
         ).strip()
 
         if not system_instructions:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Add Discord-specific instructions for proper mention format
 
         discord_instructions = (
-
             "Discord mention guidelines:\n"
-
             "- When REPLYING to a message (using Discord's reply feature), do NOT add a @mention — the reply already notifies the user.\n"
-
             "- When mentioning the user you're responding to in a NON-reply message, use <@USER_ID> format to ping them.\n"
-
             "- When referencing other users in conversation, prefer their display name or nickname naturally; use <@USER_ID> only when you want to actively ping/notify them.\n"
-
             "- User IDs and mention formats are provided in message context when available.\n"
-
-            "- Do NOT use @username format — it will not ping the user.")
-
-
+            "- Do NOT use @username format — it will not ping the user."
+        )
 
         # Match current XML tag format from persona.py assemble_persona()
 
         content = f"<system_instructions>\n{system_instructions}\n\n{discord_instructions}\n</system_instructions>"
 
         return ContextBlock(
-
             name=self.name,
-
             priority=self.priority,
-
             mutability=self.mutability,
-
             content=content,
-
         )
-
-
-
 
 
 # =============================================================================
@@ -164,11 +112,7 @@ class SystemContextProvider(ContextProvider):
 # =============================================================================
 
 
-
-
-
 class PersonaContextProvider(ContextProvider):
-
     """
 
     Provides the core persona definition (role, background, beliefs, language).
@@ -179,49 +123,30 @@ class PersonaContextProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "persona"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.PERSONA
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.IMMUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Replicate the exact assembly from persona.py: ASSEMBLY_ORDER minus system_instructions
 
@@ -234,49 +159,30 @@ class PersonaContextProvider(ContextProvider):
         field_order = ["core_personality", "background", "beliefs", "language"]
 
         xml_tags = {
-
             "core_personality": "role",
-
             "background": "background",
-
             "beliefs": "beliefs",
-
             "language": "language",
-
         }
-
-
 
         parts = []
 
         for field_name in field_order:
-
             tag = xml_tags[field_name]
 
             value = context.persona_data.get(field_name, "").strip()
 
             if value:
-
                 parts.append(f"<{tag}>\n{value}\n</{tag}>")
-
-
 
         content = "\n\n".join(parts)
 
         return ContextBlock(
-
             name=self.name,
-
             priority=self.priority,
-
             mutability=self.mutability,
-
             content=content,
-
         )
-
-
-
 
 
 # =============================================================================
@@ -286,11 +192,7 @@ class PersonaContextProvider(ContextProvider):
 # =============================================================================
 
 
-
-
-
 class CanonContextProvider(ContextProvider):
-
     """
 
     Provides modular, immutable canon blocks that explain the *why* behind
@@ -339,108 +241,64 @@ class CanonContextProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "canon"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.CANON
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.IMMUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
         if not context.persona_id or not context.persona_id.strip():
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Import here to avoid circular imports
 
         from utils.canon import build_canon_context
 
-
-
         try:
-
             canon_block = await build_canon_context(
-
                 persona_id=context.persona_id,
-
             )
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content=canon_block,
-
             )
 
         except (RuntimeError, ValueError, OSError, asyncio.TimeoutError) as e:
-
             logger.warning(f"CanonContextProvider failed: {e}")
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
-
 
 
 # =============================================================================
@@ -450,11 +308,7 @@ class CanonContextProvider(ContextProvider):
 # =============================================================================
 
 
-
-
-
 class ConversationHistoryProvider(ContextProvider):
-
     """
 
     Provides Freesona-owned conversation history (short-term memory).
@@ -477,46 +331,29 @@ class ConversationHistoryProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "conversation_history"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.CONVERSATION_HISTORY
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.MUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
         guild_id = context.guild_id
@@ -524,20 +361,12 @@ class ConversationHistoryProvider(ContextProvider):
         user_id = context.user_id
 
         if guild_id is None or user_id is None:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # channel_id must be provided; if missing, we cannot scope the
 
@@ -546,67 +375,38 @@ class ConversationHistoryProvider(ContextProvider):
         channel_id = context.channel_id
 
         if channel_id is None:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         try:
-
             from utils.conversation import build_conversation_context
 
-
-
             history = await build_conversation_context(
-
                 guild_id=guild_id,
-
                 channel_id=channel_id,
-
                 user_id=user_id,
-
             )
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content=history,
-
             )
 
         except (RuntimeError, ValueError, OSError, asyncio.TimeoutError) as e:
-
             logger.warning(f"ConversationHistoryProvider failed: {e}")
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
-
 
 
 # =============================================================================
@@ -616,11 +416,7 @@ class ConversationHistoryProvider(ContextProvider):
 # =============================================================================
 
 
-
-
-
 class UserMemoryProvider(ContextProvider):
-
     """
 
     Provides long-term user facts (from SQLite via utils.memory).
@@ -629,108 +425,64 @@ class UserMemoryProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "user_memory"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.USER_MEMORY
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.MUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
         if not context.guild_id or not context.user_id:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Import here to avoid circular imports
 
         from utils.memory import get_user_facts_prompt
 
-
-
         try:
-
             memory_block = await get_user_facts_prompt(
-
                 context.guild_id, context.user_id, context.username
-
             )
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content=memory_block,
-
             )
 
         except (RuntimeError, ValueError, OSError, asyncio.TimeoutError) as e:
-
             logger.warning(f"UserMemoryProvider failed: {e}")
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
-
 
 
 # =============================================================================
@@ -740,11 +492,7 @@ class UserMemoryProvider(ContextProvider):
 # =============================================================================
 
 
-
-
-
 class CharacterMemoryProvider(ContextProvider):
-
     """
 
     Provides persistent shared history between the persona and the user.
@@ -777,122 +525,67 @@ class CharacterMemoryProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "character_memory"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.CHARACTER_MEMORY
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.MUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
-        if (
-
-            not context.guild_id
-
-            or not context.user_id
-
-            or not context.persona_id
-
-        ):
-
+        if not context.guild_id or not context.user_id or not context.persona_id:
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Import here to avoid circular imports
 
         from utils.character_memory import build_character_memory_context
 
-
-
         try:
-
             memory_block = await build_character_memory_context(
-
                 guild_id=context.guild_id,
-
                 user_id=context.user_id,
-
                 persona_id=context.persona_id,
-
                 username=context.username,
-
             )
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content=memory_block,
-
             )
 
         except (RuntimeError, ValueError, OSError, asyncio.TimeoutError) as e:
-
             logger.warning(f"CharacterMemoryProvider failed: {e}")
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
-
 
 
 # =============================================================================
@@ -902,11 +595,7 @@ class CharacterMemoryProvider(ContextProvider):
 # =============================================================================
 
 
-
-
-
 class GuildWorldContextProvider(ContextProvider):
-
     """
 
     Provides environmental context: the Discord guild as the character's "world".
@@ -949,134 +638,76 @@ class GuildWorldContextProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "guild_world"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.GUILD_WORLD
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.MUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
         if not context.guild_id or not context.channel_id:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Import here to avoid circular imports
 
         from utils.guild_world import NULL_ACCESSOR, build_guild_world_context
 
-
-
         # Get accessor from context (injected by caller) or use null accessor
 
-        accessor = (
-
-            getattr(context, "guild_world_accessor", None) or NULL_ACCESSOR
-
-        )
-
-
+        accessor = getattr(context, "guild_world_accessor", None) or NULL_ACCESSOR
 
         try:
-
             world_context = await build_guild_world_context(
-
                 guild_id=context.guild_id,
-
                 channel_id=context.channel_id,
-
                 accessor=accessor,
-
             )
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content=world_context,
-
             )
 
         except (
-
             RuntimeError,
-
             ValueError,
-
             OSError,
-
             discord.DiscordException,
-
             asyncio.TimeoutError,
-
         ) as e:
-
             logger.warning(f"GuildWorldContextProvider failed: {e}")
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
-
 
 
 # =============================================================================
@@ -1086,11 +717,7 @@ class GuildWorldContextProvider(ContextProvider):
 # =============================================================================
 
 
-
-
-
 class PersonaKnowledgeBaseProvider(ContextProvider):
-
     """
 
     Provides relevant canonical context from the Persona Knowledge Base (RAG).
@@ -1099,133 +726,78 @@ class PersonaKnowledgeBaseProvider(ContextProvider):
 
     """
 
-
-
     @property
-
     def name(self) -> str:
 
         return "persona_knowledge_base"
 
-
-
     @property
-
     def priority(self) -> int:
 
         return ProviderPriority.PERSONA_KNOWLEDGE_BASE
 
-
-
     @property
-
     def mutability(self) -> Mutability:
 
         return Mutability.IMMUTABLE
 
-
-
     async def build(self, context: PromptBuildContext) -> ContextBlock:
 
         if not context.apply_persona:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
         if not context.kb_enabled:
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
         if not context.persona_id or not context.persona_id.strip():
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
         if not context.user_message or not context.user_message.strip():
-
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
-
-
 
         # Import here to avoid circular imports
 
         from utils.chroma import query_knowledge
 
-
-
         try:
-
             # Run query off-thread to avoid blocking (same as
 
             # retrieve_knowledge_context)
 
             entries = await asyncio.to_thread(
-
                 query_knowledge,
-
                 context.user_message,
-
                 limit=context.kb_top_k,
-
                 persona=context.persona_id,
-
             )
 
-
-
             if not entries:
-
                 return ContextBlock(
-
                     name=self.name,
-
                     priority=self.priority,
-
                     mutability=self.mutability,
-
                     content="",
-
                 )
-
-
 
             # Format entries as context — EXACT replica of generation.py lines
 
@@ -1234,7 +806,6 @@ class PersonaKnowledgeBaseProvider(ContextProvider):
             lines = ["Relevant Canonical Context"]
 
             for i, entry in enumerate(entries, 1):
-
                 meta = entry.get("metadata", {})
 
                 document = entry.get("document", "").strip()
@@ -1253,105 +824,63 @@ class PersonaKnowledgeBaseProvider(ContextProvider):
 
                 canon_level = meta.get("canon_level", "")
 
-
-
                 context_parts = [f"{i}. {document}"]
 
                 details = []
 
                 if source and source != "unknown":
-
                     details.append(f"Source: {source}")
 
                 if entry_type and entry_type != "unknown":
-
                     details.append(f"Type: {entry_type}")
 
                 if scene:
-
                     details.append(f"Scene: {scene}")
 
                 if speaker:
-
                     details.append(f"Speaker: {speaker}")
 
                 if chapter:
-
                     details.append(f"Chapter: {chapter}")
 
                 if timestamp:
-
                     details.append(f"Timestamp: {timestamp}")
 
                 if canon_level:
-
                     details.append(f"Canon: {canon_level}")
 
-
-
                 if details:
-
                     context_parts.append(f"   ({', '.join(details)})")
 
-
-
                 lines.extend(context_parts)
-
-
 
             content = "\n".join(lines)
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content=content,
-
             )
 
-
-
         except (RuntimeError, ValueError, OSError, asyncio.TimeoutError) as e:
-
             logger.warning(f"PersonaKnowledgeBaseProvider failed: {e}")
 
             return ContextBlock(
-
                 name=self.name,
-
                 priority=self.priority,
-
                 mutability=self.mutability,
-
                 content="",
-
             )
 
 
-
-
-
 __all__ = [
-
     "CanonContextProvider",
-
     "CharacterMemoryProvider",
-
     "ConversationHistoryProvider",
-
     "GuildWorldContextProvider",
-
     "PersonaContextProvider",
-
     "PersonaKnowledgeBaseProvider",
-
     "SystemContextProvider",
-
     "UserMemoryProvider",
-
 ]
-

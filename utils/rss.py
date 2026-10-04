@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # utils/rss.py: RSS/Atom parsing and feed config helpers.
-
 from __future__ import annotations
 
 import html
@@ -14,14 +13,11 @@ from xml.etree import ElementTree
 from utils.config import load_config, save_config
 
 logger = logging.getLogger(__name__)
-
 # RDF namespace constant
 RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-
 RSS_FEEDS_KEY = "rss_feeds"
 RSS_SEEN_KEY = "rss_seen"  # list of seen article links, persisted in config.json
 RSS_DISABLED_KEY = "rss_disabled"  # built-in feeds the user has explicitly removed
-
 DEFAULT_RSS_FEEDS: dict[str, str] = {
     "bbc-world": "https://feeds.bbci.co.uk/news/world/rss.xml",
     "bbc-tech": "https://feeds.bbci.co.uk/news/technology/rss.xml",
@@ -29,23 +25,18 @@ DEFAULT_RSS_FEEDS: dict[str, str] = {
     "aljazeera": "https://www.aljazeera.com/xml/rss/all.xml",
     "dw-world": "https://rss.dw.com/rdf/rss-en-all",
 }
-
 SEEN_CAP = 500  # max links to remember; oldest are evicted
-
 SHORT_URL_PATTERN = re.compile(
     r"(?:https?://)?(?:reut\.rs|t\.co|bit\.ly|tinyurl\.com|goo\.gl|ow\.ly|"
     r"is\.gd|buff\.ly|adf\.ly|bit\.do|short\.io|cutt\.ly|v\.gd|tr\.im|"
     r"u\.nu|yourls\.org)/[a-zA-Z0-9]+"
 )
-
 STRIP_CHARS = " .,;:!?\n\t"
 
 
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
-
-
 @dataclass
 class FeedItem:
     title: str
@@ -83,13 +74,10 @@ def extract_image_url_from_html(html_text: str) -> str:
 # ---------------------------------------------------------------------------
 # Feed CRUD
 # ---------------------------------------------------------------------------
-
-
 def load_rss_feeds(config: dict | None = None) -> dict[str, str]:
     config = config or load_config()
     disabled = set(config.get(RSS_DISABLED_KEY, []))
     feeds = {k: v for k, v in DEFAULT_RSS_FEEDS.items() if k not in disabled}
-
     saved = config.get(RSS_FEEDS_KEY, {})
     if isinstance(saved, dict):
         for name, url in saved.items():
@@ -101,12 +89,10 @@ def load_rss_feeds(config: dict | None = None) -> dict[str, str]:
 def save_rss_feed(name: str, url: str) -> None:
     config = load_config()
     key = name.lower().strip()
-
     # If re-adding a previously disabled built-in, un-disable it
     disabled: list = config.setdefault(RSS_DISABLED_KEY, [])
     if key in disabled:
         disabled.remove(key)
-
     feeds = config.setdefault(RSS_FEEDS_KEY, {})
     feeds[key] = url.strip()
     save_config(config)
@@ -121,20 +107,17 @@ def delete_rss_feed(name: str) -> bool:
     config = load_config()
     key = name.lower().strip()
     changed = False
-
     # Remove from custom feeds if present
     feeds = config.setdefault(RSS_FEEDS_KEY, {})
     if key in feeds:
         del feeds[key]
         changed = True
-
     # Disable built-in feeds
     if key in DEFAULT_RSS_FEEDS:
         disabled: list = config.setdefault(RSS_DISABLED_KEY, [])
         if key not in disabled:
             disabled.append(key)
         changed = True
-
     if changed:
         save_config(config)
     return changed
@@ -143,8 +126,6 @@ def delete_rss_feed(name: str) -> bool:
 # ---------------------------------------------------------------------------
 # Seen-link tracking (deduplication for auto-posting)
 # ---------------------------------------------------------------------------
-
-
 def load_seen_links(config: dict | None = None) -> set[str]:
     config = config or load_config()
     return set(config.get(RSS_SEEN_KEY, []))
@@ -153,13 +134,11 @@ def load_seen_links(config: dict | None = None) -> set[str]:
 def mark_links_seen(links: list[str]) -> None:
     if not links:
         return
-
     config = load_config()
     seen: list = config.setdefault(RSS_SEEN_KEY, [])
     for link in links:
         if link and link not in seen:
             seen.append(link)
-
     # Evict oldest entries beyond cap
     config[RSS_SEEN_KEY] = seen[-SEEN_CAP:] if len(seen) > SEEN_CAP else seen
     save_config(config)
@@ -168,17 +147,13 @@ def mark_links_seen(links: list[str]) -> None:
 # ---------------------------------------------------------------------------
 # Text cleanup helpers
 # ---------------------------------------------------------------------------
-
-
 def _deduplicate_short_urls(text: str) -> str:
     """Remove duplicate short URLs (like reut.rs/xxx) from text.
-
     Nitter feeds often duplicate short URLs in titles and descriptions.
     """
     matches = list(SHORT_URL_PATTERN.finditer(text))
     if len(matches) <= 1:
         return text
-
     # Keep only the first occurrence of each unique URL (normalized to
     # include the protocol).
     seen_urls: set[str] = set()
@@ -191,19 +166,16 @@ def _deduplicate_short_urls(text: str) -> str:
             result = result[:start] + result[end:]
         else:
             seen_urls.add(normalized)
-
     return result
 
 
 def _clean_title_and_summary(title: str, summary: str) -> tuple[str, str]:
     """Clean title and summary by removing duplicates.
-
     Nitter feeds often have:
     - Duplicate short URLs in title
     - Title repeated at the start of summary (with or without "Link " prefix)
     """
     title = _deduplicate_short_urls(title)
-
     if summary and title:
         title_stripped = title.rstrip(" .,;:!?")
         for prefix in (
@@ -215,7 +187,6 @@ def _clean_title_and_summary(title: str, summary: str) -> tuple[str, str]:
             if summary.startswith(prefix):
                 summary = summary[len(prefix) :].lstrip(STRIP_CHARS)
                 break
-
     return title, _deduplicate_short_urls(summary)
 
 
@@ -236,8 +207,6 @@ def normalize_date(value: str) -> str:
 # ---------------------------------------------------------------------------
 # XML helpers
 # ---------------------------------------------------------------------------
-
-
 def _local_tag(node: ElementTree.Element) -> str:
     """Lowercased tag name with any XML namespace stripped."""
     return node.tag.rsplit("}", 1)[-1].lower()
@@ -263,10 +232,8 @@ def _find_image_url(node: ElementTree.Element) -> str:
     """Pick the best image from media:content/thumbnail/enclosure children."""
     image_url = ""
     max_width = 0
-
     for child in list(node):
         tag = _local_tag(child)
-
         if tag in ("content", "thumbnail") and "url" in child.attrib:
             url = child.attrib["url"].strip()
             try:
@@ -280,12 +247,10 @@ def _find_image_url(node: ElementTree.Element) -> str:
             if width >= max_width:
                 max_width = width
                 image_url = url
-
         elif tag == "enclosure" and "url" in child.attrib:
             type_attr = child.attrib.get("type", "")
             if not image_url or "image" in type_attr:
                 image_url = child.attrib["url"].strip()
-
     return image_url
 
 
@@ -301,9 +266,7 @@ def _build_item(
     title = strip_html(title)
     summary = strip_html(summary)
     title, summary = _clean_title_and_summary(title, summary)
-
     image_url = _find_image_url(node) or extract_image_url_from_html(summary)
-
     return FeedItem(
         title=title,
         link=link,
@@ -321,14 +284,11 @@ def _is_reply(title: str) -> bool:
 # ---------------------------------------------------------------------------
 # Format-specific parsers
 # ---------------------------------------------------------------------------
-
-
 def _parse_rdf_feed(root: ElementTree.Element, limit: int = 5) -> list[FeedItem]:
     """Parse RDF (RSS 1.0) format feeds."""
     channel = next((c for c in root if _local_tag(c) == "channel"), None)
     if channel is None:
         return []
-
     # Collect rdf:resource links from channel/items/Seq/li
     item_urls: list[str] = []
     for items_node in channel:
@@ -342,22 +302,17 @@ def _parse_rdf_feed(root: ElementTree.Element, limit: int = 5) -> list[FeedItem]
                     resource = li.attrib.get(f"{{{RDF_NS}}}resource")
                     if resource:
                         item_urls.append(resource)
-
     # Now find item elements with matching rdf:about
     items: list[FeedItem] = []
     for child in root:
         if _local_tag(child) != "item":
             continue
-
         about = child.attrib.get(f"{{{RDF_NS}}}about")
-
         title = child_text(child, ("title",)) or "(untitled)"
         if _is_reply(title):
             continue
-
         if about in item_urls and len(items) >= limit:
             break
-
         link = child_text(child, ("link",)) or about or ""
         published = child_text(
             child,
@@ -365,41 +320,32 @@ def _parse_rdf_feed(root: ElementTree.Element, limit: int = 5) -> list[FeedItem]
         )
         summary = child_text(child, ("description", "summary", "content"))
         author = child_text(child, ("creator", "author", "dc:creator", "dc.creator"))
-
         items.append(_build_item(child, title, link, published, summary, author))
-
     return items
 
 
 def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
     root = ElementTree.fromstring(xml_text)
     root_tag = _local_tag(root)
-
     # RDF (RSS 1.0)
     if root_tag == "rdf":
         return _parse_rdf_feed(root, limit)
-
     # RSS 2.0 uses <item>, Atom uses <entry>
     if root_tag == "rss":
         channel = next((c for c in root.iter() if _local_tag(c) == "channel"), root)
         nodes = [c for c in channel if _local_tag(c) == "item"]
     else:
         nodes = [c for c in root if _local_tag(c) == "entry"]
-
     items: list[FeedItem] = []
     for node in nodes:
         if len(items) >= limit:
             break
-
         title = child_text(node, ("title",)) or "(untitled)"
         if _is_reply(title):
             continue
-
         link = child_text(node, ("link",)) or child_attr(node, "link", "href")
         published = child_text(node, ("pubdate", "published", "updated"))
         summary = child_text(node, ("description", "summary", "content"))
         author = child_text(node, ("creator", "author"))
-
         items.append(_build_item(node, title, link, published, summary, author))
-
     return items

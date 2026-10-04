@@ -449,9 +449,17 @@ Config keys (see `config.sample.json`):
 Cogs are split into **core** (always loaded) and **optional** (can be toggled at runtime without restart):
 
 ```python
-CORE_EXTENSIONS = ["cogs.system.core", "cogs.system.help", "cogs.system.status", "cogs.system.config",
-                   "cogs.system.module", "cogs.system.model", "cogs.system.provider", "cogs.system.logging",
-                   "cogs.system.timezone"]
+CORE_EXTENSIONS = [
+    "cogs.system.core",
+    "cogs.system.help",
+    "cogs.system.status",
+    "cogs.system.config",
+    "cogs.system.module",
+    "cogs.system.model",
+    "cogs.system.provider",
+    "cogs.system.logging",
+    "cogs.system.timezone",
+]
 OPTIONAL_MODULES = {
     "genai": "cogs.ai.genai",
     "math": "cogs.tools.math",
@@ -601,6 +609,7 @@ Logs are written using Python's standard `logging` module:
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
 logger.info("Generation completed", extra={"user_id": 123, "provider": "gemini"})
 ```

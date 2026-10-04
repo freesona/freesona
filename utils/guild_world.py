@@ -19,7 +19,6 @@
 # guild awareness.
 
 
-
 from __future__ import annotations
 
 import logging
@@ -31,9 +30,6 @@ import discord
 logger = logging.getLogger("FreesonaBot")
 
 
-
-
-
 # =============================================================================
 
 # Channel Info Dataclass
@@ -41,13 +37,8 @@ logger = logging.getLogger("FreesonaBot")
 # =============================================================================
 
 
-
-
-
 @dataclass
-
 class GuildChannelInfo:
-
     """
 
     Lightweight channel metadata for KB 2.0 and environmental awareness.
@@ -59,8 +50,6 @@ class GuildChannelInfo:
     Fetched fresh when needed, no persistence.
 
     """
-
-
 
     id: int
 
@@ -76,30 +65,21 @@ class GuildChannelInfo:
 
     nsfw: bool = False
 
-
-
     def format_for_prompt(self) -> str:
-
         """Format as a compact line for prompt injection."""
 
         parts = [f"#{self.name}"]
 
         if self.topic:
-
             parts.append(f"({self.topic})")
 
         if self.type != "text":
-
             parts.append(f"[{self.type}]")
 
         if self.nsfw:
-
             parts.append("[NSFW]")
 
         return " ".join(parts)
-
-
-
 
 
 # =============================================================================
@@ -109,11 +89,7 @@ class GuildChannelInfo:
 # =============================================================================
 
 
-
-
-
 class GuildWorldAccessor(Protocol):
-
     """
 
     Protocol for fetching guild/channel metadata without
@@ -130,46 +106,27 @@ class GuildWorldAccessor(Protocol):
 
     """
 
-
-
     async def get_guild_name(self, guild_id: int) -> str | None:
-
         """Return the guild (server) name, or None if unavailable."""
 
         ...
 
-
-
     async def get_channel_name(self, channel_id: int) -> str | None:
-
         """Return the channel name, or None if unavailable."""
 
         ...
 
-
-
     async def get_channel_topic(self, channel_id: int) -> str | None:
-
         """Return the channel topic/description, or None if unavailable."""
 
         ...
 
-
-
     async def get_guild_member_count(self, guild_id: int) -> int | None:
-
         """Return approximate member count, or None if unavailable."""
 
         ...
 
-
-
-    async def get_guild_channels(
-
-        self, guild_id: int
-
-    ) -> list[GuildChannelInfo]:
-
+    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
         """
 
         Return a list of all channels in the guild with basic metadata.
@@ -191,18 +148,13 @@ class GuildWorldAccessor(Protocol):
         ...
 
 
-
-
-
 # Default no-op accessor (used when Discord context is unavailable)
 
-class NullGuildWorldAccessor:
 
+class NullGuildWorldAccessor:
     """Null implementation that returns no data —
 
     safe default for testing/fallback."""
-
-
 
     async def get_guild_name(self, guild_id: int) -> str | None:
 
@@ -210,15 +162,11 @@ class NullGuildWorldAccessor:
 
         return None
 
-
-
     async def get_channel_name(self, channel_id: int) -> str | None:
 
         _ = channel_id
 
         return None
-
-
 
     async def get_channel_topic(self, channel_id: int) -> str | None:
 
@@ -226,34 +174,20 @@ class NullGuildWorldAccessor:
 
         return None
 
-
-
     async def get_guild_member_count(self, guild_id: int) -> int | None:
 
         _ = guild_id
 
         return None
 
-
-
-    async def get_guild_channels(
-
-        self, guild_id: int
-
-    ) -> list[GuildChannelInfo]:
+    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
 
         _ = guild_id
 
         return []
 
 
-
-
-
 NULL_ACCESSOR = NullGuildWorldAccessor()
-
-
-
 
 
 # =============================================================================
@@ -263,13 +197,8 @@ NULL_ACCESSOR = NullGuildWorldAccessor()
 # =============================================================================
 
 
-
-
-
 @dataclass
-
 class GuildWorldContext:
-
     """
 
     Structured environmental context for a single generation request.
@@ -279,8 +208,6 @@ class GuildWorldContext:
     All fields are optional — provider gracefully handles missing data.
 
     """
-
-
 
     guild_id: int
 
@@ -294,46 +221,27 @@ class GuildWorldContext:
 
     member_count: int | None = None
 
-
-
     def format_for_prompt(self) -> str:
-
         """Format as a human-readable context block for the system prompt."""
 
         lines = ["[Guild World Context]"]
 
-
-
         if self.guild_name:
-
             lines.append(f"Server: {self.guild_name}")
 
             if self.member_count:
-
                 lines.append(f"Population: ~{self.member_count:,}")
 
-
-
         if self.channel_name:
-
             lines.append(f"Channel: #{self.channel_name}")
 
             if self.channel_topic:
-
                 lines.append(f"Topic: {self.channel_topic}")
 
-
-
         if len(lines) == 1:
-
             return ""  # No useful context
 
-
-
         return "\n".join(lines)
-
-
-
 
 
 # =============================================================================
@@ -343,19 +251,11 @@ class GuildWorldContext:
 # =============================================================================
 
 
-
-
-
 async def build_guild_world_context(
-
     guild_id: int,
-
     channel_id: int,
-
     accessor: GuildWorldAccessor = NULL_ACCESSOR,
-
 ) -> str:
-
     """
 
     Fetch environmental metadata and format for prompt injection.
@@ -385,7 +285,6 @@ async def build_guild_world_context(
     """
 
     try:
-
         # Fetch all metadata concurrently
 
         guild_name = await accessor.get_guild_name(guild_id)
@@ -396,44 +295,24 @@ async def build_guild_world_context(
 
         member_count = await accessor.get_guild_member_count(guild_id)
 
-
-
         context = GuildWorldContext(
-
             guild_id=guild_id,
-
             channel_id=channel_id,
-
             guild_name=guild_name,
-
             channel_name=channel_name,
-
             channel_topic=channel_topic,
-
             member_count=member_count,
-
         )
-
-
 
         return context.format_for_prompt()
 
-
-
     except (discord.DiscordException, RuntimeError, ValueError, OSError) as e:
-
         logger.warning(
-
             f"GuildWorldContext fetch failed for "
-
             f"guild={guild_id}, channel={channel_id}: {e}"
-
         )
 
         return ""
-
-
-
 
 
 # =============================================================================
@@ -443,11 +322,7 @@ async def build_guild_world_context(
 # =============================================================================
 
 
-
-
-
 class DiscordGuildWorldAccessor:
-
     """
 
     Discord.py implementation of GuildWorldAccessor.
@@ -458,13 +333,9 @@ class DiscordGuildWorldAccessor:
 
     """
 
-
-
     def __init__(self, bot):
 
         self.bot = bot
-
-
 
     async def get_guild_name(self, guild_id: int) -> str | None:
 
@@ -472,19 +343,14 @@ class DiscordGuildWorldAccessor:
 
         return guild.name if guild else None
 
-
-
     async def get_channel_name(self, channel_id: int) -> str | None:
 
         channel = self.bot.get_channel(channel_id)
 
         if channel and hasattr(channel, "name"):
-
             return channel.name
 
         return None
-
-
 
     async def get_channel_topic(self, channel_id: int) -> str | None:
 
@@ -494,22 +360,13 @@ class DiscordGuildWorldAccessor:
 
         return topic
 
-
-
     async def get_guild_member_count(self, guild_id: int) -> int | None:
 
         guild = self.bot.get_guild(guild_id)
 
         return guild.member_count if guild else None
 
-
-
-    async def get_guild_channels(
-
-        self, guild_id: int
-
-    ) -> list[GuildChannelInfo]:
-
+    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
         """
 
         Return all channels in the guild with lightweight metadata.
@@ -529,108 +386,66 @@ class DiscordGuildWorldAccessor:
         guild = self.bot.get_guild(guild_id)
 
         if not guild:
-
             return []
-
-
 
         channels = []
 
         for channel in guild.channels:
-
             # Determine channel type
 
             channel_type = "unknown"
 
             if isinstance(channel, discord.TextChannel):
-
                 channel_type = "text"
 
             elif isinstance(channel, discord.VoiceChannel):
-
                 channel_type = "voice"
 
             elif isinstance(channel, discord.CategoryChannel):
-
                 channel_type = "category"
 
             elif isinstance(channel, discord.StageChannel):
-
                 channel_type = "stage"
 
             elif isinstance(channel, discord.ForumChannel):
-
                 channel_type = "forum"
 
             elif isinstance(channel, discord.Thread):
-
                 channel_type = "thread"
-
-
 
             # Get topic (only text/forum/stage channels have topics)
 
             topic = getattr(channel, "topic", None)
 
-
-
             # Get NSFW flag (text/forum/voice channels)
 
             nsfw = getattr(channel, "nsfw", False)
-
-
 
             # Get category/parent
 
             category_id = getattr(channel, "category_id", None)
 
-
-
             channels.append(
-
                 GuildChannelInfo(
-
                     id=channel.id,
-
                     name=channel.name,
-
                     type=channel_type,
-
                     topic=topic,
-
                     position=getattr(channel, "position", 0),
-
                     category_id=category_id,
-
                     nsfw=nsfw,
-
                 )
-
             )
-
-
 
         return channels
 
 
-
-
-
 __all__ = [
-
     "NULL_ACCESSOR",
-
     "DiscordGuildWorldAccessor",
-
     "GuildChannelInfo",
-
     "GuildWorldAccessor",
-
     "GuildWorldContext",
-
     "NullGuildWorldAccessor",
-
     "build_guild_world_context",
-
 ]
-

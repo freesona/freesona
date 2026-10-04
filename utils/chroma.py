@@ -22,27 +22,16 @@ from xml.etree import ElementTree
 # resolves correctly.
 
 __all__ = [
-
     "VALID_CANON_LEVELS",
-
     "VALID_ENTRY_TYPES",
-
     "VALID_SOURCE_TYPES",
-
     "add_knowledge",
-
     "delete_knowledge",
-
     "extract_text_from_bytes",
-
     "get_knowledge_by_persona",
-
     "list_knowledge",
-
     "query_knowledge",
-
 ]
-
 
 
 from dotenv import load_dotenv
@@ -50,59 +39,35 @@ from dotenv import load_dotenv
 logger = logging.getLogger("FreesonaBot")
 
 
-
 try:
-
     import chromadb
 
 except ImportError:
-
     chromadb = None
-
-
-
 
 
 load_dotenv()
 
 
-
 _chroma_client: Any = None
 
 
-
-
-
 class ChromaCollection(Protocol):
-
     """Minimum ChromaDB collection interface used by this module."""
-
-
 
     def add(self, **kwargs: Any) -> None: ...
 
-
-
     def delete(self, **kwargs: Any) -> None: ...
-
-
 
     def get(self, limit: int | None = None, **kwargs: Any) -> dict[str, Any]: ...
 
-
-
     def query(self, **kwargs: Any) -> dict[str, Any]: ...
-
-
-
 
 
 # Required metadata fields per the Persona Knowledge Base schema
 
 REQUIRED_METADATA_FIELDS = frozenset(
-
     ("persona", "source", "source_type", "entry_type", "topics")
-
 )
 
 # Optional metadata fields – these are not required for every entry but may be
@@ -110,29 +75,17 @@ REQUIRED_METADATA_FIELDS = frozenset(
 # provided when available.
 
 OPTIONAL_METADATA_FIELDS = frozenset(
-
     (
-
         "episode",
-
         "chapter",
-
         "scene",
-
         "timestamp",
-
         "canon_level",
-
         "tags",
-
         "speaker",
-
         "title",
-
     )
-
 )
-
 
 
 # Validation sets for metadata fields – these mirror the definitions used in the
@@ -142,59 +95,33 @@ OPTIONAL_METADATA_FIELDS = frozenset(
 # to ensure that user‑provided metadata conforms to expected values.
 
 VALID_ENTRY_TYPES = {
-
     "dialogue",
-
     "narration",
-
     "event",
-
     "relationship",
-
     "description",
-
 }
-
 
 
 VALID_SOURCE_TYPES = {
-
     "anime",
-
     "novel",
-
     "manga",
-
     "game",
-
     "guidebook",
-
     "interview",
-
     "website",
-
     "other",
-
 }
-
 
 
 VALID_CANON_LEVELS = {
-
     "canon",
-
     "semi-canon",
-
     "non-canon",
-
     "headcanon",
-
     "alternate",
-
 }
-
-
-
 
 
 def get_chroma_client() -> Any | None:
@@ -202,11 +129,9 @@ def get_chroma_client() -> Any | None:
     global _chroma_client
 
     if chromadb is None:
-
         return None
 
     if _chroma_client is None:
-
         persist_directory = os.getenv("CHROMA_PERSIST_DIRECTORY", "./.chroma")
 
         _chroma_client = chromadb.PersistentClient(path=persist_directory)
@@ -214,19 +139,13 @@ def get_chroma_client() -> Any | None:
     return _chroma_client
 
 
-
-
-
 def get_collection(
-
     collection_name: str | None = None,
-
 ) -> ChromaCollection | None:
 
     client = get_chroma_client()
 
     if client is None:
-
         return None
 
     resolved_client = cast(Any, client)
@@ -236,433 +155,278 @@ def get_collection(
     return cast(ChromaCollection, resolved_client.get_or_create_collection(name=name))
 
 
-
-
-
 def parse_discord_chat_json(raw_bytes: bytes) -> str:
-
     """Parses exported Discord message JSON arrays into plain text logs."""
 
     try:
-
         data = json.loads(raw_bytes.decode("utf-8"))
 
     except (json.JSONDecodeError, UnicodeDecodeError):
-
         return ""
-
-
 
     if not isinstance(data, list):
-
         return ""
 
-
-
     formatted_messages = []
-
-
 
     # Sort chronological (oldest to newest)
 
     for msg in reversed(data):
-
         if not isinstance(msg, dict):
-
             continue
 
-
-
         author = (
-
             msg.get("userName") or msg.get("author", {}).get("username") or "Unknown"
-
         )
 
         content = (msg.get("content") or "").strip()
 
         timestamp = msg.get("timestamp", "").split("T")[0]  # Extracts YYYY-MM-DD
 
-
-
         if content:
-
             if timestamp:
-
                 formatted_messages.append(f"[{timestamp}] {author}: {content}")
 
             else:
-
                 formatted_messages.append(f"{author}: {content}")
-
-
 
     return "\n".join(formatted_messages)
 
 
-
-
-
 def extract_text_from_bytes(filename: str, data: bytes) -> str:
-
     """Extracts plain text from various file formats (JSON,
 
     PDF, EPUB, TXT, MD)."""
 
     lower_name = (filename or "").lower()
 
-
-
     if lower_name.endswith(".json"):
-
         extracted_json = parse_discord_chat_json(data)
 
         if extracted_json:
-
             return extracted_json
 
-
-
     if lower_name.endswith(".pdf"):
-
         try:
-
             from pypdf import PdfReader
 
         except ImportError:
-
             logger.warning(
-
                 "pypdf is not installed; falling back to raw "
-
                 "bytes decode for PDF input."
-
             )
 
             return data.decode("utf-8", errors="ignore").strip()
-
-
 
         reader = PdfReader(io.BytesIO(data))
 
         pages: list[str] = []
 
         for page in reader.pages:
-
             extracted = page.extract_text() or ""
 
             if extracted.strip():
-
                 pages.append(extracted.strip())
 
         return "\n\n".join(pages).strip()
 
-
-
     if lower_name.endswith(".epub"):
-
         try:
-
             # Explicitly open the EPUB archive in read mode to satisfy Pylance and
 
             # avoid runtime errors on some platforms.
 
             with zipfile.ZipFile(io.BytesIO(data), mode="r") as archive:
-
                 container_data = archive.read("META-INF/container.xml")
 
                 container = ElementTree.fromstring(container_data)
 
-
-
                 rootfile = None
 
                 for elem in container.iter():
-
                     if elem.tag.endswith("rootfile"):
-
                         rootfile = elem
 
                         break
 
                 if rootfile is None:
-
                     logger.warning("EPUB container.xml missing rootfile")
 
                     return ""
 
-
-
                 opf_path = rootfile.attrib.get("full-path")
 
                 if not opf_path:
-
                     logger.warning("EPUB rootfile missing full-path")
 
                     return ""
-
-
 
                 opf_data = archive.read(opf_path)
 
                 opf_root = ElementTree.fromstring(opf_data)
 
-
-
                 item_map = {}
 
                 for item in opf_root.iter():
-
                     if item.tag.endswith("item"):
-
                         item_id = item.attrib.get("id")
 
                         href = item.attrib.get("href")
 
                         if item_id and href:
-
                             item_map[item_id] = href
-
-
 
                 spine_ids = []
 
                 for itemref in opf_root.iter():
-
                     if itemref.tag.endswith("itemref"):
-
                         idref = itemref.attrib.get("idref")
 
                         if idref:
-
                             spine_ids.append(idref)
-
-
 
                 text_parts: list[str] = []
 
                 opf_dir = os.path.dirname(opf_path) if "/" in opf_path else ""
 
-
-
                 for item_id in spine_ids:
-
                     href_value = item_map.get(item_id)
 
                     if not isinstance(href_value, str) or not href_value:
-
                         continue
 
                     href = href_value
 
-
-
                     if opf_dir and not href.startswith(opf_dir):
-
                         full_href = f"{opf_dir}/{href}" if opf_dir else href
 
                     else:
-
                         full_href = href
 
-
-
                     try:
-
                         chapter_xml = archive.read(full_href)
 
                     except KeyError:
-
                         try:
-
                             chapter_xml = archive.read(href)
 
                         except KeyError:
-
                             continue
-
-
 
                     chapter_root = ElementTree.fromstring(chapter_xml)
 
                     body = None
 
                     for elem in chapter_root.iter():
-
                         if elem.tag.endswith("body"):
-
                             body = elem
 
                             break
 
                     if body is None:
-
                         continue
 
-
-
                     text = " ".join(
-
                         part.strip()
-
                         for part in body.itertext()
-
                         if part and part.strip()
-
                     )
 
                     if text:
-
                         text_parts.append(text)
-
-
 
                 result = "\n\n".join(text_parts).strip()
 
                 if not result:
-
                     logger.warning("EPUB extraction returned empty text")
 
                 return result
 
         except (OSError, ElementTree.ParseError, UnicodeDecodeError) as exc:
-
             logger.warning(f"Failed to decode EPUB attachment {filename}: {exc}")
 
             return ""
 
-
-
     return (
-
         data.decode("utf-8", errors="ignore").strip()
-
         or data.decode("latin-1", errors="ignore").strip()
-
     )
 
 
-
-
-
 def _validate_metadata(metadata: dict[str, Any] | None) -> tuple[bool, str]:
-
     """Validates that required metadata fields are present and
 
     correctly formatted."""
 
     if metadata is None:
-
         return False, "Metadata is required but was not provided."
-
-
 
     missing = REQUIRED_METADATA_FIELDS.difference(metadata.keys())
 
     if missing:
-
         return False, f"Missing required metadata fields: {', '.join(sorted(missing))}"
-
-
 
     # Validate topics is a list
 
     topics = metadata.get("topics")
 
     if not isinstance(topics, (list, tuple)) or len(topics) == 0:
-
         return False, "Field 'topics' must be a non-empty list."
-
-
 
     # Validate entry_type
 
     entry_type = metadata.get("entry_type")
 
     if entry_type not in VALID_ENTRY_TYPES:
-
         return (
-
             False,
-
             f"Field 'entry_type' must be one of: {
-
                 ', '.join(sorted(VALID_ENTRY_TYPES))
-
             }",
-
         )
-
-
 
     # Validate source_type
 
     source_type = metadata.get("source_type")
 
     if source_type not in VALID_SOURCE_TYPES:
-
         return (
-
             False,
-
             f"Field 'source_type' must be one of: {
-
                 ', '.join(sorted(VALID_SOURCE_TYPES))
-
             }",
-
         )
-
-
 
     # Validate canon_level if provided
 
     canon_level = metadata.get("canon_level")
 
     if canon_level is not None and canon_level not in VALID_CANON_LEVELS:
-
         return (
-
             False,
-
             f"Field 'canon_level' must be one of: {
-
                 ', '.join(sorted(VALID_CANON_LEVELS))
-
             }",
-
         )
-
-
 
     # Validate persona is non-empty string
 
     persona = metadata.get("persona")
 
     if not isinstance(persona, str) or not persona.strip():
-
         return False, "Field 'persona' must be a non-empty string."
-
-
 
     # Validate source is non-empty string
 
     source = metadata.get("source")
 
     if not isinstance(source, str) or not source.strip():
-
         return False, "Field 'source' must be a non-empty string."
-
-
 
     return True, ""
 
 
-
-
-
 def _normalize_metadata(metadata: dict[str, Any]) -> dict[str, str]:
-
     """Normalizes metadata values to strings for ChromaDB storage."""
 
     normalized = {}
@@ -670,25 +434,18 @@ def _normalize_metadata(metadata: dict[str, Any]) -> dict[str, str]:
     all_fields = REQUIRED_METADATA_FIELDS | OPTIONAL_METADATA_FIELDS
 
     for key in all_fields:
-
         value = metadata.get(key)
 
         if value is None:
-
             continue
 
         if isinstance(value, (list, tuple)):
-
             normalized[key] = ", ".join(str(v) for v in value if v is not None)
 
         else:
-
             normalized[key] = str(value)
 
     return normalized
-
-
-
 
 
 # =============================================================================
@@ -698,11 +455,7 @@ def _normalize_metadata(metadata: dict[str, Any]) -> dict[str, str]:
 # =============================================================================
 
 
-
-
-
 def clean_source_text(text: str | None) -> str:
-
     """
 
     Cleans raw source text for ingestion.
@@ -716,16 +469,11 @@ def clean_source_text(text: str | None) -> str:
     """
 
     if not text:
-
         return ""
-
-
 
     # Normalize line endings
 
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-
-
 
     # Remove excessive blank lines (more than 2 consecutive)
 
@@ -736,49 +484,32 @@ def clean_source_text(text: str | None) -> str:
     blank_count = 0
 
     for line in lines:
-
         if line.strip() == "":
-
             blank_count += 1
 
             if blank_count <= 2:
-
                 cleaned_lines.append("")
 
         else:
-
             blank_count = 0
 
             cleaned_lines.append(line.rstrip())
-
-
 
     # Join and strip trailing/leading whitespace
 
     result = "\n".join(cleaned_lines).strip()
 
-
-
     # Ensure no more than 2 consecutive newlines anywhere (defensive)
 
     while "\n\n\n" in result:
-
         result = result.replace("\n\n\n", "\n\n")
-
-
 
     return result
 
 
-
-
-
 def identify_speakers(
-
     text: str, speaker_patterns: list[str] | None = None
-
 ) -> list[dict[str, str]]:
-
     """
 
     Identifies speaker attributions in dialogue text.
@@ -800,49 +531,32 @@ def identify_speakers(
     """
 
     if speaker_patterns is None:
-
         speaker_patterns = [
-
             r"^([A-Z][a-z]+):\s*(.+)$",  # "Name: dialogue"
-
             r"^([A-Z][a-z]+\s+[A-Z][a-z]+):\s*(.+)$",  # "First Last: dialogue"
-
         ]
 
-
-
     import re
-
-
 
     results = []
 
     for line in text.split("\n"):
-
         line = line.strip()
 
         if not line:
-
             continue
 
         matched = False
 
         for pattern in speaker_patterns:
-
             match = re.match(pattern, line)
 
             if match:
-
                 results.append(
-
                     {
-
                         "speaker": match.group(1).strip(),
-
                         "dialogue": match.group(2).strip(),
-
                     }
-
                 )
 
                 matched = True
@@ -850,7 +564,6 @@ def identify_speakers(
                 break
 
         if not matched:
-
             # No speaker identified, treat as narration
 
             results.append({"speaker": "Narrator", "dialogue": line})
@@ -858,23 +571,15 @@ def identify_speakers(
     return results
 
 
-
-
-
 # noinspection GrazieInspection
 
+
 def chunk_semantic_units(
-
     text: str,
-
     max_chunk_size: int = 1500,
-
     min_chunk_size: int = 100,
-
     speaker_data: list[dict[str, str]] | None = None,
-
 ) -> list[dict[str, Any]]:
-
     """
 
     Splits text into atomic semantic units for embedding.
@@ -918,7 +623,6 @@ def chunk_semantic_units(
     """
 
     if speaker_data:
-
         # Use pre-identified speaker data for dialogue-based chunking
 
         chunks = []
@@ -927,101 +631,61 @@ def chunk_semantic_units(
 
         current_speaker = None
 
-
-
         # noinspection GrazieInspection
 
         for entry in speaker_data:
-
             speaker = entry["speaker"]
 
             dialogue = entry["dialogue"]
 
-
-
             # If speaker changes and we have content, finalize current chunk
 
             if (
-
                 current_speaker is not None
-
                 and speaker != current_speaker
-
                 and current_chunk
-
             ):
-
                 chunks.append(
-
                     {
-
                         "document": current_chunk.strip(),
-
                         "speaker": current_speaker,
-
                         "estimated_tokens": len(current_chunk) // 4,
-
                     }
-
                 )
 
                 current_chunk = ""
-
-
 
             current_speaker = speaker
 
             current_chunk += f"{speaker}: {dialogue}\n"
 
-
-
             # Check if chunk is getting too large
 
             if len(current_chunk) >= max_chunk_size:
-
                 chunks.append(
-
                     {
-
                         "document": current_chunk.strip(),
-
                         "speaker": current_speaker,
-
                         "estimated_tokens": len(current_chunk) // 4,
-
                     }
-
                 )
 
                 current_chunk = ""
 
                 current_speaker = None
 
-
-
         # Add final chunk
 
         if current_chunk.strip():
-
             chunks.append(
-
                 {
-
                     "document": current_chunk.strip(),
-
                     "speaker": current_speaker,
-
                     "estimated_tokens": len(current_chunk) // 4,
-
                 }
-
             )
 
-
-
         return chunks
-
-
 
     # Fallback: simple paragraph-based chunking for narration
 
@@ -1031,30 +695,18 @@ def chunk_semantic_units(
 
     current_chunk = ""
 
-
-
     for para in paragraphs:
-
         if len(current_chunk) + len(para) + 2 > max_chunk_size and current_chunk:
-
             if len(current_chunk) >= min_chunk_size:
-
                 chunks.append(
-
                     {
-
                         "document": current_chunk,
-
                         "speaker": None,
-
                         "estimated_tokens": len(current_chunk) // 4,
-
                     }
-
                 )
 
             else:
-
                 # Merge small chunk with next
 
                 pass
@@ -1062,49 +714,28 @@ def chunk_semantic_units(
             current_chunk = para
 
         else:
-
             if current_chunk:
-
                 current_chunk += "\n\n" + para
 
             else:
-
                 current_chunk = para
 
-
-
     if current_chunk.strip():
-
         chunks.append(
-
             {
-
                 "document": current_chunk.strip(),
-
                 "speaker": None,
-
                 "estimated_tokens": len(current_chunk) // 4,
-
             }
-
         )
-
-
 
     return chunks
 
 
-
-
-
 def assign_metadata(
-
     chunks: list[dict[str, Any]],
-
     base_metadata: dict[str, Any],
-
 ) -> list[dict[str, Any]]:
-
     """
 
     Assigns metadata to each chunk, preserving chunk-specific fields.
@@ -1132,63 +763,42 @@ def assign_metadata(
     results = []
 
     for chunk in chunks:
-
         metadata = base_metadata.copy()
 
         # Add schema version and embedding model if not present
 
         if "schema_version" not in metadata:
-
             metadata["schema_version"] = "1"
 
         if "embedding_model" not in metadata:
-
             metadata["embedding_model"] = os.getenv(
-
                 "EMBEDDING_MODEL", "text-embedding-3-large"
-
             )
 
         if chunk.get("speaker") and chunk["speaker"] != "Narrator":
-
             metadata["speaker"] = chunk["speaker"]
 
             metadata["entry_type"] = "dialogue"
 
         else:
-
             metadata["entry_type"] = metadata.get("entry_type", "narration")
 
         results.append(
-
             {
-
                 "document": chunk["document"],
-
                 "metadata": metadata,
-
             }
-
         )
 
     return results
 
 
-
-
-
 def ingest_source(
-
     raw_text: str,
-
     base_metadata: dict[str, Any],
-
     max_chunk_size: int = 1500,
-
     min_chunk_size: int = 100,
-
 ) -> list[dict[str, Any]]:
-
     """
 
     Full ingestion pipeline: clean -> identify speakers ->
@@ -1223,54 +833,32 @@ def ingest_source(
 
     cleaned = clean_source_text(raw_text)
 
-
-
     # Stage 2: Speaker Identification
 
     speaker_data = identify_speakers(cleaned)
 
-
-
     # Stage 3: Semantic Chunking
 
     chunks = chunk_semantic_units(
-
         cleaned,
-
         max_chunk_size=max_chunk_size,
-
         min_chunk_size=min_chunk_size,
-
         speaker_data=speaker_data,
-
     )
-
-
 
     # Stage 4: Metadata Assignment
 
     return assign_metadata(chunks, base_metadata)
 
 
-
-
-
 def add_knowledge(
-
     document: str,
-
     *,
-
     source: str = "manual",
-
     title: str | None = None,
-
     collection_name: str | None = None,
-
     metadata: dict[str, Any] | None = None,
-
 ) -> str:
-
     """Add a knowledge entry to the ChromaDB collection.
 
 
@@ -1290,18 +878,12 @@ def add_knowledge(
     collection = get_collection(collection_name)
 
     if collection is None:
-
         return ""
 
-
-
     if not document or not document.strip():
-
         logger.warning("Attempted to add empty document to knowledge base.")
 
         return ""
-
-
 
     # Ensure metadata is a dict and contains required keys.
 
@@ -1312,53 +894,36 @@ def add_knowledge(
     meta.setdefault("source", source)
 
     if title:
-
         meta["title"] = title
-
-
 
     valid, reason = _validate_metadata(meta)
 
     if not valid:
-
         logger.warning(f"Invalid metadata for knowledge entry: {reason}")
 
         return ""
 
-
-
     # Normalize metadata values (e.g., list of topics -> comma‑separated string)
 
     normalized_meta = _normalize_metadata(meta)
-
-
 
     # Generate a unique ID for the document.
 
     doc_id = str(uuid.uuid4())
 
     try:
-
         collection.add(
-
             ids=[doc_id],
-
             documents=[document],
-
             metadatas=[normalized_meta],
-
         )
 
     except (ValueError, RuntimeError, OSError) as exc:
-
         logger.error(f"Chroma add error: {exc}")
 
         return ""
 
     return doc_id
-
-
-
 
 
 def delete_knowledge(doc_id: str, collection_name: str | None = None) -> bool:
@@ -1374,39 +939,25 @@ def delete_knowledge(doc_id: str, collection_name: str | None = None) -> bool:
     collection = get_collection(collection_name)
 
     if collection is None:
-
         return False
 
-
-
     try:
-
         collection.delete(ids=[doc_id])
 
         return True
 
     except (ValueError, RuntimeError, OSError) as exc:
-
         logger.error(f"Chroma delete error: {exc}")
 
         return False
 
 
-
-
-
 def query_knowledge(
-
     query: str,
-
     limit: int = 3,
-
     collection_name: str | None = None,
-
     persona: str | None = None,
-
 ) -> list[dict[str, Any]]:
-
     """
 
     Queries the knowledge base with optional persona filtering.
@@ -1436,28 +987,17 @@ def query_knowledge(
     collection = get_collection(collection_name)
 
     if collection is None:
-
         return []
 
-
-
     try:
-
         where_clause = {"persona": persona} if persona else None
 
         result = collection.query(
-
             query_texts=[query],
-
             n_results=limit,
-
             where=where_clause,
-
             include=["documents", "metadatas", "distances"],
-
         )
-
-
 
         docs = result.get("documents", [[]])[0] or []
 
@@ -1465,48 +1005,30 @@ def query_knowledge(
 
         distances = result.get("distances", [[]])[0] or []
 
-
-
         entries = []
 
         for i, doc in enumerate(docs):
-
             if isinstance(doc, str) and doc.strip():
-
                 entries.append(
-
                     {
-
                         "document": doc,
-
                         "metadata": metadatas[i] if i < len(metadatas) else {},
-
                         "distance": (distances[i] if i < len(distances) else None),
-
                     }
-
                 )
 
         return entries
 
     except (ValueError, RuntimeError, OSError) as exc:
-
         logger.error(f"Chroma query error: {exc}")
 
         return []
 
 
-
-
-
 def list_knowledge(
-
     collection_name: str | None = None,
-
     limit: int | None = None,
-
 ) -> list[dict[str, Any]]:
-
     """Return all knowledgeB entries in the collection.
 
 
@@ -1542,16 +1064,10 @@ def list_knowledge(
     collection = get_collection(collection_name)
 
     if collection is None:
-
         return []
 
-
-
     try:
-
         result = collection.get(limit=limit, include=["documents", "metadatas"])
-
-
 
         ids = result.get("ids", []) or []
 
@@ -1559,48 +1075,30 @@ def list_knowledge(
 
         metadatas = result.get("metadatas", []) or []
 
-
-
         entries: list[dict[str, Any]] = []
 
         for i, doc_id in enumerate(ids):
-
             entries.append(
-
                 {
-
                     "id": doc_id,
-
                     "document": docs[i] if i < len(docs) else "",
-
                     "metadata": metadatas[i] if i < len(metadatas) else {},
-
                 }
-
             )
 
         return entries
 
     except (ValueError, RuntimeError, OSError) as exc:
-
         logger.error(f"Chroma list_knowledge error: {exc}")
 
         return []
 
 
-
-
-
 def get_knowledge_by_persona(
-
     persona: str,
-
     limit: int = 50,
-
     collection_name: str | None = None,
-
 ) -> list[dict[str, Any]]:
-
     """
 
     Retrieves all knowledge entries for a specific persona.
@@ -1626,32 +1124,18 @@ def get_knowledge_by_persona(
     collection = get_collection(collection_name)
 
     if collection is None:
-
         return []
 
-
-
     try:
-
         result = collection.get(
-
             where={"persona": persona},
-
             # ChromaDB .get() uses 'limit' in some versions, but the Protocol
-
             # definition in this file doesn't specify it. For consistency
-
             # with the collection.get() call on line 782, we use a slice
-
             # or ensure the Protocol matches.
-
             limit=limit,
-
             include=["documents", "metadatas"],
-
         )
-
-
 
         ids = result.get("ids", []) or []
 
@@ -1659,31 +1143,20 @@ def get_knowledge_by_persona(
 
         metadatas = result.get("metadatas", []) or []
 
-
-
         entries = []
 
         for i, doc_id in enumerate(ids):
-
             entries.append(
-
                 {
-
                     "id": doc_id,
-
                     "document": docs[i] if i < len(docs) else "",
-
                     "metadata": metadatas[i] if i < len(metadatas) else {},
-
                 }
-
             )
 
         return entries
 
     except (ValueError, RuntimeError, OSError) as exc:
-
         logger.error(f"Chroma get by persona error: {exc}")
 
         return []
-

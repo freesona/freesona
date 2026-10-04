@@ -3,7 +3,6 @@
 # utils/views/__init__.py
 
 
-
 from .config_views import (
     ConfigCategorySelect,
     ConfigKeySelect,
@@ -16,22 +15,12 @@ from .config_views import (
 )
 
 __all__ = [
-
     "ConfigCategorySelect",
-
     "ConfigKeySelect",
-
     "ConfigKeySelectForMode",
-
     "ConfigKeySelectView",
-
     "ConfigModal",
-
     "ConfigPanelView",
-
     "ConfigResetConfirmView",
-
     "ConfigSelectView",
-
 ]
-
