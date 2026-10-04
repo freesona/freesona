@@ -5,30 +5,21 @@
 import asyncio
 import json
 import logging
+import os
 import secrets
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request, Response
 
-from utils.config import (
-    configuration_summary,
-    load_config,
-    save_config,
-    update_config_value,
-)
-from utils.knowledge_base import KnowledgeBaseService
-from utils.modules import (
-    OPTIONAL_MODULES,
-    load_enabled_modules,
-    normalized_module_name,
-    save_module_state,
-)
+from utils.chroma import _validate_metadata, add_knowledge
+from utils.config import load_config
 
 logger = logging.getLogger("FreesonaBot")
 
+
 _mvsep_jobs: dict[str, asyncio.Future] = {}
+
 
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
@@ -47,27 +38,81 @@ async def lifespan(fastapi_app: FastAPI):
 
     _mvsep_jobs.clear()
 
+
 app = FastAPI(lifespan=lifespan)
 
-def _admin_token() -> str:
-    """Return the configured dashboard token without exposing it in responses."""
-    return str(load_config().get("admin_api_token", ""))
+
+def _admin_token() -> str | None:
+    """Return the configured token for administrative HTTP endpoints."""
+    token = os.getenv("ADMIN_API_TOKEN", "").strip()
+    return token or None
+
 
 def _require_admin(authorization: str | None) -> None:
-    """Require a configured bearer token for administrative endpoints."""
-    token = _admin_token()
-    scheme, _, supplied = (
-        authorization.partition(" ") if authorization else ("", "", "")
+    """Require a valid Bearer token for administrative endpoints."""
+    configured_token = _admin_token()
+    supplied_token = ""
+    if authorization and authorization.startswith("Bearer "):
+        supplied_token = authorization.removeprefix("Bearer ").strip()
+
+    if not configured_token or not secrets.compare_digest(
+        supplied_token, configured_token
+    ):
+        raise HTTPException(
+            status_code=401, detail="Invalid administrative credentials"
+        )
+
+
+@app.get("/admin/status")
+async def admin_status(authorization: str | None = None) -> dict[str, Any]:
+    """Return non-sensitive application configuration for administrators."""
+    _require_admin(authorization)
+    config = load_config()
+    return {
+        "status": "ok",
+        "provider": config.get("provider"),
+        "provider_model": config.get("provider_model"),
+        "admin_api_token_configured": _admin_token() is not None,
+    }
+
+
+@app.post("/admin/knowledge")
+async def admin_knowledge(
+    payload: dict[str, Any], authorization: str | None = None
+) -> dict[str, str]:
+    """Add a validated knowledge entry through the administrative API."""
+    _require_admin(authorization)
+
+    document = payload.get("document")
+    metadata = payload.get("metadata")
+    if not isinstance(document, str) or not document.strip():
+        raise HTTPException(
+            status_code=422, detail="document must be a non-empty string"
+        )
+    if not isinstance(metadata, dict):
+        raise HTTPException(status_code=422, detail="metadata is required")
+
+    valid, reason = _validate_metadata(metadata)
+    if not valid:
+        raise HTTPException(status_code=422, detail=reason)
+
+    document_id = add_knowledge(
+        document,
+        source=str(payload.get("source", "admin")),
+        title=payload.get("title"),
+        collection_name=payload.get("collection_name"),
+        metadata=metadata,
     )
-    if scheme.lower() != "bearer":
-        supplied = ""
-    if not token or not secrets.compare_digest(supplied, token):
-        raise HTTPException(status_code=401, detail="Admin authentication required")
+    if not document_id:
+        raise HTTPException(status_code=503, detail="Knowledge base is unavailable")
+    return {"id": document_id}
+
 
 @app.get("/")
 async def root():
 
     return {"status": "ok"}
+
 
 @app.get("/health")
 @app.get("/health/")
@@ -75,114 +120,16 @@ async def health():
 
     return {"status": "ok"}
 
-@app.get("/admin/status")
-async def admin_status(authorization: str | None = Header(default=None)):
-    """Return a redacted runtime summary for authenticated administrators."""
-    _require_admin(authorization)
-    config = load_config()
-    return {
-        "status": "ok",
-        "provider": config.get("provider"),
-        "provider_model": config.get("provider_model"),
-        "admin_api_token_configured": bool(_admin_token()),
-    }
-
-@app.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(authorization: str | None = Header(default=None)):
-    """Render a minimal authenticated administration landing page."""
-    _require_admin(authorization)
-    return "<html><body><h1>Freesona administration</h1><p>Use the /admin API routes to manage this instance.</p></body></html>"
-
-@app.get("/admin/config")
-async def admin_config(authorization: str | None = Header(default=None)):
-    """Return a redacted configuration summary."""
-    _require_admin(authorization)
-    return configuration_summary()
-
-@app.put("/admin/config/{key}")
-async def admin_update_config(
-    key: str, value: Any, authorization: str | None = Header(default=None)
-):
-    """Validate and persist one non-secret configuration value."""
-    _require_admin(authorization)
-    if any(marker in key.lower() for marker in ("token", "key", "secret", "password")):
-        raise HTTPException(
-            status_code=403,
-            detail="Sensitive configuration cannot be changed through this route",
-        )
-    try:
-        saved = update_config_value(key, value)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"key": key, "value": saved}
-
-@app.get("/admin/modules")
-async def admin_modules(authorization: str | None = Header(default=None)):
-    """Return configured optional module states."""
-    _require_admin(authorization)
-    return load_enabled_modules(load_config())
-
-@app.put("/admin/modules/{name}")
-async def admin_update_module(
-    name: str, enabled: bool, authorization: str | None = Header(default=None)
-):
-    """Persist an optional module state for the next bot reload."""
-    _require_admin(authorization)
-    key = normalized_module_name(name)
-    if key not in OPTIONAL_MODULES:
-        raise HTTPException(status_code=422, detail="Unknown module")
-    config = load_config()
-    save_module_state(config, key, enabled)
-    save_config(config)
-    return {"name": key, "enabled": enabled, "restart_required": True}
-
-def _knowledge_base_service() -> KnowledgeBaseService:
-    """Create the configured structured Knowledge Base service."""
-    return KnowledgeBaseService(
-        str(load_config().get("knowledge_base_database", "knowledge.db"))
-    )
-
-@app.post("/admin/knowledge")
-async def admin_knowledge(
-    payload: dict[str, Any], authorization: str | None = Header(default=None)
-):
-    """Validate and persist one structured Knowledge Base entry."""
-    _require_admin(authorization)
-    service = _knowledge_base_service()
-    await service.initialize()
-    try:
-        entry = await service.ingest(payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"id": entry.id, "persona": entry.persona, "revision": entry.revision}
-
-@app.get("/admin/knowledge")
-async def admin_list_knowledge(authorization: str | None = Header(default=None)):
-    """List structured Knowledge Base records."""
-    _require_admin(authorization)
-    service = _knowledge_base_service()
-    await service.initialize()
-    return [entry.__dict__ for entry in await service.list_entries()]
-
-@app.delete("/admin/knowledge/{entry_id}")
-async def admin_delete_knowledge(
-    entry_id: str, authorization: str | None = Header(default=None)
-):
-    """Delete one structured Knowledge Base record."""
-    _require_admin(authorization)
-    service = _knowledge_base_service()
-    await service.initialize()
-    if not await service.delete_entry(entry_id):
-        raise HTTPException(status_code=404, detail="Knowledge entry not found")
-    return {"id": entry_id, "deleted": True}
 
 def register_mvsep_job(job_hash: str, future: asyncio.Future) -> None:
 
     _mvsep_jobs[job_hash] = future
 
+
 def unregister_mvsep_job(job_hash: str) -> None:
 
     _mvsep_jobs.pop(job_hash, None)
+
 
 def _mvsep_hash(payload: dict[str, Any]) -> str | None:
 
@@ -192,6 +139,7 @@ def _mvsep_hash(payload: dict[str, Any]) -> str | None:
         return data.get("hash") or data.get("job_hash")
 
     return payload.get("hash") or payload.get("job_hash")
+
 
 def _is_valid_mvsep_payload(payload: Any) -> bool:
     """
@@ -210,6 +158,7 @@ def _is_valid_mvsep_payload(payload: Any) -> bool:
         return False
 
     return bool(_mvsep_hash(payload))
+
 
 @app.api_route("/webhooks/mvsep", methods=["GET", "POST"])
 async def mvsep_webhook(request: Request):

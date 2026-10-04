@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
 # cogs/fun/random.py: Fun commands involving randomness — random member,
+
 # coin flip, dice roll, and picking from choices.
+
 
 import secrets
 
 from discord.ext import commands
+
 
 class RandomCog(commands.Cog):
     def __init__(self, bot):
@@ -74,6 +77,7 @@ class RandomCog(commands.Cog):
         selected = secrets.choice(items)
 
         await ctx.send(f"Selected: **{selected}**")
+
 
 async def setup(bot):
 

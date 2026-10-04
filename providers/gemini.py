@@ -9,8 +9,10 @@ try:
 except ImportError:
     genai = None  # type: ignore
 
+
 from providers.base import BaseProvider
 from utils.providers import build_interactions_input, format_user_text
+
 
 class GeminiProvider(BaseProvider):
     def generate_text(
@@ -73,6 +75,7 @@ class GeminiProvider(BaseProvider):
         }
 
         # System instruction is a top-level parameter, not inside
+
         # generation_config
 
         if system_prompt:
@@ -84,6 +87,7 @@ class GeminiProvider(BaseProvider):
         response = client.interactions.create(**interaction_kwargs)
 
         # Return tuple of (output_text, interaction_id) for conversation
+
         # tracking
 
         output_text = getattr(response, "output_text", "") or ""

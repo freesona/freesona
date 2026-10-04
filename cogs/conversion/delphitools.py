@@ -2,6 +2,7 @@
 
 # cogs/conversion/delphitools.py: Delphitools CLI integration for file conversion
 
+
 import asyncio
 import logging
 import tempfile
@@ -16,17 +17,21 @@ from utils.generation import extract_attachments
 
 log = logging.getLogger(__name__)
 
+
 # Configurable values loaded from config.json (settable via /config slash commands)
+
 
 def _get_subprocess_timeout() -> int:
 
     return int(load_config().get("delphitools_subprocess_timeout", 300))
+
 
 def _get_limit_bytes() -> int:
 
     return int(
         load_config().get("delphitools_limit_bytes", 10 * 1024 * 1024)
     )  # 10 MB default
+
 
 async def _run(*cmd: str, timeout: int | None = None) -> int:
     """Run a subprocess and return its exit code. Raises TimeoutError on timeout."""
@@ -50,6 +55,7 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
         raise RuntimeError("Subprocess finished without an exit code.")
 
     return return_code
+
 
 async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]:
     """Run a subprocess, capture stdout, and return (exit_code, stdout_text)."""
@@ -78,6 +84,7 @@ async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]
 
     return return_code, stdout.decode().strip()
 
+
 class Delphitools(commands.Cog):
     LIMIT_BYTES = 10 * 1024 * 1024  # 10 MB Discord upload limit
 
@@ -88,10 +95,15 @@ class Delphitools(commands.Cog):
         self.bot = bot
 
     # ------------------------------------------------------------------
+
     # Internal helpers
+
     # ------------------------------------------------------------------
+
     # ------------------------------------------------------------------
+
     # Commands
+
     # ------------------------------------------------------------------
 
     @commands.hybrid_command(
@@ -986,6 +998,7 @@ class Delphitools(commands.Cog):
                 log.exception("Error in hash command")
 
                 await ctx.send(f"❌ **Hash failed.** {e!s}")
+
 
 async def setup(bot: commands.Bot) -> None:
 

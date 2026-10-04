@@ -188,10 +188,10 @@ Every `ContextBlock` returned by `ContextProvider.build()` **must** populate:
 ```python
 @dataclass
 class ContextBlock:
-    name: str              # Provider identifier (e.g., "persona")
-    priority: int          # Assembly priority (lower = earlier)
-    mutability: Mutability # IMMUTABLE | MUTABLE | PLACEHOLDER
-    content: str           # Rendered text (may be empty)
+    name: str  # Provider identifier (e.g., "persona")
+    priority: int  # Assembly priority (lower = earlier)
+    mutability: Mutability  # IMMUTABLE | MUTABLE | PLACEHOLDER
+    content: str  # Rendered text (may be empty)
 ```
 
 **Consumers** (debug UI, token accounting, selective context) rely on these fields being accurate.
@@ -371,5 +371,7 @@ accessor = DiscordGuildWorldAccessor(bot)
 channels: list[GuildChannelInfo] = await accessor.get_guild_channels(guild_id)
 
 for ch in channels:
-    print(ch.format_for_prompt())  # e.g., "#general (General chat)", "#voice-chat [voice]"
+    print(
+        ch.format_for_prompt()
+    )  # e.g., "#general (General chat)", "#voice-chat [voice]"
 ```

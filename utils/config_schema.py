@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
+
 # utils/config_schema.py: Shared configuration schema definitions
+
 # for config commands.
+
 # Moved from cogs/system/admin.py to be shared across config-related cogs.
+
+
 from utils.config import DEFAULT_CONFIG
 
 # Configuration categories for /config list command
+
 CONFIG_CATEGORIES = {
     "General": [
         "prefix",
         "conversation_response_mode",
         "debounce_seconds",
-        "message_claim_database",
-        "message_claim_lease_seconds",
-        "message_claim_instance_id",
     ],
     "AI Provider": [
         "provider",
@@ -22,7 +25,6 @@ CONFIG_CATEGORIES = {
     "ChromaDB": [
         "chroma_collection",
         "chroma_persist_directory",
-        "knowledge_base_database",
     ],
     "Autonomy": [
         "autonomy_cooldown_seconds",
@@ -60,7 +62,10 @@ CONFIG_CATEGORIES = {
         "log_section_webhook",
     ],
 }
+
+
 # Configuration descriptions for /config show command
+
 CONFIG_DESCRIPTIONS = {
     "prefix": "Command prefix for text commands (default: ~)",
     "conversation_response_mode": (
@@ -79,10 +84,6 @@ CONFIG_DESCRIPTIONS = {
     ),
     "chroma_persist_directory": ("ChromaDB persistence directory (default: ./.chroma)"),
     "debounce_seconds": "Message debounce time in seconds (default: 1.2)",
-    "message_claim_database": "SQLite database shared by message-processing instances (default: memory.db)",
-    "message_claim_lease_seconds": "Message-claim lease duration in seconds (default: 300)",
-    "message_claim_instance_id": "Unique owner identifier for this bot instance (default: hostname and process ID)",
-    "knowledge_base_database": "SQLite database for structured Knowledge Base records (default: knowledge.db)",
     "autonomy_cooldown_seconds": (
         "Cooldown between autonomous actions in seconds (default: 120)"
     ),
@@ -121,21 +122,21 @@ CONFIG_DESCRIPTIONS = {
     "log_section_security": "Log security events (default: true)",
     "log_section_webhook": "Log webhook events (default: false)",
 }
+
+
 # Configuration key order for /config view command (alphabetical within
+
 # categories)
+
 CONFIG_KEY_ORDER = [
     "prefix",
     "conversation_response_mode",
     "debounce_seconds",
-    "message_claim_database",
-    "message_claim_lease_seconds",
-    "message_claim_instance_id",
     "provider",
     "provider_model",
     "model_temperature",
     "chroma_collection",
     "chroma_persist_directory",
-    "knowledge_base_database",
     "autonomy_cooldown_seconds",
     "autonomy_user_cooldown",
     "mvsep_poll_interval",
@@ -162,7 +163,10 @@ CONFIG_KEY_ORDER = [
     "log_section_security",
     "log_section_webhook",
 ]
+
+
 # Model choices for /model set command autocomplete
+
 MODEL_CHOICES = {
     "gemini": [
         "gemini-2.5-pro",
@@ -216,7 +220,10 @@ MODEL_CHOICES = {
         "phi3:14b",
     ],
 }
+
+
 # Provider choices for /provider set command autocomplete
+
 PROVIDER_CHOICES = [
     "gemini",
     "openai",
@@ -231,33 +238,41 @@ PROVIDER_CHOICES = [
 
 def get_model_choices(provider: str) -> list[str]:
     """Get model choices for a specific provider."""
+
     return MODEL_CHOICES.get(provider.lower(), [])
 
 
 def get_provider_choices() -> list[str]:
     """Get list of available provider choices."""
+
     return PROVIDER_CHOICES
 
 
 def get_config_default(key: str):
     """Get default value for a config key from DEFAULT_CONFIG."""
+
     return DEFAULT_CONFIG.get(key)
 
 
 def is_valid_config_key(key: str) -> bool:
     """Check if a config key is valid
+
     (exists in DEFAULT_CONFIG or CONFIG_DESCRIPTIONS)."""
+
     return key in DEFAULT_CONFIG or key in CONFIG_DESCRIPTIONS
 
 
 def get_config_category(key: str) -> str | None:
     """Get the category name for a config key."""
+
     for category, keys in CONFIG_CATEGORIES.items():
         if key in keys:
             return category
+
     return None
 
 
 def get_config_description(key: str) -> str:
     """Get description for a config key."""
+
     return CONFIG_DESCRIPTIONS.get(key, "No description available.")

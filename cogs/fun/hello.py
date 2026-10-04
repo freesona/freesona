@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
 # cogs/fun/hello.py: Simple response and sample logic for future commands.
+
 # This cog provides a template for implementing basic Discord commands.
 
+
 from discord.ext import commands
+
 
 class HelloCog(commands.Cog):
     def __init__(self, bot):
@@ -14,6 +17,7 @@ class HelloCog(commands.Cog):
     async def hello_cmd(self, ctx):
 
         await ctx.send(f"Hello {ctx.author.mention}!")
+
 
 async def setup(bot) -> None:
 

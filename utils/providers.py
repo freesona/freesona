@@ -135,10 +135,6 @@ def _upload_to_file_api(
 
     from google.genai import types
 
-    types.File(
-        display_name=display_name,
-        mime_type=mime_type,
-    )
     # Create file with content
     uploaded = client.files.upload(
         file=io.BytesIO(file_bytes),

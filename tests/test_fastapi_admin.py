@@ -10,7 +10,7 @@ import fastapi_server
 
 def test_admin_requires_bearer_scheme_and_valid_token():
     """Reject absent, raw, and invalid administrative credentials."""
-    with patch("fastapi_server._admin_token", return_value="secret"):
+    with patch.object(fastapi_server, "_admin_token", return_value="secret"):
         for authorization in (None, "secret", "Bearer wrong"):
             with pytest.raises(HTTPException) as error:
                 fastapi_server._require_admin(authorization)

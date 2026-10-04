@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # tests/test_canon.py: Tests for the Canon Framework
+import os
 import sys
+import tempfile
+import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import os
-import tempfile
-import unittest
-
 from utils.canon import (
     COMPONENT_ASSEMBLY_ORDER,
     COMPONENT_LABELS,

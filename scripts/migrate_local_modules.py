@@ -26,6 +26,7 @@ KNOWN_BUILTIN_MODULES = {
     "core": "cogs.system.system",
 }
 
+
 def migrate(file_path):
 
     if not os.path.exists(file_path):
@@ -79,6 +80,7 @@ def migrate(file_path):
     print("Successfully created modules.local.json.")
 
     print("Please verify the file content.")
+
 
 if __name__ == "__main__":
     file_path = "utils/modules.py"

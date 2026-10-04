@@ -24,6 +24,13 @@ logger = logging.getLogger("FreesonaBot")
 POLL_INTERVAL_MINUTES = 5
 RSS_CHANNELS_KEY = "rss_channels"  # Dict of {guild_id: channel_id}
 USER_AGENT = {"User-Agent": "FreesonaBot/1.0"}
+
+
+def _timeout(seconds: float) -> aiohttp.ClientTimeout:
+    """Build a total-request timeout (single place for the type-checker ignore)."""
+    return aiohttp.ClientTimeout(total=seconds)  # pyright: ignore[reportCallIssue]
+
+
 # Embed palette
 COLOR_NEWS = discord.Color.from_rgb(88, 101, 242)
 COLOR_OK = discord.Color.from_rgb(87, 242, 135)
@@ -60,6 +67,26 @@ async def feed_autocomplete(
     return choices[:25]
 
 
+def _batch_embeds(
+    embeds: list[discord.Embed], max_chars: int = 5500, max_count: int = 10
+) -> list[list[discord.Embed]]:
+    """Split embeds into messages that respect Discord's per-message limits
+    (10 embeds and 6000 total characters)."""
+    batches: list[list[discord.Embed]] = []
+    current: list[discord.Embed] = []
+    size = 0
+    for embed in embeds:
+        length = len(embed)
+        if current and (len(current) >= max_count or size + length > max_chars):
+            batches.append(current)
+            current, size = [], 0
+        current.append(embed)
+        size += length
+    if current:
+        batches.append(current)
+    return batches
+
+
 def _resolve_link(item, feed_url: str) -> None:
     """Resolve a relative item link against the feed's URL (in place)."""
     if item.link and not urlparse(item.link).netloc:
@@ -69,10 +96,10 @@ def _resolve_link(item, feed_url: str) -> None:
 class NewsCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.poll_feeds.start()
+        self.poll_feeds.start()  # pyright: ignore[reportAttributeAccessIssue]
 
     async def cog_unload(self):
-        self.poll_feeds.cancel()
+        self.poll_feeds.cancel()  # pyright: ignore[reportAttributeAccessIssue]
 
     # ------------------------------------------------------------------
     # Helpers
@@ -128,9 +155,7 @@ class NewsCog(commands.Cog):
         feeds = load_rss_feeds(config)
         seen = load_seen_links(config)
         new_links: list[str] = []
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=15)
-        ) as session:
+        async with aiohttp.ClientSession(timeout=_timeout(15)) as session:
             for name, url in feeds.items():
                 try:
                     async with session.get(url, headers=USER_AGENT) as resp:
@@ -185,7 +210,7 @@ class NewsCog(commands.Cog):
             mark_links_seen(new_links)
             logger.info("RSS: posted %s new article(s)", len(new_links))
 
-    @poll_feeds.before_loop
+    @poll_feeds.before_loop  # pyright: ignore[reportFunctionMemberAccess]
     async def before_poll(self):
         await self.bot.wait_until_ready()
 
@@ -300,9 +325,7 @@ class NewsCog(commands.Cog):
         await ctx.defer(ephemeral=False)
         try:
             async with (
-                aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(total=12)
-                ) as session,
+                aiohttp.ClientSession(timeout=_timeout(12)) as session,
                 session.get(url, headers=USER_AGENT) as resp,
             ):
                 if resp.status >= 400:
@@ -328,7 +351,8 @@ class NewsCog(commands.Cog):
             )
             return
         embeds = [self._build_news_embed(item, key) for item in items]
-        await ctx.send(embeds=embeds)
+        for batch in _batch_embeds(embeds):
+            await ctx.send(embeds=batch)
 
     @rss_group.command(name="add", help="Add or update an RSS feed (Admin only).")
     @commands.has_permissions(administrator=True)

@@ -8,17 +8,32 @@ from discord import app_commands, ui
 from discord.ext import commands
 
 from utils.chroma import (
+    VALID_CANON_LEVELS,
+    add_knowledge,
+    delete_knowledge,
     extract_text_from_bytes,
+    get_knowledge_by_persona,
+    list_knowledge,
     query_knowledge,
 )
-from utils.config import load_config
-from utils.knowledge_base import (
-    VALID_CANON_LEVELS,
-    VALID_ENTRY_TYPES,
-    VALID_SOURCE_TYPES,
-    KnowledgeBaseService,
-    validate_entry,
-)
+
+VALID_SOURCE_TYPES = {
+    "anime",
+    "novel",
+    "manga",
+    "game",
+    "guidebook",
+    "interview",
+    "website",
+    "other",
+}
+VALID_ENTRY_TYPES = {
+    "dialogue",
+    "narration",
+    "event",
+    "relationship",
+    "description",
+}
 
 
 class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
@@ -181,22 +196,22 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
             metadata["tags"] = [
                 t.strip() for t in self.tags.value.split(",") if t.strip()
             ]
-        try:
-            entry_data = {**metadata, "content": self.document}
-            validate_entry(entry_data)
-        except ValueError as exc:
+        # Add to knowledge base
+        doc_id = await asyncio.to_thread(
+            add_knowledge,
+            self.document,
+            source="discord",
+            title=self.document_title.strip() if self.document_title else None,
+            metadata=metadata,
+        )
+        if not doc_id:
             await interaction.followup.send(
-                f"Invalid knowledge entry: {exc}", ephemeral=True
+                "ChromaDB is not available or could not initialize the collection.",
+                ephemeral=True,
             )
             return
-        config = load_config()
-        service = KnowledgeBaseService(
-            str(config.get("knowledge_base_database", "knowledge.db"))
-        )
-        await service.initialize()
-        entry = await service.ingest(entry_data)
         await interaction.followup.send(
-            f"Added knowledge entry with ID `{entry.id}` "
+            f"Added knowledge entry with ID `{doc_id}` "
             f"for persona `{metadata['persona']}`.",
             ephemeral=True,
         )
@@ -205,27 +220,6 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
 class ChromaCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-    async def _knowledge_entries(self, persona: str | None, limit: int) -> list[dict]:
-        """Return structured records in the legacy command display shape."""
-        service = KnowledgeBaseService(
-            str(load_config().get("knowledge_base_database", "knowledge.db"))
-        )
-        await service.initialize()
-        entries = await service.list_entries(persona)
-        return [
-            {
-                "id": entry.id,
-                "document": entry.content,
-                "metadata": {
-                    "persona": entry.persona,
-                    "source": entry.source,
-                    "entry_type": entry.entry_type,
-                    **(entry.metadata or {}),
-                },
-            }
-            for entry in entries[:limit]
-        ]
 
     @commands.hybrid_command(name="kbsearch", help="Search the local knowledge base.")
     @app_commands.describe(
@@ -357,7 +351,13 @@ class ChromaCog(commands.Cog):
         limit: int = 15,
     ):
         await ctx.defer(ephemeral=True)
-        entries = await self._knowledge_entries(persona, limit)
+        if persona:
+            # Run disk lookup off-thread
+            entries = await asyncio.to_thread(
+                get_knowledge_by_persona, persona, limit=limit
+            )
+        else:
+            entries = await asyncio.to_thread(list_knowledge, limit=limit)
         if not entries:
             await ctx.send("No knowledge base entries found.", ephemeral=True)
             return
@@ -392,11 +392,7 @@ class ChromaCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def kbdelete(self, ctx: commands.Context, entry_id: str):
         await ctx.defer(ephemeral=True)
-        service = KnowledgeBaseService(
-            str(load_config().get("knowledge_base_database", "knowledge.db"))
-        )
-        await service.initialize()
-        success = await service.delete_entry(entry_id)
+        success = await asyncio.to_thread(delete_knowledge, entry_id)
         if success:
             await ctx.send(f"Deleted knowledge entry `{entry_id}`.", ephemeral=True)
             return
@@ -413,7 +409,9 @@ class ChromaCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def kbpersona(self, ctx: commands.Context, persona: str, limit: int = 50):
         await ctx.defer(ephemeral=True)
-        entries = await self._knowledge_entries(persona, limit)
+        entries = await asyncio.to_thread(
+            get_knowledge_by_persona, persona, limit=limit
+        )
         if not entries:
             await ctx.send(
                 f"No knowledge base entries found for persona `{persona}`.",

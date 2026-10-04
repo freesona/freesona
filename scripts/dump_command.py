@@ -2,33 +2,28 @@
 
 # scripts/dump_command.py: Python module.
 
+import asyncio
+import logging
 import sys
+import warnings
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
+
+# Third‑party imports
+import discord
+from discord.ext import commands
+import yaml
 
 # Ensure project root is in sys.path for local imports
-
 ROOT = Path(__file__).resolve().parents[1]
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Standard library imports
-
-import asyncio
-import logging
-import warnings
-from collections.abc import Iterable
-from typing import Any
-
-# Third‑party imports
-import discord
-import yaml
-from discord.ext import commands
-
-from utils.config import load_config
-
 # Local imports (after sys.path adjustment)
-from utils.modules import (
+from utils.config import load_config  # noqa: E402
+from utils.modules import (  # noqa: E402
     CORE_EXTENSIONS,
     OPTIONAL_MODULES,
     load_enabled_modules,
@@ -52,21 +47,25 @@ logging.getLogger("discord.http").setLevel(logging.ERROR)
 
 logging.getLogger("asyncio").setLevel(logging.ERROR)
 
+
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="asyncio")
 
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="asyncio")
 
 warnings.filterwarnings("ignore", module="discord")
 
+
 ROOT = Path(__file__).resolve().parents[1]
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+
 class PreviewBot(commands.Bot):
     async def setup_hook(self):
 
         pass
+
 
 def get_params(command: Any) -> list[dict]:
     """Extracts parameter details from both Prefix and Slash commands."""
@@ -104,6 +103,7 @@ def get_params(command: Any) -> list[dict]:
             )
 
     return params
+
 
 def process_commands(cmds: Iterable[Any], is_tree: bool = False) -> list[dict]:
     """Recursively processes commands and subcommands."""
@@ -146,6 +146,7 @@ def process_commands(cmds: Iterable[Any], is_tree: bool = False) -> list[dict]:
         extracted.append(entry)
 
     return extracted
+
 
 async def main() -> None:
 
@@ -200,6 +201,7 @@ async def main() -> None:
     print(yaml.dump(report, sort_keys=False, allow_unicode=True, indent=2))
 
     await bot.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

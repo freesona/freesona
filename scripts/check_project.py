@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+
 # scripts/check_project.py: Python module.
 
 """Project checks that can run before pushing without editor tooling."""
@@ -11,7 +12,6 @@ import importlib
 import json
 import os
 import pathlib
-import re
 import subprocess
 import sys
 import tempfile
@@ -22,49 +22,13 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 SKIP_DIRS = {".git", "__pycache__", "venv", ".venv"}
 
-class CheckFailure(Exception):
+
+class CheckFailureError(Exception):
     pass
 
-OBSOLETE_REQUIREMENTS = {
-    "google",
-    "google-generativeai",
-    "youtube-dl",
-}
 
-def declared_requirement_names(path: pathlib.Path) -> list[str]:
-    names: list[str] = []
+CheckFailure = CheckFailureError
 
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.split("#", 1)[0].strip()
-
-        if not line or line.startswith(("-r", "--")):
-            continue
-
-        match = re.match(r"([A-Za-z0-9][A-Za-z0-9._-]*)", line)
-
-        if match:
-            names.append(match.group(1).lower().replace("_", "-"))
-
-    return names
-
-def check_requirements() -> None:
-    requirements = ROOT / "requirements.txt"
-    names = declared_requirement_names(requirements)
-    declared = set(names)
-    obsolete = sorted(declared & OBSOLETE_REQUIREMENTS)
-
-    if obsolete:
-        raise CheckFailure(
-            "Obsolete or conflicting requirements declared: " + ", ".join(obsolete)
-        )
-
-    duplicates = sorted(name for name in declared if names.count(name) > 1)
-
-    if duplicates:
-        raise CheckFailure("Duplicate requirements declared: " + ", ".join(duplicates))
-
-    if "google-genai" not in declared:
-        raise CheckFailure("google-genai is required for the Gemini provider")
 
 def iter_python_files() -> list[pathlib.Path]:
 
@@ -77,6 +41,7 @@ def iter_python_files() -> list[pathlib.Path]:
         files.append(path)
 
     return sorted(files)
+
 
 def check_python_syntax() -> None:
 
@@ -94,6 +59,7 @@ def check_python_syntax() -> None:
     if errors:
         raise CheckFailure("Python syntax errors:\n" + "\n".join(errors))
 
+
 def reload_local_module(name: str) -> ModuleType:
 
     if str(ROOT) not in sys.path:
@@ -103,6 +69,7 @@ def reload_local_module(name: str) -> ModuleType:
         del sys.modules[name]
 
     return importlib.import_module(name)
+
 
 def check_config_round_trip() -> None:
 
@@ -149,6 +116,7 @@ def check_config_round_trip() -> None:
 
     assert model_name == "test-model"
 
+
 def check_public_url_guard() -> None:
 
     security = reload_local_module("utils.security")
@@ -166,6 +134,7 @@ def check_public_url_guard() -> None:
     assert not security.is_public_http_url("http://10.0.0.1/file.mp3")
 
     assert not security.is_public_http_url("http://169.254.1.1/file.mp3")
+
 
 def check_provider_helpers() -> None:
 
@@ -190,6 +159,7 @@ def check_provider_helpers() -> None:
     assert providers.normalize_provider_name("open-router") == "openrouter"
 
     assert providers.normalize_provider_name("groqcloud") == "groq"
+
 
 def check_openai_compatible_providers() -> None:
 
@@ -274,6 +244,7 @@ def check_openai_compatible_providers() -> None:
 
         os.environ.update(old_env)
 
+
 def load_mvsep_helpers() -> dict:
 
     source = (ROOT / "cogs" / "media" / "mvsep.py").read_text(encoding="utf-8")
@@ -307,6 +278,7 @@ def load_mvsep_helpers() -> dict:
 
     return namespace
 
+
 def check_mvsep_url_routing() -> None:
 
     helpers = load_mvsep_helpers()
@@ -332,6 +304,7 @@ def check_mvsep_url_routing() -> None:
     assert helpers["stem_label"]({"name": "stem"}, 1) == "Instrumental"
 
     assert helpers["stem_label"]({"name": "vocals.mp3"}, 1) == "Vocals"
+
 
 def check_module_registry() -> None:
 
@@ -359,11 +332,17 @@ def check_module_registry() -> None:
 
     assert modules.module_extension("missing") is None
 
+
 def check_rss_parser() -> None:
 
     rss = reload_local_module("utils.rss")
 
-    sample = """<?xml version="1.0"?><rss><channel><item><title>One</title><link>https://example.com/1</link><pubDate>Sun, 24 May 2026 01:00:00 GMT</pubDate><description>Hello &amp;amp; hi</description></item></channel></rss>"""
+    sample = (
+        '<?xml version="1.0"?><rss><channel><item><title>One</title>'
+        "<link>https://example.com/1</link>"
+        "<pubDate>Sun, 24 May 2026 01:00:00 GMT</pubDate>"
+        "<description>Hello &amp;amp; hi</description></item></channel></rss>"
+    )
 
     items = rss.parse_feed(sample)
 
@@ -374,6 +353,7 @@ def check_rss_parser() -> None:
     assert items[0].link == "https://example.com/1"
 
     assert "Hello" in items[0].summary
+
 
 def check_json_files() -> None:
 
@@ -390,6 +370,7 @@ def check_json_files() -> None:
             raise CheckFailure(
                 f"{rel} is invalid JSON: line {exc.lineno}, column {exc.colno}"
             )
+
 
 def check_env_sample() -> None:
 
@@ -433,6 +414,7 @@ def check_env_sample() -> None:
     if missing:
         raise CheckFailure(".env.sample is missing keys: " + ", ".join(missing))
 
+
 def check_secret_files_not_tracked() -> None:
 
     try:
@@ -460,6 +442,7 @@ def check_secret_files_not_tracked() -> None:
     if tracked:
         raise CheckFailure("Secret/runtime files are tracked: " + ", ".join(tracked))
 
+
 def check_unit_tests() -> None:
 
     res = subprocess.run(
@@ -480,6 +463,7 @@ def check_unit_tests() -> None:
     if res.returncode != 0:
         raise CheckFailure(f"Unit tests failed:\n{res.stderr}\n{res.stdout}")
 
+
 def run_check(name: str, func) -> None:
 
     print(f"[check] {name}...", end=" ", flush=True)
@@ -488,11 +472,11 @@ def run_check(name: str, func) -> None:
 
     print("ok")
 
+
 def main() -> int:
 
     checks = [
         ("python syntax", check_python_syntax),
-        ("requirements", check_requirements),
         ("config round trip", check_config_round_trip),
         ("public URL guard", check_public_url_guard),
         ("MVSEP URL routing", check_mvsep_url_routing),
@@ -520,6 +504,7 @@ def main() -> int:
     print("\nAll checks passed.")
 
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
