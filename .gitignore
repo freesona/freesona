@@ -110,3 +110,6 @@ test_*.txt
 .serena/project.yml
 .junie/demo.md
 .junie/vms/template-vm/Dockerfile
+.junie/skills/mintlify/SKILL.md
+.agents/skills/mintlify/SKILL.md
+skills-lock.json

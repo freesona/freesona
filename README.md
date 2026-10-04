@@ -251,7 +251,6 @@ The bot owner can switch providers and models without restarting, sync global sl
 /provider reset
 /sync
 /reboot
-/dumpconfig
 /docs
 ```
 

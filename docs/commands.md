@@ -14,9 +14,9 @@ AI commands are organized by command type in dedicated AI cog modules (`genai_ge
 | `~ask <question>` (`/ask`, alias `~a`)                    | Conversational response using active persona                                                  | Anyone        |
 | `~search <query>` (`/search`, alias `~s`)                 | Web search with AI summary                                                                    | Anyone        |
 | `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP                                                       | Anyone        |
-| `/kbsearch <query>`                                       | Search the local ChromaDB knowledge base                                                      | Administrator |
+| `/kbsearch <query> [persona] [limit]`                     | Search the local ChromaDB knowledge base                                                      | Administrator |
 | `/kbadd <title> [content] [attachment]`                   | Add text or a PDF/EPUB/TXT/JSON attachment to the local knowledge base (opens metadata modal) | Administrator |
-| `/kblist`                                                 | List the newest knowledge base entries                                                        | Administrator |
+| `/kblist [persona] [limit]`                               | List the newest knowledge base entries                                                        | Administrator |
 | `/kbdelete <id>`                                          | Delete a knowledge base entry by ID                                                           | Administrator |
 | `/kbpersona <persona> [limit]`                            | List all knowledge entries for a specific persona                                             | Administrator |
 
@@ -148,13 +148,11 @@ Commands are organized by granular system cogs (`cogs/system/*.py`). All are own
 
 ### Core System Commands (`cogs/system/core.py`)
 
-| Command                                               | Action                                                                                     | Permissions |
-| :---------------------------------------------------- | :----------------------------------------------------------------------------------------- | :---------- |
-| `/sync`                                               | Sync global slash commands                                                                 | Bot Owner   |
-| `/reboot`                                             | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart. | Bot Owner   |
-| `/dumpconfig`                                         | Dump current `config.json` contents                                                        | Bot Owner   |
-| `/docs`                                               | Open the Freesona documentation website                                                    | Anyone      |
-| `/personareload` (`~personareload`, alias `~preload`) | Reload persona from JSON file without rebooting                                            | Bot Owner   |
+| Command             | Action                                                                                     | Permissions |
+| :------------------ | :----------------------------------------------------------------------------------------- | :---------- |
+| `/sync`             | Sync global slash commands                                                                 | Bot Owner   |
+| `/reboot`           | Gracefully shutdown the bot for restart (Owner only). Requires process manager to restart. | Bot Owner   |
+| `/docs`             | Open the Freesona documentation website                                                    | Anyone      |
 
 ### Configuration Management (`cogs/system/config.py`)
 
