@@ -4,12 +4,15 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 from dataclasses import asdict, dataclass
 from typing import Any
 
 import aiosqlite
 
 from utils.chroma import add_knowledge
+
+logger = logging.getLogger("FreesonaBot")
 
 VALID_ENTRY_TYPES = frozenset(
     {"dialogue", "narration", "event", "relationship", "description"}
@@ -144,6 +147,7 @@ class KnowledgeBaseService:
         }
         metadata["topics"] = list(entry.topics)
         metadata.update(entry.metadata or {})
+        metadata["structured_id"] = entry_id
         try:
             indexed_id = await asyncio.to_thread(
                 self.indexer, document, source=entry.source, metadata=metadata
@@ -158,13 +162,71 @@ class KnowledgeBaseService:
                 )
                 await db.commit()
         return entry
+
+    async def retry_pending_indexing(self) -> int:
+        """Retry Chroma indexing for records persisted without an index."""
+        async with aiosqlite.connect(self.database_path) as db:
+            cursor = await db.execute(
+                "SELECT id, payload FROM knowledge_entries WHERE indexed_id IS NULL "
+                "ORDER BY created_at DESC, rowid DESC"
+            )
+            rows = await cursor.fetchall()
+        indexed = 0
+        for entry_id, payload in rows:
+            normalized = validate_entry(json.loads(payload))
+            entry_values = {key: normalized[key] for key in ENTRY_FIELDS}
+            entry = KnowledgeEntry(
+                id=entry_id,
+                metadata={
+                    key: value
+                    for key, value in normalized.items()
+                    if key not in ENTRY_FIELDS
+                }
+                or None,
+                **entry_values,
+            )
+            metadata = {
+                key: value
+                for key, value in asdict(entry).items()
+                if key not in {"id", "content", "metadata"}
+            }
+            metadata["topics"] = list(entry.topics)
+            metadata.update(entry.metadata or {})
+            metadata["structured_id"] = entry_id
+            try:
+                indexed_id = await asyncio.to_thread(
+                    self.indexer,
+                    f"[{entry.entry_type}] {entry.content}",
+                    source=entry.source,
+                    metadata=metadata,
+                )
+            except (OSError, RuntimeError, ValueError):
+                indexed_id = ""
+            if indexed_id:
+                async with aiosqlite.connect(self.database_path) as db:
+                    await db.execute(
+                        "UPDATE knowledge_entries SET indexed_id = ? WHERE id = ?",
+                        (indexed_id, entry_id),
+                    )
+                    await db.commit()
+                indexed += 1
+        return indexed
+
+    async def indexed_id(self, entry_id: str) -> str | None:
+        """Return the durable Chroma ID for a structured record, if indexed."""
+        async with aiosqlite.connect(self.database_path) as db:
+            cursor = await db.execute(
+                "SELECT indexed_id FROM knowledge_entries WHERE id = ?", (entry_id,)
+            )
+            row = await cursor.fetchone()
+        return row[0] if row else None
     async def list_entries(self, persona: str | None = None) -> list[KnowledgeEntry]:
         """Return persisted entries, optionally limited to one persona."""
         async with aiosqlite.connect(self.database_path) as db:
-            query = "SELECT payload FROM knowledge_entries"
+            query = "SELECT payload FROM knowledge_entries ORDER BY created_at DESC, rowid DESC"
             args: tuple[str, ...] = ()
             if persona:
-                query += " WHERE persona = ?"
+                query = "SELECT payload FROM knowledge_entries WHERE persona = ? ORDER BY created_at DESC, rowid DESC"
                 args = (persona,)
             cursor = await db.execute(query, args)
             rows = await cursor.fetchall()
@@ -194,13 +256,18 @@ class KnowledgeBaseService:
             row = await cursor.fetchone()
             if row is None:
                 return False
+        indexed_id = row[0]
+        async with aiosqlite.connect(self.database_path) as db:
             await db.execute("DELETE FROM knowledge_entries WHERE id = ?", (entry_id,))
             await db.commit()
-        indexed_id = row[0]
         if indexed_id:
-            from utils.chroma import delete_knowledge
             try:
-                await asyncio.to_thread(delete_knowledge, indexed_id)
-            except (OSError, RuntimeError, ValueError):
-                pass
+                from utils.chroma import delete_knowledge
+
+                deleted = await asyncio.to_thread(delete_knowledge, indexed_id)
+            except Exception:
+                logger.exception("Failed to delete Chroma index entry %s", indexed_id)
+            else:
+                if not deleted:
+                    logger.error("Failed to delete Chroma index entry %s", indexed_id)
         return True

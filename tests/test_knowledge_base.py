@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from utils.knowledge_base import (
     KnowledgeBaseService,
@@ -69,3 +70,14 @@ class TestKnowledgeBase(unittest.IsolatedAsyncioTestCase):
         stored = await self.service.list_entries()
         self.assertEqual(stored, [ingested])
         self.assertEqual(ingested.metadata, {"scene": "Cafe", "tags": ["important"]})
+
+    async def test_delete_removes_sqlite_record_when_chroma_delete_fails(self):
+        ingested = await self.service.ingest(entry())
+
+        with patch(
+            "utils.chroma.delete_knowledge", side_effect=RuntimeError("offline")
+        ):
+            deleted = await self.service.delete_entry(ingested.id)
+
+        self.assertTrue(deleted)
+        self.assertEqual(await self.service.list_entries(), [])
