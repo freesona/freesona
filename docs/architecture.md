@@ -33,7 +33,7 @@ Freesona/
 │   │   └── delphitools.py    # File conversion and utility commands via delphitools
 │   ├── system/
 │   │   ├── system.py         # Aggregate system extension loader (registers split system cogs)
-│   │   ├── core.py           # Core commands: /sync, /reboot, /dumpconfig
+│   │   ├── core.py           # Core commands: /sync, /reboot, /docs
 │   │   ├── config.py         # Configuration management: /config
 │   │   ├── logging.py        # Logging configuration: /logging
 │   │   ├── module.py         # Module management: /module
