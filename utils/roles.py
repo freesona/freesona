@@ -1,5 +1,7 @@
+#!/usr/bin/env python3
 # utils/roles.py: Python module.
 import discord
+
 
 def resolve_message_role(message: discord.Message, bot_user_id: int) -> str:
     """
@@ -11,11 +13,8 @@ def resolve_message_role(message: discord.Message, bot_user_id: int) -> str:
     """
     if message.author.id == bot_user_id:
         return "model"
-
     if message.webhook_id is not None:
         return "webhook"
-
     if message.author.bot:
         return "bot"
-
     return "user"

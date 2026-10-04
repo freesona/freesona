@@ -1,7 +1,9 @@
 # Architectural Audit Report — Freesona v1
 
-**Date:** 2026-07-17  
-**Scope:** Full codebase audit against `docs/architecture.md` and `AGENTS.md` principles  
+This document follows ASD-STE100 Simplified Technical English.
+
+**Date:** 2026-07-17
+**Scope:** Full codebase audit against `docs/architecture.md` and `AGENTS.md` principles
 **Status:** Baseline — no code changes made
 
 ---
@@ -307,6 +309,7 @@ The codebase is functional and well-structured for its current scope, but severa
 ### A. Prompt Assembly Is Implicit (Highest Priority)
 
 **Current state** (`generation.py:394–402`):
+
 ```python
 persona = current_persona if apply_persona else ""
 if apply_persona and guild_id and user_id:
@@ -318,6 +321,7 @@ if kb_context:
 ```
 
 **Problems:**
+
 - Ordering hardcoded: System → Persona → Memory → KB
 - No way to inspect individual blocks before assembly
 - No way to add/remove/reorder context providers without editing `generate()`
@@ -331,12 +335,7 @@ if kb_context:
 
 | Location                | Issue                                                                                 |
 |-------------------------|---------------------------------------------------------------------------------------|
-| `generation.py:412`     | `if provider_name != "gemini"` branch                                                 |
-| `generation.py:417–429` | Gemini Interactions API with `previous_interaction_id`                                |
-| `providers.py:128–140`  | Gemini uses `genai.Client` + `system_instruction` config; others use chat completions |
-| `providers.py:179–188`  | NIM model-specific `extra_payload`                                                    |
-| `search.py`             | Only Gemini Grounding API                                                             |
-| `memory.py:139–146`     | Fact extraction uses Gemini Interactions API directly                                 |
+| `generation.py` | Provider‑specific continuity logic removed; no Gemini‑only branches remain |
 
 **Required:** `Provider` protocol with `generate()`, `generate_stream()`, `supports_continuity()`, `supports_multimodal()`.
 
@@ -362,6 +361,7 @@ if kb_context:
 ### D. Config Hot-Path Re-reads
 
 `utils.config.load_config()` called in:
+
 - `generation.py:_get_split_min_length()` (every message split)
 - `generation.py:_get_split_delay_base()` (every segment)
 - `generation.py:_get_split_delay_per_char()` (every segment)
@@ -376,6 +376,7 @@ if kb_context:
 ### E. Character Memory — Missing System
 
 Per `architecture.md` and issue description, **Character Memory** is a distinct system:
+
 - **Responsibility**: Persistent shared history between persona and user (promises, shared experiences, recurring jokes, unfinished activities, relationship progression, persistent decisions)
 - **Must NOT be**: User memory, canonical knowledge, conversation history, persona definition, prompt instructions
 - **Mutability**: Mutable (unlike Persona KB which is immutable)
@@ -389,6 +390,7 @@ Per `architecture.md` and issue description, **Character Memory** is a distinct 
 ### F. Discord UI in Data Layer
 
 `utils/persona.py` contains:
+
 - `PersonaCoreModal`, `PersonaStyleModal`, `PersonaFullModal` (3 modals)
 - `PersonaPanelView` (view with 4 buttons)
 - `open_persona_panel()` (command handler)
@@ -413,7 +415,7 @@ Per `architecture.md` and issue description, **Character Memory** is a distinct 
 | Logging                   | ✅ Good      | Uses `logging` module consistently                             |
 | Documentation             | ✅ Good      | `architecture.md` is comprehensive                             |
 | Configuration             | ⚠️ Partial  | No schema validation; hot-path re-reads                        |
-| Memory Systems Separation | ❌ Violated  | Short-term + long-term in one module; Character Memory missing |
+| Memory Systems Separation | ❌ Violated  | Short- and long-term in one module; Character Memory missing |
 | Performance               | ⚠️ Deferred | Config I/O on hot path; no pooling                             |
 | Security                  | ✅ Good      | SSRF, injection, AST guards present                            |
 | Dependencies              | ✅ Minimal   | Well-justified deps                                            |
@@ -473,6 +475,7 @@ Per `architecture.md` and issue description, **Character Memory** is a distinct 
 The Freesona codebase is **architecturally coherent at the module level** but **violates its own principles at the integration layer**. The generation pipeline (`utils/generation.py`) is the central nexus where provider independence, separation of concerns, and explicit interfaces break down.
 
 **The audit confirms the issue's revised implementation order is correct:**
+
 1. **Architecture Audit** (this document) — baseline established
 2. **PromptBuilder** — fixes the core integration point
 3. **Character Memory ADR + Implementation** — adds missing memory system with clear boundaries

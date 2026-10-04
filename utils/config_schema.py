@@ -1,10 +1,16 @@
-# utils/config_schema.py: Shared configuration schema definitions for config commands.
+#!/usr/bin/env python3
+
+# utils/config_schema.py: Shared configuration schema definitions
+
+# for config commands.
+
 # Moved from cogs/system/admin.py to be shared across config-related cogs.
+
 
 from utils.config import DEFAULT_CONFIG
 
-
 # Configuration categories for /config list command
+
 CONFIG_CATEGORIES = {
     "General": [
         "prefix",
@@ -19,6 +25,7 @@ CONFIG_CATEGORIES = {
     "ChromaDB": [
         "chroma_collection",
         "chroma_persist_directory",
+        "knowledge_base_database",
     ],
     "Autonomy": [
         "autonomy_cooldown_seconds",
@@ -57,27 +64,51 @@ CONFIG_CATEGORIES = {
     ],
 }
 
+
 # Configuration descriptions for /config show command
+
 CONFIG_DESCRIPTIONS = {
     "prefix": "Command prefix for text commands (default: ~)",
-    "conversation_response_mode": "How bot responds in conversations: all, mention, reply, dm (default: all)",
-    "provider": "AI provider to use: gemini, openai, anthropic, openrouter, etc. (default: gemini)",
-    "provider_model": "Specific model name for the provider (default: provider default)",
-    "model_temperature": "Temperature for AI generation 0.0-2.0 (default: 0.7)",
-    "chroma_collection": "ChromaDB collection name for embeddings (default: freesona)",
-    "chroma_persist_directory": "ChromaDB persistence directory (default: ./.chroma)",
+    "conversation_response_mode": (
+        "How bot responds in conversations: all, mention, reply, dm (default: all)"
+    ),
+    "provider": (
+        "AI provider to use: gemini, openai, ollama, nim, azure, groq, "
+        "openrouter, or custom (default: gemini)"
+    ),
+    "provider_model": (
+        "Specific model name for the provider (default: provider default)"
+    ),
+    "model_temperature": ("Temperature for AI generation 0.0-2.0 (default: 0.7)"),
+    "chroma_collection": (
+        "ChromaDB collection name for embeddings (default: freesona)"
+    ),
+    "chroma_persist_directory": ("ChromaDB persistence directory (default: ./.chroma)"),
+    "knowledge_base_database": "SQLite database for structured knowledge records (default: knowledge.db)",
     "debounce_seconds": "Message debounce time in seconds (default: 1.2)",
-    "autonomy_cooldown_seconds": "Cooldown between autonomous actions in seconds (default: 120)",
-    "autonomy_user_cooldown": "Cooldown per user for autonomous actions in seconds (default: 60)",
+    "autonomy_cooldown_seconds": (
+        "Cooldown between autonomous actions in seconds (default: 120)"
+    ),
+    "autonomy_user_cooldown": (
+        "Cooldown per user for autonomous actions in seconds (default: 60)"
+    ),
     "mvsep_poll_interval": "MVSEP API poll interval in seconds (default: 10)",
     "mvsep_poll_timeout": "MVSEP API poll timeout in seconds (default: 600)",
-    "ytdlp_subprocess_timeout": "YT-DLP subprocess timeout in seconds (default: 300)",
-    "ytdlp_compress_target_mb": "YT-DLP compression target size in MB (default: 9.5)",
-    "generation_split_min_length": "Minimum message length to trigger splitting (default: 280)",
-    "generation_split_delay_base": "Base delay between split messages in seconds (default: 1.2)",
-    "generation_split_delay_per_char": "Additional delay per character for split messages (default: 0.012)",
-    "generation_split_delay_max": "Maximum delay between split messages in seconds (default: 3.5)",
-    "generation_rate_limit": "Max messages per minute for generation (default: 5)",
+    "ytdlp_subprocess_timeout": ("YT-DLP subprocess timeout in seconds (default: 300)"),
+    "ytdlp_compress_target_mb": ("YT-DLP compression target size in MB (default: 9.5)"),
+    "generation_split_min_length": (
+        "Minimum message length to trigger splitting (default: 280)"
+    ),
+    "generation_split_delay_base": (
+        "Base delay between split messages in seconds (default: 1.2)"
+    ),
+    "generation_split_delay_per_char": (
+        "Additional delay per character for split messages (default: 0.012)"
+    ),
+    "generation_split_delay_max": (
+        "Maximum delay between split messages in seconds (default: 3.5)"
+    ),
+    "generation_rate_limit": ("Max messages per minute for generation (default: 5)"),
     "log_enabled": "Enable logging system (default: false)",
     "log_channel_id": "Discord channel ID for log output (default: 0)",
     "log_level": "Log level: DEBUG, INFO, WARNING, ERROR (default: INFO)",
@@ -94,7 +125,11 @@ CONFIG_DESCRIPTIONS = {
     "log_section_webhook": "Log webhook events (default: false)",
 }
 
-# Configuration key order for /config view command (alphabetical within categories)
+
+# Configuration key order for /config view command (alphabetical within
+
+# categories)
+
 CONFIG_KEY_ORDER = [
     "prefix",
     "conversation_response_mode",
@@ -133,6 +168,7 @@ CONFIG_KEY_ORDER = [
 
 
 # Model choices for /model set command autocomplete
+
 MODEL_CHOICES = {
     "gemini": [
         "gemini-2.5-pro",
@@ -187,70 +223,58 @@ MODEL_CHOICES = {
     ],
 }
 
+
 # Provider choices for /provider set command autocomplete
+
 PROVIDER_CHOICES = [
     "gemini",
     "openai",
-    "anthropic",
-    "openrouter",
-    "nvidia",
     "ollama",
-    "deepinfra",
-    "together",
+    "nim",
+    "azure",
     "groq",
-    "fireworks",
-    "perplexity",
-    "cerebras",
-    "sambanova",
-    "xai",
-    "deepseek",
-    "moonshot",
-    "zhipu",
-    "baichuan",
-    "minimax",
-    "stepfun",
-    "volcengine",
-    "siliconflow",
-    "modelslab",
-    "infermatic",
-    "hyperbolic",
-    "novita",
-    "runpod",
-    "vast",
-    "lambda",
-    "together-legacy",
-    "openai-compatible",
+    "openrouter",
+    "custom",
 ]
 
 
 def get_model_choices(provider: str) -> list[str]:
     """Get model choices for a specific provider."""
+
     return MODEL_CHOICES.get(provider.lower(), [])
 
 
 def get_provider_choices() -> list[str]:
     """Get list of available provider choices."""
+
     return PROVIDER_CHOICES
 
 
 def get_config_default(key: str):
     """Get default value for a config key from DEFAULT_CONFIG."""
+
     return DEFAULT_CONFIG.get(key)
 
 
 def is_valid_config_key(key: str) -> bool:
-    """Check if a config key is valid (exists in DEFAULT_CONFIG or CONFIG_DESCRIPTIONS)."""
+    """Check if a config key is valid
+
+    (exists in DEFAULT_CONFIG or CONFIG_DESCRIPTIONS)."""
+
     return key in DEFAULT_CONFIG or key in CONFIG_DESCRIPTIONS
 
 
 def get_config_category(key: str) -> str | None:
     """Get the category name for a config key."""
+
     for category, keys in CONFIG_CATEGORIES.items():
         if key in keys:
             return category
+
     return None
 
 
 def get_config_description(key: str) -> str:
     """Get description for a config key."""
+
     return CONFIG_DESCRIPTIONS.get(key, "No description available.")

@@ -1,5 +1,7 @@
 # Architecture
 
+This document follows ASD-STE100 Simplified Technical English.
+
 This document explains how Freesona is structured internally. It is intended for developers who want to understand the codebase, extend it, or debug it.
 
 ---
@@ -18,13 +20,17 @@ Freesona/
 │   │   ├── genai_persona.py  # setpersona + persona profile/lock/debug commands
 │   │   ├── genai_memory.py   # conversation + long-term memory commands
 │   │   ├── genai_channel.py  # setchannel / clearchannel / chatmode
-│   │   └── genai_autonomy.py # autonomy + botwhitelist runtime controls
+│   │   ├── genai_autonomy.py # autonomy + botwhitelist runtime controls
+│   │   ├── chroma.py         # Knowledge base administration commands
+│   │   └── genai_common.py   # Shared AI cog helpers
 │   ├── media/
 │   │   ├── mvsep.py          # Audio stem separation via MVSEP API
 │   │   └── ytdlp.py          # Video/audio downloader via yt-dlp + ffmpeg
 │   ├── moderation/
 │   │   ├── core.py           # Kick, ban, timeout, purge
 │   │   └── warns.py          # Warn, delwarn, warnthresholds
+│   ├── conversion/
+│   │   └── delphitools.py    # File conversion and utility commands via delphitools
 │   ├── system/
 │   │   ├── system.py         # Aggregate system extension loader (registers split system cogs)
 │   │   ├── core.py           # Core commands: /sync, /reboot, /dumpconfig
@@ -51,8 +57,12 @@ Freesona/
     ├── conversation.py       # ConversationManager — short-term memory, budgets, context
     ├── generation.py         # Provider orchestration, PromptBuilder integration, send_response
     ├── guild_world.py        # Guild World Context — environmental grounding
+    ├── anniversaries_db.py   # Anniversary storage helpers
+    ├── ingest_pdf.py         # PDF knowledge-source ingestion helpers
     ├── intent.py             # Confidence-scored intent evaluator for autonomy
+    ├── knowledge_base.py     # Structured knowledge-base validation and storage
     ├── memory.py             # SQLite long-term facts (legacy interaction IDs deprecated)
+    ├── message_claims.py     # SQLite message-processing claim leases
     ├── modules.py            # Cog registry (OPTIONAL_MODULES, CORE_EXTENSIONS)
     ├── persona.py            # Persona data layer, /setpersona panel modals
     ├── prompt_builder.py     # PromptBuilder & ContextProvider architecture
@@ -66,6 +76,15 @@ Freesona/
 ```
 
 All cogs depend on `utils/`. Cogs do not import from each other, except that `mvsep.py` calls `ytdlp.py` via `bot.get_cog("YtDlp")` (not a direct import) to download platform audio before submitting to MVSEP.
+
+`utils/knowledge_base.py` provides structured validation and SQLite persistence.
+The Discord knowledge-base commands and FastAPI knowledge route use this service;
+new records are then indexed in ChromaDB as a secondary index.
+
+The FastAPI server currently provides health and MVSEP webhook endpoints plus
+`GET /admin/status` and `POST /admin/knowledge`. The other admin routes described
+in earlier documentation are not implemented. The dashboard does not replace
+Discord commands and Discord does not call the dashboard over HTTP.
 
 ---
 
@@ -203,7 +222,7 @@ The persona is stored as a structured JSON object with five fields:
 
 ---
 
-## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/generation.py`)
+## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/prompt_builder_providers.py`)
 
 ### Definition
 
@@ -387,7 +406,9 @@ This invariant prevents **canon drift** — the gradual corruption of character 
 
 ### Retrieval & Context Construction
 
-The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `utils/generation.py`:
+`PersonaKnowledgeBaseProvider` in `utils/prompt_builder_providers.py` retrieves
+knowledge for the prompt pipeline. It calls `query_knowledge` from
+`utils/chroma.py` with the active persona and configured top-k value:
 
 1. Embeds the user's message
 2. Queries ChromaDB with **metadata filtering (by `persona`) occurring before or alongside vector search** to reduce the candidate set
@@ -415,6 +436,7 @@ System (10) → Persona (20) → Canon (25) → Conversation History (30) → Us
 - **`/kbsearch`** — Semantic search with optional persona filter
 - **`/kblist`** — List recent entries
 - **`/kbdelete`** — Delete entry by ID
+- **`/kbpersona`** — List all knowledge entries for a specific persona
 
 ### Provider Independence
 
@@ -426,7 +448,7 @@ The knowledge base:
 - Provides identical retrieval behavior across all providers
 - Is fully **persona-agnostic** — adding a new persona requires only source material + metadata, no code changes
 
-### Configuration
+### Knowledge Base Configuration
 
 Environment variables (see `.env.sample`):
 
@@ -447,24 +469,39 @@ Config keys (see `config.sample.json`):
 Cogs are split into **core** (always loaded) and **optional** (can be toggled at runtime without restart):
 
 ```python
-CORE_EXTENSIONS = ["cogs.system.core", "cogs.system.help", "cogs.system.status", "cogs.system.config",
-                   "cogs.system.module", "cogs.system.model", "cogs.system.provider", "cogs.system.logging",
-                   "cogs.system.timezone"]
-OPTIONAL_MODULES = {
+CORE_EXTENSIONS = [
+    "cogs.system.help",
+    "cogs.tools.ping",
+    "cogs.system.status",
+    "cogs.system.system",
+]
+BUILTIN_OPTIONAL_MODULES = {
+    "hello": "cogs.fun.hello",
+    "random": "cogs.fun.random",
+    "moderation": "cogs.moderation.core",
     "genai": "cogs.ai.genai",
     "math": "cogs.tools.math",
     "news": "cogs.system.news",
     "ytdlp": "cogs.media.ytdlp",
     "mvsep": "cogs.media.mvsep",
-    "moderation": "cogs.moderation.core",
     "warns": "cogs.moderation.warns",
-    "hello": "cogs.fun.hello",
-    "random": "cogs.fun.random",
+    "chroma": "cogs.ai.chroma",
+    "conversion": "cogs.conversion.delphitools",
+    "module": "cogs.system.system",
+    "model": "cogs.system.system",
+    "provider": "cogs.system.system",
+    "config": "cogs.system.system",
+    "logging": "cogs.system.system",
+    "core": "cogs.system.system",
 }
+OPTIONAL_MODULES = BUILTIN_OPTIONAL_MODULES.copy()
+# Entries in modules.local.json override or extend the built-in registry.
 ```
 
 `genai` maps to `cogs.ai.genai`, an aggregate extension that registers multiple AI cogs by command type.
-The core system cogs (`cogs.system.*`) are now granular modules — `system.py` is an aggregate extension that registers all split system cogs.
+`system.py` is an aggregate extension that registers the split system cogs. The
+system aliases in `BUILTIN_OPTIONAL_MODULES` keep the individual names visible
+to `/module list` without loading them twice.
 
 Enabled/disabled state persists in `config.json` under `"enabled_modules"`. The `/module enable`, `/module disable`, and `/module reload` commands call `bot.load_extension` / `unload_extension` / `reload_extension` at runtime and re-sync slash commands automatically.
 
@@ -531,7 +568,7 @@ Freesona includes an optional logging system that can write to both rotating log
 ### Configuration
 
 | Config Key | Type | Default | Description |
-|:-----------|:-----|:--------|:------------|
+| :--------- | :--- | :------ | :---------- |
 | `log_enabled` | bool | `false` | Enable/disable logging system |
 | `log_channel_id` | int | `0` | Discord channel ID for log messages (0 = disabled) |
 | `log_level` | str | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
@@ -548,6 +585,7 @@ Freesona includes an optional logging system that can write to both rotating log
 | `log_section_webhook` | bool | `false` | Webhook events (FastAPI/MVSEP) |
 
 Environment variable overrides (see `.env.sample`):
+
 - `LOG_ENABLED`
 - `LOG_CHANNEL_ID`
 - `LOG_LEVEL`
@@ -563,12 +601,12 @@ Environment variable overrides (see `.env.sample`):
 - `LOG_SECTION_SECURITY`
 - `LOG_SECTION_WEBHOOK`
 
-### Log Sections
+### Log Section Definitions
 
 Log sections provide granular control over what gets logged. Each section maps to a set of logger name prefixes:
 
 | Section | Config Key | Logger Prefixes | Default |
-|:--------|:-----------|:----------------|:--------|
+| :------ | :--------- | :-------------- | :------ |
 | General | `log_section_general` | `main`, `cogs`, `utils` | ✅ Enabled |
 | Config | `log_section_config` | `utils.config`, `cogs.system.config` | ❌ Disabled |
 | AI | `log_section_ai` | `utils.providers`, `utils.generation`, `utils.prompt_builder*`, `cogs.ai` | ✅ Enabled |
@@ -598,12 +636,14 @@ Logs are written using Python's standard `logging` module:
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
 logger.info("Generation completed", extra={"user_id": 123, "provider": "gemini"})
 ```
 
 The Discord log channel receives formatted messages in code blocks:
-```
+
+```text
 [2024-01-15 14:32:10] [INFO] utils.generation: Generation completed for user 123 via gemini
 ```
 
@@ -612,7 +652,7 @@ The Discord log channel receives formatted messages in code blocks:
 Owner-only slash commands for managing the logging system:
 
 | Command | Description |
-|:--------|:------------|
+| :------ | :---------- |
 | `/logging status` | Show current logging configuration and enabled sections |
 | `/logging enable <section>` | Enable a logging section |
 | `/logging disable <section>` | Disable a logging section |
@@ -641,6 +681,8 @@ Current endpoints:
 | `GET /`                | Heartbeat — returns `{"status": "ok"}` |
 | `GET /health`          | Health check for uptime monitors       |
 | `POST /webhooks/mvsep` | MVSEP separation result callback       |
+| `GET /admin/status`    | Redacted runtime status                |
+| `POST /admin/knowledge`| Add a knowledge-base record            |
 
 Future endpoints (planned in roadmap):
 
@@ -677,21 +719,21 @@ All runtime-mutable settings are stored in `config.json`. Loaded fresh on every 
 See `.env.sample` for a full reference. Key variables:
 
 | Variable                | Required | Description                           |
-|:------------------------|:---------|:--------------------------------------|
-| `BOT_TOKEN`             | ✅        | Discord bot token                     |
-| `CHANNEL_ID`            | ✅        | Startup message channel               |
-| `GOOGLE_API_KEY`        | ✅        | Gemini API key                        |
-| `MODEL_NAME`            | ✅        | Default Gemini model                  |
-| `CONFIG_FILE_PATH`      | ✅        | Path to `config.json`                 |
-| `MEMORY_FILE_PATH`      | ✅        | Path to `memory.db`                   |
-| `BOT_NAME`              | —        | Display name for startup messages     |
-| `WOLFRAM_APPID_SHORT`   | —        | Wolfram Short Answer API key          |
-| `WOLFRAM_APPID_LLM`     | —        | Wolfram LLM API key                   |
-| `MVSEP_API_KEY`         | —        | MVSEP separation API key              |
-| `MVSEP_WEBHOOK_URL`     | —        | Public URL for MVSEP callbacks        |
-| `COOKIES_<PLATFORM>`    | —        | Netscape cookies file for yt-dlp auth |
-| `GOOGLE_SEARCH_API_KEY` | —        | Legacy Google Custom Search fallback  |
-| `SEARCH_ENGINE_ID`      | —        | Legacy Google Custom Search engine ID |
+| :---------------------- | :------- | :------------------------------------ |
+| `BOT_TOKEN`             | Yes      | Discord bot token                     |
+| `CHANNEL_ID`            | Yes      | Startup message channel               |
+| `GOOGLE_API_KEY`        | Yes      | Gemini API key                        |
+| `MODEL_NAME`            | Yes      | Default Gemini model                  |
+| `CONFIG_FILE_PATH`      | Yes      | Path to `config.json`                 |
+| `MEMORY_FILE_PATH`      | Yes      | Path to `memory.db`                   |
+| `BOT_NAME`              | No       | Display name for startup messages     |
+| `WOLFRAM_APPID_SHORT`   | No       | Wolfram Short Answer API key          |
+| `WOLFRAM_APPID_LLM`     | No       | Wolfram LLM API key                   |
+| `MVSEP_API_KEY`         | No       | MVSEP separation API key              |
+| `MVSEP_WEBHOOK_URL`     | No       | Public URL for MVSEP callbacks        |
+| `COOKIES_<PLATFORM>`    | No       | Netscape cookies file for yt-dlp auth |
+| `GOOGLE_SEARCH_API_KEY` | No       | Legacy Google Custom Search fallback  |
+| `SEARCH_ENGINE_ID`      | No       | Legacy Google Custom Search engine ID |
 
 ---
 

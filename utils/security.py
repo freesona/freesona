@@ -1,5 +1,5 @@
+#!/usr/bin/env python3
 # utils/security.py: Injection detection and output sanitization.
-
 import ipaddress
 import re
 import socket
@@ -24,12 +24,12 @@ INJECTION_PATTERNS = [
     "reveal your instructions",
     "print your instructions",
 ]
-
 OUTPUT_FLAGS = [
     "ignore previous instructions",
     "system prompt",
     "developer message",
 ]
+
 
 # Private/special-use IPv4 blocks expressed as decimal integer ranges so we
 # can catch decimal/octal/hex obfuscation, not just dotted-quad strings.
@@ -38,8 +38,6 @@ OUTPUT_FLAGS = [
 # ValueError and fell through to `return True`. We fix that by failing
 # closed instead of open, and by explicitly normalizing the IPv4 forms
 # Python's ipaddress module does NOT auto-handle, like "127.1" shorthand.)
-
-
 def _normalize_ipv4_shorthand(host: str) -> str | None:
     """
     Expand shorthand IPv4 forms (e.g. '127.1', '10.1', '0x7f.1') that
@@ -50,6 +48,7 @@ def _normalize_ipv4_shorthand(host: str) -> str | None:
     parts = host.split(".")
     if not (1 <= len(parts) <= 4):
         return None
+
     def _parse_part(p: str) -> int:
         # Legacy C-style octal: leading zero with no 0x/0o prefix, e.g.
         # "017700000001" — curl/getaddrinfo on many platforms still treat
@@ -63,10 +62,8 @@ def _normalize_ipv4_shorthand(host: str) -> str | None:
         nums = [_parse_part(p) for p in parts]
     except ValueError:
         return None
-
     if any(n < 0 for n in nums):
         return None
-
     if len(nums) == 4:
         if any(n > 255 for n in nums):
             return None
@@ -107,7 +104,6 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
     Return True only for URLs that are http(s), have a public hostname,
     and (if resolve_dns) resolve to a public IP. Fails CLOSED: any
     ambiguity, parse failure, or resolution failure returns False.
-
     NOTE: this check is only as good as the moment it runs. If the
     caller fetches the URL later (especially after following redirects),
     re-validate at fetch time against the IP actually being connected to,
@@ -117,27 +113,22 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
         parsed = urlparse(url)
     except ValueError:
         return False
-
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return False
-
     hostname = parsed.hostname
     if hostname is None:
         return False
     host = hostname.strip().lower().rstrip(".")
     if not host:
         return False
-
     if host == "localhost" or host.endswith(".localhost"):
         return False
-
     # 1. Try strict parse first (handles normal dotted-quad IPv4 and IPv6).
     ip_obj = None
     try:
         ip_obj = ipaddress.ip_address(host)
     except ValueError:
         pass
-
     # 2. Try shorthand/decimal/octal/hex IPv4 normalization.
     if ip_obj is None:
         normalized = _normalize_ipv4_shorthand(host)
@@ -146,10 +137,8 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
                 ip_obj = ipaddress.ip_address(normalized)
             except ValueError:
                 ip_obj = None
-
     if ip_obj is not None:
         return not _is_blocked_ip(ip_obj)
-
     # 3. Not IP-literal at all — it's a real hostname. Fail closed unless
     #    we can confirm DNS resolution to a public address.
     if not resolve_dns:
@@ -157,12 +146,10 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
         # check before an async resolve elsewhere) — allow by hostname
         # shape only, since we can't make stronger guarantees here.
         return True
-
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
         return False
-
     resolved_ips = set()
     for info in infos:
         addr = info[4][0]
@@ -170,10 +157,8 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
             resolved_ips.add(ipaddress.ip_address(addr))
         except ValueError:
             continue
-
     if not resolved_ips:
         return False
-
     # If ANY resolved address is private/internal, block the whole host.
     # A hostname that round-robins between a public and a private IP is
     # exactly the DNS-rebinding pattern we're defending against.
@@ -183,7 +168,6 @@ def is_public_http_url(url: str, *, resolve_dns: bool = True) -> bool:
 # ---------------------------------------------------------------------------
 # Prompt injection detection + sanitization
 # ---------------------------------------------------------------------------
-
 def _normalize_for_matching(text: str) -> str:
     """Collapse whitespace and strip zero-width/invisible chars so basic
     spacing/Unicode obfuscation doesn't trivially dodge substring checks."""
@@ -208,11 +192,11 @@ def sanitize_prompt(prompt: str) -> str:
     normalized_check = _normalize_for_matching(prompt)
     if not any(pattern in normalized_check for pattern in INJECTION_PATTERNS):
         return prompt
-
     redacted = prompt
     for pattern in INJECTION_PATTERNS:
-        redacted = re.sub(re.escape(pattern), "[redacted]", redacted, flags=re.IGNORECASE)
-
+        redacted = re.sub(
+            re.escape(pattern), "[redacted]", redacted, flags=re.IGNORECASE
+        )
     return (
         "[NOTE: the user message below contained text resembling an "
         "instruction override attempt; the matched phrase(s) have been "

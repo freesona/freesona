@@ -1,5 +1,5 @@
 # discord.py: Interfaces with the Discord API.
-discord.py
+discord.py==2.7.1
 
 # python-dotenv: Loads environment variables from a .env file.
 python-dotenv
@@ -12,9 +12,6 @@ requests
 
 # google-genai: Connects to the Gemini API for AI responses.
 google-genai
-
-# google: Namespace package metadata used by static inspections for 'google.*' imports.
-google
 
 # fastapi: Async web framework for building APIs.
 fastapi
@@ -57,3 +54,9 @@ chromadb
 
 # onnxruntime: Inference engine for running ONNX models, used in AI cogs.
 onnxruntime
+
+# protobuf: Protocol Buffers library for serializing structured data, used in AI cogs.
+protobuf
+
+#aiofiles: Asynchronous file handling library, used in cogs/media/mvsep.py
+aiofiles

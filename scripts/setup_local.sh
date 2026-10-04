@@ -4,30 +4,63 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+load_env_defaults() {
+  python3 - <<'PY'
+import re
+from pathlib import Path
+
+env_path = Path('.env')
+
+for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith('#'):
+        continue
+
+    if line.startswith('export '):
+        line = line[7:].lstrip()
+
+    if '=' not in line:
+        continue
+
+    key, value = line.split('=', 1)
+    key = key.strip()
+    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', key):
+        continue
+
+    value = value.strip()
+    if value[:1] in {'"', "'"} and value[-1:] == value[:1]:
+        value = value[1:-1]
+    else:
+        value = re.split(r'#(?=\s)', value, maxsplit=1)[0].rstrip()
+
+    print(f'{key}={value}')
+PY
+}
+
 # ASCII Art Banner
 print_banner() {
 cat << 'EOF'
 
-                    IIIII                                                                                                                  
-                    II II                                                                                                                  
-                    II II                                                                                                                  
-                III       III                                                                                                              
-               II  IIIIIII  II                                                                                                             
-              I  IIIIIIIIIII  II                                                                                                           
-             I  IIIIIIIIIIIII  I                                                                                                           
-             I  IIIIIIIIIIIII  I                                                                                                           
-          III   IIIIIIIIIIIII    II                                                                                                        
-        II   II  IIIIIIIIIII  II   II                                                                                                      
-      II  IIIIII   IIIIIII   IIIIII  II                                                                                                    
-     II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII                                                                                  
-    I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII                                                                                  
-   I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III                                                                                         
-  II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII    
-  I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III   
- II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII   
- II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII   
- II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII  
- II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III  
+                    IIIII
+                    II II
+                    II II
+                III       III
+               II  IIIIIII  II
+              I  IIIIIIIIIII  II
+             I  IIIIIIIIIIIII  I
+             I  IIIIIIIIIIIII  I
+          III   IIIIIIIIIIIII    II
+        II   II  IIIIIIIIIII  II   II
+      II  IIIIII   IIIIIII   IIIIII  II
+     II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII
+    I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII
+   I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III
+  II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII
+  I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III
+ II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII
+ II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII
+ II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII
+ II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III
 EOF
 }
 print_banner
@@ -40,9 +73,9 @@ echo ""
 
 # If .env exists, load it for defaults
 if [ -f .env ]; then
-  set -a
-  source .env
-  set +a
+  while IFS= read -r assignment; do
+    export "$assignment"
+  done < <(load_env_defaults)
 fi
 
 # Interactive prompts for required values
@@ -222,6 +255,17 @@ ENVEOF
 echo "Configuration saved to .env"
 echo ""
 
+# Ensure config.json exists with default values
+if [ ! -f config.json ]; then
+    echo "Creating default config.json..."
+    python3 - <<'PY'
+import sys
+sys.path.insert(0, '.')
+from utils.config import save_config, DEFAULT_CONFIG
+save_config(DEFAULT_CONFIG)
+PY
+fi
+
 # Validate required fields
 if [[ "$BOT_TOKEN" == "YOUR_DISCORD_BOT_TOKEN" ]] || [ -z "$BOT_TOKEN" ]; then
   echo "Warning: BOT_TOKEN not set. The bot will not start without a valid token."
@@ -249,16 +293,36 @@ if [ ! -d .venv ]; then
 fi
 
 source .venv/bin/activate
-python -m pip install --upgrade pip >/dev/null
-python -m pip install -r requirements.txt >/dev/null
+PYTHON=${VIRTUAL_ENV}/bin/python3
+if [ ! -x "$PYTHON" ]; then
+    echo "Error: Python executable not found in virtual environment."
+    exit 1
+fi
+# Ensure pip is available in the virtual environment
+if ! "$PYTHON" -m pip --version >/dev/null 2>&1; then
+    "$PYTHON" -m ensurepip --upgrade >/dev/null
+fi
+# Upgrade pip and install requirements using the virtual environment's python
+"$PYTHON" -m pip install --upgrade pip >/dev/null
+"$PYTHON" -m pip install -r requirements.txt >/dev/null
+
+# Optional delphitools CLI installation
+read -p "Do you want to install delphitools CLI (requires Rust)? [y/N] " install_dt
+if [[ "$install_dt" =~ ^[Yy]$ ]]; then
+    if ! command -v rustc >/dev/null 2>&1; then
+        echo "Rust toolchain not found. Install it from https://www.rust-lang.org/tools/install"
+    else
+        cargo install delphitools-cli || echo "Failed to install delphitools-cli via cargo."
+    fi
+fi
 
 echo ""
 echo "Running project checks..."
-python scripts/check_project.py
+$PYTHON scripts/check_project.py
 
 echo ""
 echo "====================================================="
 echo "         Setup complete! Starting Freesona...        "
 echo "====================================================="
 echo ""
-python main.py
+$PYTHON main.py

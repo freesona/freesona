@@ -7,6 +7,9 @@
 
 # Freesona
 
+All repository documentation must adhere to ASD-STE100 Simplified Technical
+English.
+
 Freesona is an open-source, self-hosted Discord AI bot. It keeps persona,
 conversation, long-term memory, knowledge, and environment as separate systems.
 
@@ -119,8 +122,10 @@ CHANNEL_ID=YOUR_LOG_CHANNEL_ID
 BOT_NAME=Freesona
 
 # AI Provider
-AI_PROVIDER=          # gemini | openai | ollama | nim | azure | groq | openrouter
-AI_PROVIDER_MODEL=          # override the default model for the chosen provider
+# AI_PROVIDER: gemini | openai | ollama | nim | azure | groq | openrouter | custom
+AI_PROVIDER=
+# AI_PROVIDER_MODEL: override the default model for the chosen provider
+AI_PROVIDER_MODEL=
 MODEL_NAME=gemini-flash-lite-latest
 GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
 
@@ -131,15 +136,32 @@ GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
 # NVIDIA_API_KEY=
 # NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1/chat/completions
 # AZURE_AI_KEY=
-# AZURE_AI_BASE_URL=        # your Azure AI Foundry endpoint
+# AZURE_AI_BASE_URL: your Azure AI Foundry endpoint
+# AZURE_AI_BASE_URL=
 # GROQ_API_KEY=
 # OPENROUTER_API_KEY=
 # OPENROUTER_SITE_URL=
 # OPENROUTER_SITE_NAME=Freesona
+# CUSTOM_API_BASE_URL: full OpenAI-compatible chat-completions URL
+# CUSTOM_API_BASE_URL=
+# CUSTOM_API_KEY: optional; omitted for unauthenticated local endpoints
+# CUSTOM_API_KEY=
 
 # ChromaDB (optional — required for knowledge base retrieval)
 CHROMA_COLLECTION=freesona
 CHROMA_PERSIST_DIRECTORY=./.chroma
+
+# FastAPI administration (optional)
+# ADMIN_API_TOKEN=use-a-long-random-secret
+
+# Shared message-processing leases (required for multiple bot instances)
+MESSAGE_CLAIM_DATABASE=memory.db
+# Set a unique value on each running instance.
+# MESSAGE_CLAIM_INSTANCE_ID=instance-1
+MESSAGE_CLAIM_LEASE_SECONDS=300
+
+# Structured Knowledge Base records (Chroma indexing remains optional)
+KNOWLEDGE_BASE_DATABASE=knowledge.db
 
 # Complimentary tokens
 MVSEP_API_KEY=YOUR_MVSEP_API_KEY
@@ -186,6 +208,7 @@ Without a persistent volume on cloud hosts, file changes won't survive a redeplo
 | `persona.json`        | Active persona fields                                                                                                            |
 | `personas.json`       | Saved persona presets                                                                                                            |
 | `memory.db`           | Long-term user facts, keyed by `guild_id + user_id` for provider-neutral memory injection                                        |
+| `knowledge.db`        | Structured Knowledge Base records and Chroma index identifiers                                                                   |
 | `character_memory.db` | Character Memory — shared experiences, promises, recurring jokes, relationship progression (per guild/user/persona)              |
 | `canon.db`            | Canon Framework — modular immutable identity components (identity, beliefs, motivations, rules, world assumptions, explanations) |
 | `warnings.db`         | Per-guild moderation warnings with hex IDs and timestamps                                                                        |
@@ -193,6 +216,12 @@ Without a persistent volume on cloud hosts, file changes won't survive a redeplo
 | `.chroma/`            | ChromaDB vector store for knowledge base retrieval (optional)                                                                    |
 
 Conversation history is maintained by **ConversationManager** (provider-agnostic, in SQLite). Clear it per-channel with `/clearmemory`.
+
+For multiple bot instances, put `MESSAGE_CLAIM_DATABASE` on shared persistent
+storage and set a unique `MESSAGE_CLAIM_INSTANCE_ID` on each instance. The SQLite
+lease prevents duplicate message processing and allows another instance to retry
+an expired claim. If you enable the FastAPI admin routes, set `ADMIN_API_TOKEN`
+and send it as a bearer token; never commit or log the token.
 
 ---
 
@@ -276,7 +305,7 @@ Licensed under the **MIT License**. See [LICENSE](LICENSE).
 - [x] RSS monitors — post matching feed items into selected channels
 - [x] Warning system — per-guild moderation warnings with hex IDs, auto-threshold actions, and DM notifications
 - [x] Anniversary tracking — generic `anniversaries.db` backend for user-claimed date entries with optional calendar sync
-- [x] Full knowledge base commands — `/kbadd`, `/kblist`, `/kbdelete` on top of the existing ChromaDB retrieval layer
+- [x] Full knowledge base commands — `/kbsearch`, `/kbadd`, `/kblist`, `/kbdelete`, and `/kbpersona` on top of the existing ChromaDB retrieval layer
 - [x] **ConversationManager** — Provider-agnostic short-term memory with budgets, TTL, and prompt injection
 - [x] **PromptBuilder** — Modular ContextProvider architecture with explicit ordering and inspection
 - [x] **Canon Framework** — Modular immutable identity components (identity, beliefs, motivations, rules, world assumptions, explanations)
@@ -291,13 +320,13 @@ Licensed under the **MIT License**. See [LICENSE](LICENSE).
 
 ### Medium-term
 
-- [ ] Web dashboard via FastAPI — `fastapi_server.py` is already in the repo
-- [ ] Message claiming system for multi-instance deployments
+- [x] Web dashboard via FastAPI — bearer-token protected status and structured KB administration routes
+- [x] Message claiming system for multi-instance deployments — durable SQLite leases with expiry and ownership
 
 ### Long-term
 
-- [ ] Knowledge Base 2.0 — Structured entry types (Canon Scene, Character Profile, World Rule, etc.) with rich metadata
-- [ ] Improved KB authoring tooling — deterministic ingestion, validation, and formatting guides
+- [x] Knowledge Base 2.0 — structured entry types, normalized metadata, revisions, and SQLite persistence
+- [x] Improved KB authoring tooling — deterministic IDs, validation, optional Chroma indexing, and authoring guidance
 
 ---
 

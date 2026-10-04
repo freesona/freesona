@@ -1,5 +1,7 @@
 # Features
 
+This document follows ASD-STE100 Simplified Technical English.
+
 ## PromptBuilder Architecture
 
 Freesona assembles prompts using a modular **PromptBuilder** system with independent **ContextProvider** components. Each provider contributes a single, well-defined context block without knowledge of the others. Provider ordering is declared in a single registry (`utils/prompt_builder.py`) and can be inspected at runtime via `inspect()`.
@@ -22,8 +24,6 @@ Freesona assembles prompts using a modular **PromptBuilder** system with indepen
 ## Persona System
 
 Freesona's persona is split into five structured fields edited through a button-based `/setpersona` panel — no restart required.
-
-
 
 | Field                          | Edited via    |
 |:-------------------------------|:--------------|
@@ -101,6 +101,7 @@ Every message payload is tied to a stable Discord `user_id` before reaching the 
 The **Canon Framework** replaces the monolithic persona prompt with modular, immutable components that explain *why* a character behaves as they do, not merely *what* they do. It is the authoritative source of canonical truth alongside the PKB.
 
 **Six component types:**
+
 1. **Core Identity** — Who the character fundamentally is
 2. **Core Beliefs** — What the character believes about the world
 3. **Motivations** — What drives the character's actions
@@ -109,6 +110,7 @@ The **Canon Framework** replaces the monolithic persona prompt with modular, imm
 6. **Canon Explanations** — The "why" behind behaviors, not just the "what"
 
 **Features:**
+
 - Authored, immutable components (never learned from conversation)
 - Versioned snapshots for rollback
 - Export/import for portability
@@ -122,6 +124,7 @@ The **Canon Framework** replaces the monolithic persona prompt with modular, imm
 The character exists *through* Discord, not inside a single guild. Guild World Context provides **environmental grounding** — the "where" of the current interaction — without storing it as memory.
 
 **Supplies per request:**
+
 - Guild (server) name
 - Channel name
 - Channel topic/description
@@ -131,22 +134,9 @@ The character exists *through* Discord, not inside a single guild. Guild World C
 
 The same persona naturally adapts its wording to different servers without changing who it is. Guilds represent different communities, not different characters.
 
-**Channel Enumeration (KB 2.0 Support):**
-
-The `GuildWorldAccessor` protocol and its `DiscordGuildWorldAccessor` implementation provide a `get_guild_channels(guild_id)` method that returns a list of `GuildChannelInfo` objects. Each contains:
-- `id` — Channel snowflake ID
-- `name` — Channel name
-- `type` — Channel type (`text`, `voice`, `category`, `stage`, `forum`, `thread`)
-- `topic` — Channel topic/description (if applicable)
-- `position` — Channel position in the list
-- `category_id` — Parent category ID
-- `nsfw` — Whether the channel is marked NSFW
-
-This enables KB 2.0 to tag knowledge to specific channels, understand server structure, and let the persona reference other channels by name — all without persisting this data as memory. The channel list is fetched fresh from Discord's cache on each request.
-
 ---
 
-## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/generation.py`)
+## Persona Knowledge Base (RAG) (`utils/chroma.py`, `utils/prompt_builder_providers.py`)
 
 ### Definition
 
@@ -155,14 +145,13 @@ This enables KB 2.0 to tag knowledge to specific channels, understand server str
 ### Purpose
 
 The knowledge base stores **canonical, factual information** about a persona — dialogue, narration, events, relationships, and descriptions — sourced from original material (anime, novels, manga, games, etc.). It supplies canonical knowledge about a persona as one input to the generation pipeline and does not independently determine model behavior. It is **not** responsible for:
+
 - Conversation history (handled by **ConversationManager** in `utils/conversation.py`)
 - User long-term memory (handled by `utils/memory.py`)
 - Persona definition/prompt engineering (handled by `utils/persona.py`)
 - Safety instructions or model reasoning
 
 ### Architecture
-
-
 
 ```mermaid
 flowchart TD
@@ -190,8 +179,6 @@ flowchart TD
     end
 ```
 
-
-
 Where supported by the vector database, metadata filtering occurs before or alongside vector search to reduce the candidate set. An optional re-ranking stage can be added later without changing the overall architecture.
 
 ### Knowledge Lifecycle
@@ -216,8 +203,6 @@ When embedding models change or metadata schemas evolve, entries can be re-inges
 
 Each knowledge entry represents **one semantic unit** (atomic chunk):
 
-
-
 ```json
 {
   "id": "kb_abc123...",
@@ -241,20 +226,14 @@ Each knowledge entry represents **one semantic unit** (atomic chunk):
 }
 ```
 
-
-
 #### Schema Versioning
 
 Knowledge entries include version metadata so future migrations remain manageable:
-
-
 
 | Field             | Description                                 |
 |:------------------|:--------------------------------------------|
 | `schema_version`  | Schema version of the entry (default: `1`)  |
 | `embedding_model` | Embedding model used to generate the vector |
-
-
 
 These fields are automatically populated during ingestion and should be treated as immutable for the lifetime of the entry.
 
@@ -281,8 +260,6 @@ These inferences belong to the language model during generation. Storing them in
 
 #### Required Metadata Fields
 
-
-
 | Field         | Description                                                                                 |
 |:--------------|:--------------------------------------------------------------------------------------------|
 | `persona`     | Persona identifier (e.g., `chisato_nishikigi`)                                              |
@@ -291,11 +268,7 @@ These inferences belong to the language model during generation. Storing them in
 | `entry_type`  | Content type: `dialogue`, `narration`, `event`, `relationship`, `description`               |
 | `topics`      | Semantic topics for retrieval (non-empty list)                                              |
 
-
-
 #### Optional Metadata Fields
-
-
 
 | Field         | Description                                                                  |
 |:--------------|:-----------------------------------------------------------------------------|
@@ -306,8 +279,6 @@ These inferences belong to the language model during generation. Storing them in
 | `timestamp`   | Source timestamp (e.g., `2023-01-15`, `S01E06 12:34`)                        |
 | `canon_level` | Canon priority: `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` |
 | `tags`        | Additional indexing tags (comma-separated)                                   |
-
-
 
 ### Ingestion Pipeline
 
@@ -332,8 +303,6 @@ Only two sources are authorized to define objective facts about the persona:
 
 All other context providers are **strictly descriptive** and must never define what the character "is" or "believes" in a canonical sense:
 
-
-
 | Provider                      | Authority               | What It May Describe                                                                                    |
 |:------------------------------|:------------------------|:--------------------------------------------------------------------------------------------------------|
 | `SystemContextProvider`       | Hard constraints        | Model behavior constraints (safety, format, reasoning)                                                  |
@@ -342,8 +311,6 @@ All other context providers are **strictly descriptive** and must never define w
 | `UserMemoryProvider`          | User facts              | *What the persona knows about the user* across sessions                                                 |
 | `CharacterMemoryProvider`     | Relationship history    | *What they've experienced together*: promises, shared events, recurring jokes, relationship progression |
 | `GuildWorldContextProvider`   | Environmental grounding | *Where they are*: server name, channel context, local norms                                             |
-
-
 
 **Enforcement**:
 
@@ -355,7 +322,8 @@ This invariant prevents **canon drift** — the gradual corruption of character 
 
 ### Retrieval & Context Construction
 
-The retrieval function `retrieve_knowledge_context(query, persona, top_k)` in `utils/generation.py`:
+`PersonaKnowledgeBaseProvider` in `utils/prompt_builder_providers.py` retrieves
+knowledge through `query_knowledge` in `utils/chroma.py`:
 
 1. Embeds the user's message
 2. Queries ChromaDB with **metadata filtering (by `persona`) occurring before or alongside vector search** to reduce the candidate set
@@ -394,6 +362,17 @@ The knowledge base:
 - Provides identical retrieval behavior across all providers
 - Is fully **persona-agnostic** — adding a new persona requires only source material + metadata, no code changes
 
+---
+
+## Conversion and Utility Commands (`cogs/conversion/delphitools.py`)
+
+The optional `conversion` module provides Discord commands backed by the
+`delphitools` CLI. It supports image conversion, text watermarks, palette
+generation, color-blindness simulation, QR and barcode generation, unit
+conversion, Base64/hex/URL encoding and decoding, and MD5/SHA-1/SHA-256 hashes.
+Commands enforce a subprocess timeout and the Discord upload-size limit. The
+module requires the `dt` executable.
+
 ### Configuration
 
 Environment variables (see `.env.sample`):
@@ -431,8 +410,6 @@ This is like a real Discord user: they participate in many servers, naturally co
 
 Freesona routes generation through a provider abstraction so the same commands can target different backends without changing command code. Supported providers:
 
-
-
 | Provider         | Key env var                         |
 |:-----------------|:------------------------------------|
 | Gemini (default) | `GOOGLE_API_KEY`                    |
@@ -443,8 +420,6 @@ Freesona routes generation through a provider abstraction so the same commands c
 | Groq             | `GROQ_API_KEY`                      |
 | OpenRouter       | `OPENROUTER_API_KEY`                |
 
-
-
 Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching credentials. `/model set` and `/model reset` change the active model at runtime without a restart. The provider abstraction is shared across Gemini, OpenAI, Ollama, NVIDIA NIM, Azure AI Foundry, Groq, and OpenRouter; all providers are now stateless and receive conversation context via the system prompt.
 
 ---
@@ -452,8 +427,6 @@ Set `AI_PROVIDER` and `AI_PROVIDER_MODEL` in `.env`, then add the matching crede
 ## Autonomous Mode
 
 When enabled, the bot can join an active conversation unprompted. It uses a confidence-scored intent evaluator (`utils/intent.py`) rather than a random dice roll:
-
-
 
 | Signal                                           | Score |
 |:-------------------------------------------------|:------|
@@ -465,8 +438,6 @@ When enabled, the bot can join an active conversation unprompted. It uses a conf
 | Channel has existing conversation memory         | +0.10 |
 | Short filler message (lol, ok, emoji-only)       | −0.30 |
 | Long monologue with no question and no mention   | −0.20 |
-
-
 
 Frequency thresholds: `low` = 0.70, `default` = 0.50, `high` = 0.35. A 120-second per-channel cooldown prevents it from dominating a conversation. A separate 60-second per-user cooldown prevents repeated autonomous responses to the same user.
 
@@ -538,8 +509,6 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 
 ### Configurable Values
 
-
-
 | Key                                      | Type   | Default      | Description                                           |
 |:-----------------------------------------|:-------|:-------------|:------------------------------------------------------|
 | `mvsep_poll_interval`                    | int    | 5            | Seconds between MVSEP API polling checks              |
@@ -562,11 +531,7 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 | `canon_version`                          | string | "1.0.0"      | Current canon version                                 |
 | `canon_file_path`                        | string | "./canon.db" | Path to canon database                                |
 
-
-
 ### Commands
-
-
 
 | Command                     | Action                                            | Permissions |
 |:----------------------------|:--------------------------------------------------|:------------|
@@ -574,8 +539,6 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 | `/config list`              | List all configurable keys with descriptions      | Bot Owner   |
 | `/config set <key> <value>` | Set a config value (auto type-converted)          | Bot Owner   |
 | `/config reset <key>`       | Reset a config key to its default value           | Bot Owner   |
-
-
 
 ### Example Usage
 
@@ -587,3 +550,13 @@ Most hardcoded timing and behavior constants have been moved into `config.json` 
 ```
 
 Values are validated and type-converted based on their default types (int, float, bool, or string). Invalid values are rejected with an error message.
+
+## Structured Knowledge Base authoring
+
+Knowledge entries are validated before Chroma ingestion. Each entry must include
+`persona`, `source`, `source_type`, `entry_type`, `topics`, and `content`;
+`canon_level` defaults to `canon` and `revision` defaults to `1`. Supported
+entry types are `dialogue`, `narration`, `event`, `relationship`, and
+`description`. Normalize source text and use stable topic names so repeated
+ingestion produces the same record identity. Chroma remains an optional index;
+structured records are retained in SQLite when vector indexing is unavailable.

@@ -6,29 +6,29 @@ cd /d "%ROOT_DIR%"
 
 REM ASCII Art Banner
 echo.
-echo                     IIIII                                                                                                                  
-echo                     II II                                                                                                                  
-echo                     II II                                                                                                                  
-echo                 III       III                                                                                                              
-echo                II  IIIIIII  II                                                                                                             
-echo               I  IIIIIIIIIII  II                                                                                                           
-echo              I  IIIIIIIIIIIII  I                                                                                                           
-echo              I  IIIIIIIIIIIII  I                                                                                                           
-echo           III   IIIIIIIIIIIII    II                                                                                                        
-echo         II   II  IIIIIIIIIII  II   II                                                                                                      
-echo       II  IIIIII   IIIIIII   IIIIII  II                                                                                                    
-echo      II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII                                                                                  
-echo     I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII                                                                                  
-echo    I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III                                                                                         
-echo   II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII    
-echo   I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III   
-echo  II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII  
-echo  II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII  
-echo  II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII 
-echo  II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III 
+echo                     IIIII
+echo                     II II
+echo                     II II
+echo                 III       III
+echo                II  IIIIIII  II
+echo               I  IIIIIIIIIII  II
+echo              I  IIIIIIIIIIIII  I
+echo              I  IIIIIIIIIIIII  I
+echo           III   IIIIIIIIIIIII    II
+echo         II   II  IIIIIIIIIII  II   II
+echo       II  IIIIII   IIIIIII   IIIIII  II
+echo      II  IIIIIIIIII       IIIIIIIIIII  I       IIIIIIIIII
+echo     I  IIIIIIIIIII  IIIII  IIIIIIIIIII  I      IIIIIIIIII
+echo    I  IIIIIIIIIIII IIIIIII IIIIIIIIIIII  I     III
+echo   II IIIIIIIIIIII  IIIIIII  IIIIIIIIIIII II    III       IIIIIIII IIIIIIII    IIIIIIIII   IIIIIIII    IIIIIIII   III IIIIII   IIIIIIII
+echo   I  IIIIIIIIIII  IIIIIIIII  IIIIIIIIIII  I    IIIIIIIII IIIII   III    IIII IIII   III IIII    III IIIII   IIII IIII   IIII III    III
+echo  II  IIIII  IIII IIIIIIIIIII  III  IIIII  II   III       IIII   IIIIIIIIIIIIIIIIIIIIIIII  IIIIIIII  III      III III     III   IIIIIIII
+echo  II  IIIII I       IIIIIII       I IIIII  II   III       IIII   III         IIII            IIIIIII III      III III     III IIII  IIII
+echo  II  IIII  IIIIIIIIIIIIIIIIIIIIIII  IIII  II   III       IIII    IIII  IIII  IIII   IIII IIII   III  IIII  IIIII III     III III   IIIII
+echo  II  IIII IIIIIIIIIIIIIIIIIIIIIIIII IIII  I    III       IIII     IIIIIIII     IIIIIII    IIIIIIII    IIIIIIII   III     III IIIIIII III
 echo.
 echo =====================================================
-echo   Freesona - Self-Hosted Discord AI Framework Setup  
+echo   Freesona - Self-Hosted Discord AI Framework Setup
 echo =====================================================
 echo.
 
@@ -205,6 +205,18 @@ echo CHARACTER_MEMORY_FILE_PATH=character_memory.db
 echo Configuration saved to .env
 echo.
 
+REM Ensure config.json exists with default values
+if not exist config.json (
+    echo Creating default config.json...
+    python -c "
+import sys
+sys.path.insert(0, '.')
+from utils.config import load_config, save_config, DEFAULT_CONFIG
+# Save default config to ensure file exists
+save_config(DEFAULT_CONFIG)
+    "
+)
+
 REM Validate required fields
 if "%BOT_TOKEN%"=="YOUR_DISCORD_BOT_TOKEN" (
   echo Warning: BOT_TOKEN not set. The bot will not start without a valid token.
@@ -241,6 +253,23 @@ if not exist .venv (
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip >nul
 python -m pip install -r requirements.txt >nul
+
+REM Optional delphitools CLI installation
+set /p INSTALL_DT="Do you want to install delphitools CLI (requires Rust)? [y/N]: "
+if /I "%INSTALL_DT%"=="y" (
+    REM Check for Rust toolchain
+    rustc --version >nul 2>&1
+    if errorlevel 1 (
+        echo Rust toolchain not found. Install it from https://www.rust-lang.org/tools/install
+    ) else (
+        cargo install delphitools-cli
+        if errorlevel 1 (
+            echo Failed to install delphitools-cli via cargo.
+        ) else (
+            echo delphitools CLI installed successfully.
+        )
+    )
+)
 
 echo.
 echo Running project checks...

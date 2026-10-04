@@ -1,23 +1,26 @@
+#!/usr/bin/env python3
+
 # utils/views/__init__.py
 
+
 from .config_views import (
-    ConfigModal,
-    ConfigKeySelect,
-    ConfigKeySelectView,
-    ConfigPanelView,
     ConfigCategorySelect,
+    ConfigKeySelect,
+    ConfigKeySelectForMode,
+    ConfigKeySelectView,
+    ConfigModal,
+    ConfigPanelView,
     ConfigResetConfirmView,
     ConfigSelectView,
-    ConfigKeySelectForMode,
 )
 
 __all__ = [
-    "ConfigModal",
-    "ConfigKeySelect",
-    "ConfigKeySelectView",
-    "ConfigPanelView",
     "ConfigCategorySelect",
+    "ConfigKeySelect",
+    "ConfigKeySelectForMode",
+    "ConfigKeySelectView",
+    "ConfigModal",
+    "ConfigPanelView",
     "ConfigResetConfirmView",
     "ConfigSelectView",
-    "ConfigKeySelectForMode",
 ]
