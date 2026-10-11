@@ -10,8 +10,8 @@ AI commands are organized by command type in dedicated AI cog modules (`genai_ge
 
 | Command                                                   | Action                                                                                        | Permissions   |
 | :-------------------------------------------------------- | :-------------------------------------------------------------------------------------------- | :------------ |
-| `~write <prompt>` (`/write`, alias `~w`)                  | Structured output using active persona                                                        | Anyone        |
-| `~ask <question>` (`/ask`, alias `~a`)                    | Conversational response using active persona                                                  | Anyone        |
+| `~write <prompt>` (`/write`, alias `~w`)                  | Structured output using active persona; slash command accepts an optional file attachment    | Anyone        |
+| `~ask <question>` (`/ask`, alias `~a`)                    | Conversational response using active persona; slash command accepts an optional file attachment | Anyone        |
 | `~search <query>` (`/search`, alias `~s`)                 | Web search with AI summary                                                                    | Anyone        |
 | `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP                                                       | Anyone        |
 | `/kbsearch <query> [persona] [limit]`                     | Search the local ChromaDB knowledge base                                                      | Administrator |

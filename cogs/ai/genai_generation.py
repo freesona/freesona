@@ -26,17 +26,23 @@ class GenAIGenerationCog(commands.Cog):
     @commands.hybrid_command(
         name="write",
         aliases=["w"],
-        help="Ask the AI to write or create something.",
+        help="Ask the AI to write or create something; optionally attach a file.",
     )
-    async def write_cmd(self, ctx: commands.Context, *, query: str):
+    async def write_cmd(
+        self,
+        ctx: commands.Context,
+        *,
+        query: str,
+        attachment: discord.Attachment | None = None,
+    ):
         guild = ctx.guild
         if guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
-        attachments = await extract_attachments(ctx.message) if ctx.message else []
         response: ConversationResponse | None = None
         if ctx.interaction:
             await ctx.defer()
+            attachments = await extract_attachments(ctx.message, attachment)
             response = await safe_generate(
                 query,
                 current_persona=CURRENT_PERSONA,
@@ -57,6 +63,7 @@ class GenAIGenerationCog(commands.Cog):
             )
         else:
             async with ctx.typing():
+                attachments = await extract_attachments(ctx.message, attachment)
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,
@@ -90,16 +97,26 @@ class GenAIGenerationCog(commands.Cog):
     # -------------------------------------------------------------------
     # ~ask
     # -------------------------------------------------------------------
-    @commands.hybrid_command(name="ask", aliases=["a"], help="Ask the AI a question.")
-    async def ask_cmd(self, ctx: commands.Context, *, query: str):
+    @commands.hybrid_command(
+        name="ask",
+        aliases=["a"],
+        help="Ask the AI a question; optionally attach a file.",
+    )
+    async def ask_cmd(
+        self,
+        ctx: commands.Context,
+        *,
+        query: str,
+        attachment: discord.Attachment | None = None,
+    ):
         guild = ctx.guild
         if guild is None:
             await ctx.send("AI commands are not available in DMs.")
             return
-        attachments = await extract_attachments(ctx.message) if ctx.message else []
         response: ConversationResponse | None = None
         if ctx.interaction:
             await ctx.defer()
+            attachments = await extract_attachments(ctx.message, attachment)
             response = await safe_generate(
                 query,
                 current_persona=CURRENT_PERSONA,
@@ -118,6 +135,7 @@ class GenAIGenerationCog(commands.Cog):
             )
         else:
             async with ctx.typing():
+                attachments = await extract_attachments(ctx.message, attachment)
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,

@@ -113,3 +113,5 @@ test_*.txt
 .junie/skills/mintlify/SKILL.md
 .agents/skills/mintlify/SKILL.md
 skills-lock.json
+outputs/week-1-baseline-audit.md
+outputs/week-1-baseline-audit.md

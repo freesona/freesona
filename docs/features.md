@@ -60,6 +60,7 @@ Freesona owns conversation history through the **ConversationManager** — a pro
   - `conversation_max_messages` (default: 20)
   - `conversation_token_budget` (default: 4000, rough estimation)
   - `conversation_ttl_seconds` (default: 3600 / 1 hour)
+- Keeps up to 8 MiB of original image data per in-memory conversation scope, so image follow-ups can reuse recent images until their messages are evicted or the conversation expires.
 - Provides `build_conversation_context()` for prompt injection (summary + recent messages format)
 - Runs periodic cleanup of expired conversations
 

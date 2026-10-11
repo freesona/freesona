@@ -19,6 +19,8 @@ from utils.config import load_config
 
 logger = logging.getLogger("FreesonaBot")
 
+_MAX_RETAINED_IMAGE_BYTES = 8 * 1024 * 1024
+
 
 # ---------------------------------------------------------------------------
 
@@ -52,6 +54,10 @@ class ConversationMessage:
     interaction_id: str | None = None
 
     embeds: list[str] | None = None  # Text representation of message embeds
+
+    attachments: list[tuple[bytes, str]] | None = None
+
+    has_image_attachment: bool = False
 
 
 @dataclass
@@ -144,13 +150,24 @@ async def add_message(
     mentions: list[dict] | None = None,
     reply: dict | None = None,
     embeds: list[str] | None = None,
+    attachments: list[tuple[bytes, str]] | None = None,
 ) -> None:
     """Add a message to the conversation history."""
 
-    if not content or not content.strip():
+    if (not content or not content.strip()) and not attachments:
         return
 
     state = await get_conversation(guild_id, channel_id, user_id)
+
+    retained_attachments = None
+    if attachments:
+        image_attachments = [
+            (data, mime)
+            for data, mime in attachments
+            if mime.startswith("image/")
+        ]
+        if sum(len(data) for data, _ in image_attachments) <= _MAX_RETAINED_IMAGE_BYTES:
+            retained_attachments = image_attachments or None
 
     msg = ConversationMessage(
         role=role,
@@ -162,6 +179,10 @@ async def add_message(
         mentions=mentions,
         reply=reply,
         embeds=embeds,
+        attachments=retained_attachments,
+        has_image_attachment=any(
+            mime.startswith("image/") for _, mime in (attachments or [])
+        ),
     )
 
     state.messages.append(msg)
@@ -179,6 +200,7 @@ async def add_user_message(
     mentions: list[dict] | None = None,
     reply: dict | None = None,
     embeds: list[str] | None = None,
+    attachments: list[tuple[bytes, str]] | None = None,
 ) -> None:
     """Add a user message to the conversation history."""
 
@@ -193,7 +215,19 @@ async def add_user_message(
         mentions,
         reply,
         embeds,
+        attachments,
     )
+
+
+async def get_recent_image_attachments(
+    guild_id: int, channel_id: int, user_id: int
+) -> list[tuple[bytes, str]]:
+    """Return image bytes from the most recent attachment-bearing user message."""
+    state = await get_conversation(guild_id, channel_id, user_id)
+    for message in reversed(state.messages):
+        if message.has_image_attachment:
+            return message.attachments or []
+    return []
 
 
 async def add_assistant_message(
@@ -476,6 +510,18 @@ async def _enforce_limits(state: ConversationState) -> None:
         # Keep at least 2 messages (1 exchange)
 
         state.messages.popleft()
+
+    retained_bytes = sum(
+        len(data)
+        for message in state.messages
+        for data, _ in (message.attachments or [])
+    )
+    for message in state.messages:
+        if retained_bytes <= _MAX_RETAINED_IMAGE_BYTES:
+            break
+        if message.attachments:
+            retained_bytes -= sum(len(data) for data, _ in message.attachments)
+            message.attachments = None
 
 
 async def cleanup_expired_conversations() -> int:

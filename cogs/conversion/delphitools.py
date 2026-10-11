@@ -74,8 +74,8 @@ async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]
 
     except asyncio.TimeoutError:
         proc.kill()
-
-        stdout = b""
+        await proc.communicate()
+        raise
 
     return_code = proc.returncode
 

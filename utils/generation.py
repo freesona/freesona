@@ -35,6 +35,7 @@ from utils.config import (
 from utils.conversation import (
     add_assistant_message,
     add_user_message,
+    get_recent_image_attachments,
 )
 from utils.persona import PERSONA_DATA as GLOBAL_PERSONA_DATA
 from utils.prompt_builder import build_system_prompt
@@ -444,22 +445,29 @@ async def _send_first_segment_with_reply(
 
 async def extract_attachments(
     message: discord.Message | None,
+    attachment: discord.Attachment | None = None,
 ) -> list[tuple[bytes, str]]:
     """Extract attachments from a Discord message.
 
     Args:
         message: Discord message object possibly containing attachments.
+        attachment: Attachment provided as a slash-command option.
 
     Returns:
         List of (bytes, mime_type) tuples for each attachment.
     """
 
-    if not message or not message.attachments:
+    message_attachments = message.attachments if message else []
+    all_attachments = list(message_attachments)
+    if attachment is not None and attachment not in all_attachments:
+        all_attachments.append(attachment)
+
+    if not all_attachments:
         return []
 
     results = []
 
-    for att in message.attachments:
+    for att in all_attachments:
         mime = att.content_type or ""
 
         mime_base = mime.split(";")[0].strip()
@@ -637,6 +645,29 @@ async def generate(
 
     text = sanitize_prompt(text)
 
+    image_reference = re.search(
+        r"\b(?:same|that|this|earlier|previous|before|uploaded)\b.{0,40}"
+        r"\b(?:image|photo|picture|worksheet|diagram|screenshot)\b|"
+        r"\b(?:image|photo|picture|worksheet|diagram|screenshot)\b.{0,40}"
+        r"\b(?:same|that|this|earlier|previous|before|uploaded)\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if not attachments and image_reference and guild_id and channel_id and user_id:
+        attachments = await get_recent_image_attachments(
+            guild_id, channel_id, user_id
+        )
+        if not attachments:
+            limitation = (
+                "The user refers to an image from earlier in the conversation, "
+                "but its original image data is no longer available. Be honest "
+                "about this; do not imply they never uploaded it."
+            )
+            instruction_prefix = "\n\n".join(
+                part for part in (instruction_prefix, limitation) if part
+            )
+
     # Add user message to conversation history (short-term memory)
 
     if guild_id and channel_id and user_id:
@@ -650,6 +681,7 @@ async def generate(
             mentions,
             reply,
             embeds,
+            attachments,
         )
 
     # Build system prompt using PromptBuilder (includes conversation history
