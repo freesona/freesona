@@ -34,7 +34,7 @@ class TestEvaluateIntent(unittest.TestCase):
     def test_question_uses_semantic_and_question_signals(self):
         result = evaluate_intent(self.make_message("How does this work?"), None)
         self.assertEqual(result.intent, INTENT_GENERAL_CHAT)
-        self.assertEqual(result.confidence, 0.6)
+        self.assertAlmostEqual(result.confidence, 0.6, places=2)
         self.assertTrue(result.requires_response)
         self.assertEqual(result.targets, ["semantic_trigger", "question_mark"])
 

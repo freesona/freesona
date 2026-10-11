@@ -778,6 +778,10 @@ async def generate(
 
             await set_last_interaction_id(guild_id, channel_id, user_id, interaction_id)
 
+        # Strip reasoning tags before storing in conversation history
+
+        output_text = _strip_reasoning_tags(output_text or "")
+
         # Add assistant response to conversation history
 
         if guild_id and channel_id and user_id and output_text:
