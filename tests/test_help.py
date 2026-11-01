@@ -4,14 +4,14 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cogs.conversion.delphitools import Delphitools
-from cogs.system.help import HelpCog
+from cogs.system.help import HelpCog, HelpView
 
 
 class MockContext:
@@ -46,6 +46,114 @@ async def test_help_menu_lists_delphitools_commands_in_tools_category():
     tools_help = view.categories["Tools"]
     assert tools_help == "`barcodegen` - Generate a barcode from text"
     assert any(button.label == "Tools" for button in view.children)
+
+
+@pytest.mark.anyio
+async def test_tools_help_refreshes_commands_loaded_after_panel_opened():
+    tools_cog = SimpleNamespace(help_category="Tools")
+    bot = SimpleNamespace(commands=[])
+    cog = HelpCog(cast(Any, bot))
+    view = HelpView(
+        bot,
+        MockContext(),
+        {"Tools": "None"},
+        "~",
+        cog.get_command_category,
+    )
+    command = SimpleNamespace(
+        name="contrast",
+        help="Check colour contrast",
+        hidden=False,
+        cog=tools_cog,
+    )
+    bot.commands.append(command)
+
+    message = SimpleNamespace(edit=AsyncMock())
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(defer=AsyncMock()),
+        message=message,
+        followup=None,
+    )
+    await view.update_help(cast(Any, interaction), "Tools")
+
+    embed = message.edit.await_args.kwargs["embed"]
+    assert embed.fields[0].value == "`contrast` - Check colour contrast"
+
+
+@pytest.mark.anyio
+async def test_tools_help_lists_slash_commands_without_prefix_commands():
+    tools_cog = SimpleNamespace(help_category="Tools")
+    bot = SimpleNamespace(
+        commands=[],
+        tree=SimpleNamespace(
+            walk_commands=lambda: [
+                SimpleNamespace(
+                    name="preflight",
+                    description="Analyse a PDF",
+                    binding=tools_cog,
+                )
+            ]
+        ),
+    )
+    cog = HelpCog(cast(Any, bot))
+    view = HelpView(
+        bot,
+        MockContext(),
+        {"Tools": "None"},
+        "~",
+        cog.get_command_category,
+    )
+    message = SimpleNamespace(edit=AsyncMock())
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(defer=AsyncMock()),
+        message=message,
+        followup=None,
+    )
+
+    await view.update_help(cast(Any, interaction), "Tools")
+
+    embed = message.edit.await_args.kwargs["embed"]
+    assert embed.fields[0].value == "`/preflight` - Analyse a PDF"
+
+
+@pytest.mark.anyio
+async def test_tools_help_lists_slash_subcommands_under_their_group():
+    tools_cog = SimpleNamespace(help_category="Tools")
+    regex_command = SimpleNamespace(name="regex", binding=tools_cog)
+    bot = SimpleNamespace(
+        commands=[],
+        tree=SimpleNamespace(
+            walk_commands=lambda: [
+                SimpleNamespace(
+                    name="tools",
+                    description="Delphitools utilities",
+                    commands=[regex_command],
+                )
+            ]
+        ),
+    )
+    cog = HelpCog(cast(Any, bot))
+    view = HelpView(
+        bot,
+        MockContext(),
+        {"Tools": "None"},
+        "~",
+        cog.get_command_category,
+    )
+    message = SimpleNamespace(edit=AsyncMock())
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(defer=AsyncMock()),
+        message=message,
+        followup=None,
+    )
+
+    await view.update_help(cast(Any, interaction), "Tools")
+
+    embed = message.edit.await_args.kwargs["embed"]
+    assert embed.fields[0].value == (
+        "`/tools` - Delphitools utilities\n"
+        "Slash subcommands: `/tools regex`"
+    )
 
 
 @pytest.mark.anyio

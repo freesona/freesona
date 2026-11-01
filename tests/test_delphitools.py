@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import discord
 import pytest
+from discord import app_commands
 from discord.ext import commands as discord_commands
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -682,6 +684,77 @@ def test_discord_choices_only_include_cli_supported_values():
     }
     assert choices("encode", "encoding") == {"base64", "url"}
     assert choices("decode", "encoding") == {"base64", "url"}
+
+
+@pytest.mark.anyio
+async def test_delphitools_slash_commands_fit_in_one_tools_group():
+    bot = discord_commands.Bot(
+        command_prefix="~", intents=discord.Intents.none()
+    )
+    cog = Delphitools(bot)
+
+    try:
+        await bot.add_cog(cog)
+
+        root_commands = bot.tree.get_commands()
+        assert [command.name for command in root_commands] == ["tools"]
+        assert isinstance(root_commands[0], app_commands.Group)
+        slash_commands = root_commands[0].commands
+        assert len(slash_commands) == 25
+        assert {command.name for command in slash_commands} == {
+            "barcodegen",
+            "base",
+            "colorblind",
+            "colour",
+            "contrast",
+            "convert",
+            "crop",
+            "decode",
+            "encode",
+            "favicon",
+            "font-info",
+            "glyph",
+            "harmony",
+            "hash",
+            "imgconvert",
+            "palette",
+            "paper",
+            "preflight",
+            "qrgen",
+            "regex",
+            "split",
+            "time",
+            "unit",
+            "unitconvert",
+            "watermark",
+        }
+
+        prefix_only = {
+            command.name
+            for command in cog.get_commands()
+            if getattr(command, "app_command", None) is None
+        }
+        assert prefix_only == {
+            "clip",
+            "completions",
+            "impose",
+            "line-height",
+            "matte",
+            "meta",
+            "noise",
+            "px2rem",
+            "rem2px",
+            "rmbg",
+            "scroll",
+            "shavian",
+            "svgo",
+            "trace",
+            "typo",
+            "wc",
+            "zine",
+        }
+    finally:
+        await bot.close()
 
 
 def test_all_delphitools_commands_have_three_second_user_cooldowns():

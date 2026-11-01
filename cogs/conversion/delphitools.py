@@ -132,7 +132,11 @@ async def _run_capture(
     return return_code, output.decode().strip()
 
 
-class Delphitools(commands.Cog):
+class Delphitools(
+    commands.GroupCog,
+    group_name="tools",
+    group_description="Delphitools utilities",
+):
     LIMIT_BYTES = 10 * 1024 * 1024  # 10 MB Discord upload limit
 
     help_category = "Tools"
@@ -364,7 +368,7 @@ class Delphitools(commands.Cog):
         description="Convert a colour between common colour formats.",
         help=(
             "Convert a colour such as `#ff6600` to one or more formats. "
-            "Example: `{prefix}colour #ff6600 hex,rgb,oklch`."
+            "Example: `colour #ff6600 hex,rgb,oklch`."
         ),
         usage="<colour> [formats]",
     )
@@ -391,7 +395,7 @@ class Delphitools(commands.Cog):
         description="Check the WCAG contrast ratio between two colours.",
         help=(
             "Check a foreground/background colour pair for WCAG AA and AAA. "
-            "Example: `{prefix}contrast #ffffff #222222`."
+            "Example: `contrast #ffffff #222222`."
         ),
         usage="<foreground> <background>",
     )
@@ -412,7 +416,7 @@ class Delphitools(commands.Cog):
         description="Generate a colour harmony from a base colour.",
         help=(
             "Generate related colours from a base colour. "
-            "Example: `{prefix}harmony #ff6600 complementary`."
+            "Example: `harmony #ff6600 complementary`."
         ),
         usage="<colour> [harmony_type]",
     )
@@ -439,7 +443,7 @@ class Delphitools(commands.Cog):
             "Test a Rust-compatible regular expression against text. "
             "Flags are letters: `g` all matches, `i` ignore case, "
             "`m` multiline, `s` dot-all, `x` extended. "
-            'Example: `{prefix}regex "\\\\d{3}-\\\\d{4}" '
+            'Example: `regex "\\\\d{3}-\\\\d{4}" '
             '"phone: 555-1234"`.'
         ),
         usage="<pattern> <text> [flags]",
@@ -469,7 +473,7 @@ class Delphitools(commands.Cog):
             "Convert a number between decimal, hexadecimal, octal, and binary."
         ),
         help=(
-            "Convert a number between bases. Example: `{prefix}base 255 hex`."
+            "Convert a number between bases. Example: `base 255 hex`."
         ),
         usage="<value> [targets] [from_base]",
     )
@@ -501,7 +505,7 @@ class Delphitools(commands.Cog):
         help=(
             "Convert a timestamp or date, optionally changing timezone or "
             "adding/subtracting a duration. Example: "
-            "`{prefix}time 2026-01-01 UTC 30d`."
+            "`time 2026-01-01 UTC 30d`."
         ),
         usage="[input] [timezone] [add] [subtract] [formats]",
     )
@@ -536,11 +540,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "Time", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="wc",
         description="Count words, characters, sentences, and reading time.",
         help=(
             "Count words, characters, sentences, and estimated reading time. "
-            'Example: `{prefix}wc "The quick brown fox."`.'
+            'Example: `wc "The quick brown fox."`.'
         ),
         usage="<text>",
     )
@@ -554,7 +559,7 @@ class Delphitools(commands.Cog):
         description="Look up standard paper dimensions.",
         help=(
             "Look up a paper size such as A4 or Letter. "
-            "Example: `{prefix}paper A4`."
+            "Example: `paper A4`."
         ),
         usage="[name] [unit] [series] [pixels] [dpi]",
     )
@@ -593,7 +598,7 @@ class Delphitools(commands.Cog):
         description="Look up Unicode characters by codepoint or name.",
         help=(
             "Look up a Unicode codepoint, search character names, or list a "
-            "range. Example: `{prefix}glyph U+2603`."
+            "range. Example: `glyph U+2603`."
         ),
         usage="[input] [search] [range] [limit]",
     )
@@ -627,11 +632,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "Glyph lookup", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="px2rem",
         description="Convert CSS pixels to rem.",
         help=(
             "Convert a pixel value to rem, using a 16px base by default. "
-            "Example: `{prefix}px2rem 24 16`."
+            "Example: `px2rem 24 16`."
         ),
         usage="<value> [base]",
     )
@@ -648,11 +654,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "px to rem", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="rem2px",
         description="Convert CSS rem to pixels.",
         help=(
             "Convert a rem value to pixels, using a 16px base by default. "
-            "Example: `{prefix}rem2px 1.5 16`."
+            "Example: `rem2px 1.5 16`."
         ),
         usage="<value> [base]",
     )
@@ -667,11 +674,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "rem to px", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="line-height",
         description="Compute line-height values for a font size.",
         help=(
             "Calculate line-height suggestions for a font size. "
-            "Example: `{prefix}line-height 16`."
+            "Example: `line-height 16`."
         ),
         usage="[font_size] [name]",
     )
@@ -694,11 +702,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "Line height", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="typo",
         description="Convert typographic measurements.",
         help=(
             "Convert values between pt, px, mm, em, rem, pc, in, and cm. "
-            "Example: `{prefix}typo 12pt px,mm`."
+            "Example: `typo 12pt px,mm`."
         ),
         usage="<value> [targets] [base]",
     )
@@ -725,11 +734,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "Typography conversion", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="shavian",
         description="Transliterate English text to the Shavian alphabet.",
         help=(
             "Convert English text to the Shavian alphabet. "
-            'Example: `{prefix}shavian "Hello world"`.'
+            'Example: `shavian "Hello world"`.'
         ),
         usage="<text> [gloss]",
     )
@@ -746,11 +756,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "Shavian transliteration", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="meta",
         description="Generate HTML social-sharing meta tags.",
         help=(
             "Generate HTML title, description, and social-sharing tags. "
-            'Example: `{prefix}meta "My page" "A page description"`.'
+            'Example: `meta "My page" "A page description"`.'
         ),
         usage="<title> <description> [url] [image]",
     )
@@ -777,11 +788,12 @@ class Delphitools(commands.Cog):
         await self._run_text_cli(ctx, "Meta tags", *args)
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="completions",
         description="Generate a shell completion script for Delphitools.",
         help=(
             "Generate a completion script you can download and install in "
-            "your local shell. Example: `{prefix}completions powershell`."
+            "your local shell. Example: `completions powershell`."
         ),
         usage="<shell>",
     )
@@ -855,7 +867,7 @@ class Delphitools(commands.Cog):
         description="Crop an image to an aspect ratio.",
         help=(
             "Crop an attached image to an aspect ratio such as 1:1 or 16:9. "
-            "Example: `{prefix}crop 1:1` with an image attached."
+            "Example: `crop 1:1` with an image attached."
         ),
         usage="<ratio> [position] (attach image)",
     )
@@ -887,11 +899,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="matte",
         description="Place an image on a square or aspect-ratio matte.",
         help=(
             "Fit an image onto a matte using blur, solid colour, or gradient. "
-            "Example: `{prefix}matte 1:1 blur` with an image attached."
+            "Example: `matte 1:1 blur` with an image attached."
         ),
         usage="[ratio] [mode] [colour] (attach image)",
     )
@@ -928,11 +941,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="scroll",
         description="Split a wide image into social carousel tiles.",
         help=(
             "Split a wide image into carousel tiles. "
-            "Example: `{prefix}scroll 4:5` with an image attached."
+            "Example: `scroll 4:5` with an image attached."
         ),
         usage="[ratio] [fill] [colour] (attach image)",
     )
@@ -972,7 +986,7 @@ class Delphitools(commands.Cog):
         description="Generate favicon files from an image.",
         help=(
             "Generate standard favicon sizes from an attached image. "
-            "Example: `{prefix}favicon` with an image attached. Use slash "
+            "Example: `favicon` with an image attached. Use slash "
             "options to select sizes or include favicon.ico."
         ),
         usage="[sizes] [ico] (attach image)",
@@ -1007,11 +1021,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="svgo",
         description="Optimise an attached SVG file.",
         help=(
             "Optimise an SVG file and return the optimised result. "
-            "Example: `{prefix}svgo` with an SVG attached."
+            "Example: `svgo` with an SVG attached."
         ),
         usage="(attach SVG file)",
     )
@@ -1036,7 +1051,7 @@ class Delphitools(commands.Cog):
         description="Split an image into a grid of tiles.",
         help=(
             "Split an image into a grid of up to 10 tiles. "
-            "Example: `{prefix}split 2 2` with an image attached."
+            "Example: `split 2 2` with an image attached."
         ),
         usage="<rows> <columns> (attach image)",
     )
@@ -1078,7 +1093,7 @@ class Delphitools(commands.Cog):
         help=(
             "Convert an attached image to a different format, with optional "
             "resize. JPEG quality is configurable; WebP output is lossless. "
-            "Example: `{prefix}convert webp 800x` with an image attached."
+            "Example: `convert webp 800x` with an image attached."
         ),
         usage="<format> [resize] [quality] (attach image)",
     )
@@ -1135,11 +1150,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="noise",
         description="Add a colour-noise overlay to an image.",
         help=(
             "Add a subtle grain/noise overlay to an image. "
-            "Example: `{prefix}noise 0.15 1.0` with an image attached."
+            "Example: `noise 0.15 1.0` with an image attached."
         ),
         usage="[opacity] [scale] [seed] (attach image)",
     )
@@ -1184,12 +1200,13 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="rmbg",
         description="Remove the background from an attached image.",
         help=(
             "Remove an image background. The first use downloads a roughly "
             "170 MB model to the bot host. "
-            "Example: `{prefix}rmbg` with an image attached."
+            "Example: `rmbg` with an image attached."
         ),
         usage="(attach image; first run downloads a model)",
     )
@@ -1210,11 +1227,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="trace",
         description="Trace a raster image into an SVG.",
         help=(
             "Convert a raster image to a vector SVG. "
-            "Example: `{prefix}trace detailed` with an image attached."
+            "Example: `trace detailed` with an image attached."
         ),
         usage="[preset] [colours] [blur] (attach image)",
     )
@@ -1253,11 +1271,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="clip",
         description="Trim transparent edges from a PNG.",
         help=(
             "Trim transparent borders around an image. "
-            "Example: `{prefix}clip` with a PNG attached."
+            "Example: `clip` with a PNG attached."
         ),
         usage="(attach PNG image)",
     )
@@ -1282,7 +1301,7 @@ class Delphitools(commands.Cog):
         description="Extract metadata from an attached font file.",
         help=(
             "Show metadata from a TTF, OTF, WOFF, or WOFF2 font. "
-            "Example: `{prefix}font-info` with a font file attached."
+            "Example: `font-info` with a font file attached."
         ),
         usage="(attach TTF/OTF/WOFF/WOFF2 file)",
     )
@@ -1307,7 +1326,7 @@ class Delphitools(commands.Cog):
         description="Analyse a PDF for print-readiness issues.",
         help=(
             "Check an attached PDF for print-readiness issues. "
-            "Example: `{prefix}preflight` with a PDF attached."
+            "Example: `preflight` with a PDF attached."
         ),
         usage="(attach PDF file)",
     )
@@ -1330,11 +1349,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="impose",
         description="Prepare a PDF for booklet or n-up printing.",
         help=(
             "Impose an attached PDF for saddle-stitch, perfect-bind, or n-up "
-            "printing. Example: `{prefix}impose saddle-stitch` with a PDF."
+            "printing. Example: `impose saddle-stitch` with a PDF."
         ),
         usage="[layout] [paper] (attach PDF)",
     )
@@ -1367,11 +1387,12 @@ class Delphitools(commands.Cog):
         )
 
     @commands.hybrid_command(
+        with_app_command=False,
         name="zine",
         description="Arrange eight images into a single-sheet mini-zine.",
         help=(
             "Arrange exactly eight attached images into a printable "
-            "single-sheet mini-zine. Example: `{prefix}zine` with 8 images."
+            "single-sheet mini-zine. Example: `zine` with 8 images."
         ),
         usage="(attach exactly 8 images)",
     )
@@ -1449,7 +1470,7 @@ class Delphitools(commands.Cog):
             "Convert an attached image to PNG, JPG, WebP, GIF, BMP, TIFF, "
             "or ICO. You can also set a width and height in pixels. "
             "Attach the image to the command message. "
-            "Example: `{prefix}imgconvert webp` with an image attached."
+            "Example: `imgconvert webp` with an image attached."
         ),
         usage="<format> [width] [height] (attach image)",
     )
@@ -1629,7 +1650,7 @@ class Delphitools(commands.Cog):
             "Overlay a second image as a watermark on the first image. "
             "Set opacity and relative scale from 0.0 to 1.0. "
             "Attach the base image and watermark image to the command. "
-            "Example: `{prefix}watermark` with both images attached."
+            "Example: `watermark` with both images attached."
         ),
         usage="[opacity] [position] [scale] (attach base and watermark)",
     )
@@ -1832,7 +1853,7 @@ class Delphitools(commands.Cog):
             "Create a palette with an analogous, complementary, triadic, "
             "monochromatic, true-random, or random-cohesive strategy. "
             "Choose 1-20 colors (default 5). PNG is the supported image "
-            "format. Example: `{prefix}palette analogous 5 png`."
+            "format. Example: `palette analogous 5 png`."
         ),
         usage="<strategy> [count] [format]",
     )
@@ -1997,7 +2018,7 @@ class Delphitools(commands.Cog):
             "deuteranopia, tritanopia, or achromatopsia. Select `all` to "
             "generate all four variants. "
             "Attach the image to the command message. "
-            "Example: `{prefix}colorblind all` with an image attached."
+            "Example: `colorblind all` with an image attached."
         ),
         usage="<type> (attach image)",
     )
@@ -2173,7 +2194,7 @@ class Delphitools(commands.Cog):
         description="Create a QR code from text or a link.",
         help=(
             "Create a QR code that contains the text or link you provide. "
-            "Example: `{prefix}qrgen https://example.com`."
+            "Example: `qrgen https://example.com`."
         ),
         usage="<text or link>",
     )
@@ -2238,7 +2259,7 @@ class Delphitools(commands.Cog):
         help=(
             "Encode text or a number as a Code 128 or EAN-13 barcode. "
             "Choose the format after the data. "
-            "Example: `{prefix}barcodegen 12345678 code128`."
+            "Example: `barcodegen 12345678 code128`."
         ),
         usage="<data> <type>",
     )
@@ -2321,7 +2342,7 @@ class Delphitools(commands.Cog):
         help=(
             "Convert a number between units. Enter the value, source unit, "
             "then target unit. The available units depend on the unit type. "
-            "Example: `{prefix}unit 10 km mi`."
+            "Example: `unit 10 km mi`."
         ),
         usage="<value> <from_unit> <to_unit>",
     )
@@ -2370,7 +2391,7 @@ class Delphitools(commands.Cog):
         description="Convert a value from one unit to another.",
         help=(
             "Convert a number between units. Enter the value, source unit, "
-            "then target unit. Example: `{prefix}unit 10 km mi`."
+            "then target unit. Example: `unit 10 km mi`."
         ),
         usage="<value> <from_unit> <to_unit>",
     )
@@ -2392,7 +2413,7 @@ class Delphitools(commands.Cog):
         description="Encode text as Base64, hexadecimal, or URL text.",
         help=(
             "Encode text as Base64 or URL text. "
-            "Example: `{prefix}encode hello base64`."
+            "Example: `encode hello base64`."
         ),
         usage="<text> <encoding>",
     )
@@ -2446,7 +2467,7 @@ class Delphitools(commands.Cog):
         description="Decode Base64 or URL text.",
         help=(
             "Convert encoded Base64 or URL text back to text. "
-            "Example: `{prefix}decode aGVsbG8= base64`."
+            "Example: `decode aGVsbG8= base64`."
         ),
         usage="<encoded_text> <encoding>",
     )
@@ -2503,7 +2524,7 @@ class Delphitools(commands.Cog):
         help=(
             "Create a fixed-length digest of text. A hash cannot be reversed. "
             "Select `md5`, `sha1`, or `sha256`. "
-            "Example: `{prefix}hash hello sha256`."
+            "Example: `hash hello sha256`."
         ),
         usage="<data> <algorithm>",
     )
@@ -2557,3 +2578,4 @@ class Delphitools(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
 
     await bot.add_cog(Delphitools(bot))
+
