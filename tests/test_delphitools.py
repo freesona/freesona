@@ -234,6 +234,54 @@ async def test_imgconvert_sends_generated_image():
 
 
 @pytest.mark.anyio
+async def test_colorblind_uses_cli_arguments_and_sends_generated_image(
+    monkeypatch,
+):
+    cog = Delphitools(bot=MagicMock())
+    attachment = MagicMock(
+        filename="sample.png",
+        content_type="image/png",
+    )
+    ctx = MockContext(message=MagicMock())
+    monkeypatch.setattr(
+        "cogs.conversion.delphitools.time.perf_counter",
+        MagicMock(side_effect=[10.0, 12.34]),
+    )
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        assert command[:2] == ("dt", "colorblind")
+        assert command[2].endswith("input.png")
+        assert command[3] == "--output"
+        assert command[4].endswith("colorblind_protanopia_sample.png")
+        assert command[5:] == ("--cb-type", "protanopia")
+        Path(command[4]).write_bytes(b"simulated-image")
+        return 0, ""
+
+    with (
+        patch(
+            "cogs.conversion.delphitools.extract_attachments",
+            new=AsyncMock(return_value=[(b"image-data", "image/png")]),
+        ),
+        patch(
+            "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+        ) as run_capture,
+    ):
+        await cast(Any, cog.colorblind.callback)(
+            cog, ctx, "protanopia", attachment
+        )
+
+    call = run_capture.await_args
+    assert call is not None
+    assert call.kwargs == {"timeout": 300}
+    assert len(ctx.sent) == 1
+    assert ctx.sent[0]["content"] == "✅ **Protanopia done in 2.34s**"
+    assert ctx.sent[0]["uploaded_filename"] == (
+        "colorblind_protanopia_sample.png"
+    )
+    assert ctx.sent[0]["uploaded_bytes"] == b"simulated-image"
+
+
+@pytest.mark.anyio
 async def test_encode_reports_cli_failure_details():
     cog = Delphitools(bot=MagicMock())
     ctx = MockContext()

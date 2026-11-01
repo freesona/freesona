@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 
 import discord
@@ -667,6 +668,8 @@ class Delphitools(commands.Cog):
 
         async with ctx.typing():
             try:
+                started_at = time.perf_counter()
+
                 # Extract attachment data
 
                 attachments = await extract_attachments(ctx.message)
@@ -708,8 +711,9 @@ class Delphitools(commands.Cog):
                         "dt",
                         "colorblind",
                         str(input_file),
+                        "--output",
                         str(output_file),
-                        "--type",
+                        "--cb-type",
                         type,
                     ]
 
@@ -759,11 +763,11 @@ class Delphitools(commands.Cog):
 
                     # Send the processed image
 
+                    elapsed = time.perf_counter() - started_at
                     await ctx.send(
                         content=(
-                            f"✅ **Colorblind simulation completed** "
-                            f"({type} simulation applied to "
-                            f"{attachment.filename})"
+                            f"✅ **{type.capitalize()} done in "
+                            f"{elapsed:.2f}s**"
                         ),
                         file=discord.File(str(output_file)),
                     )
