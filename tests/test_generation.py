@@ -7,17 +7,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 
+from utils.discord_adapter import (
+    _send_first_segment_with_reply,
+    extract_attachments,
+    send_response,
+)
 from utils.generation import (
     ConversationResponse,
     GenerationError,
     MessageSegment,
-    _send_first_segment_with_reply,
     _strip_reasoning_tags,
     clean_text,
-    extract_attachments,
     generate,
     safe_generate,
-    send_response,
 )
 from utils.interaction import InteractionRequest
 
@@ -36,7 +38,9 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
         response = ConversationResponse(
-            segments=[MessageSegment(text="Hello world", typing=False, delay=0)]
+            segments=[
+                MessageSegment(text="Hello world", typing=False, delay=0)
+            ]
         )
         await send_response(response, channel)
         channel.send.assert_called_once_with("Hello world")
@@ -92,7 +96,9 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
             side_effect=discord.NotFound(MagicMock(), "Not found")
         )
         response = ConversationResponse(
-            segments=[MessageSegment(text="Reply fallback", typing=False, delay=0)]
+            segments=[
+                MessageSegment(text="Reply fallback", typing=False, delay=0)
+            ]
         )
         await send_response(response, channel, reply_to=reply_to)
         # Should fall back to channel.send
@@ -283,7 +289,10 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
         earlier_image = [(b"original-image", "image/png")]
         with (
             patch("utils.generation.rate_limit", new_callable=AsyncMock),
-            patch("utils.generation.sanitize_prompt", side_effect=lambda value: value),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
             patch("utils.generation.add_user_message", new_callable=AsyncMock),
             patch(
                 "utils.generation.get_recent_image_attachments",
@@ -296,12 +305,21 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
                 return_value="system",
             ),
             patch(
-                "utils.generation.generate_text", return_value="It shows a worksheet."
+                "utils.generation.generate_text",
+                return_value="It shows a worksheet.",
             ) as provider,
-            patch("utils.generation.add_assistant_message", new_callable=AsyncMock),
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ),
             patch("utils.generation.get_provider_name", return_value="openai"),
-            patch("utils.generation.get_provider_model", return_value="model-x"),
-            patch("utils.generation.get_model_name", return_value="fallback-model"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
             patch("utils.generation.get_model_temperature", return_value=0.4),
             patch("utils.generation.KB_ENABLED", False),
         ):
@@ -314,12 +332,17 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
             )
 
         get_images.assert_awaited_once_with(2, 3, 1)
-        self.assertEqual(provider.call_args.kwargs["attachments"], earlier_image)
+        self.assertEqual(
+            provider.call_args.kwargs["attachments"], earlier_image
+        )
 
     async def test_missing_referenced_image_is_disclosed_to_provider(self):
         with (
             patch("utils.generation.rate_limit", new_callable=AsyncMock),
-            patch("utils.generation.sanitize_prompt", side_effect=lambda value: value),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
             patch("utils.generation.add_user_message", new_callable=AsyncMock),
             patch(
                 "utils.generation.get_recent_image_attachments",
@@ -335,10 +358,18 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
                 "utils.generation.generate_text",
                 return_value="I cannot access that image now.",
             ) as provider,
-            patch("utils.generation.add_assistant_message", new_callable=AsyncMock),
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ),
             patch("utils.generation.get_provider_name", return_value="openai"),
-            patch("utils.generation.get_provider_model", return_value="model-x"),
-            patch("utils.generation.get_model_name", return_value="fallback-model"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
             patch("utils.generation.get_model_temperature", return_value=0.4),
             patch("utils.generation.KB_ENABLED", False),
         ):
@@ -356,7 +387,9 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
             provider.call_args.kwargs["instruction_prefix"],
         )
 
-    async def test_generate_preserves_serialized_context_and_provider_handoff(self):
+    async def test_generate_preserves_serialized_context_and_provider_handoff(
+        self,
+    ):
         prompt = {
             "content": "hello",
             "mentions": [{"id": 8, "name": "Lin", "mention": "<@8>"}],
@@ -380,14 +413,23 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
             ) as build_prompt,
             patch(
                 "utils.generation.generate_text",
-                return_value=("Hello <thought>private</thought>", "interaction-2"),
+                return_value=(
+                    "Hello <thought>private</thought>",
+                    "interaction-2",
+                ),
             ) as provider,
             patch(
-                "utils.generation.add_assistant_message", new_callable=AsyncMock
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
             ) as add_assistant,
             patch("utils.generation.get_provider_name", return_value="gemini"),
-            patch("utils.generation.get_provider_model", return_value="model-x"),
-            patch("utils.generation.get_model_name", return_value="fallback-model"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
             patch("utils.generation.get_model_temperature", return_value=0.4),
             patch("utils.generation.KB_ENABLED", True),
             patch("utils.generation.KB_TOP_K", 5),
@@ -397,7 +439,8 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
                 return_value="interaction-1",
             ),
             patch(
-                "utils.conversation.set_last_interaction_id", new_callable=AsyncMock
+                "utils.conversation.set_last_interaction_id",
+                new_callable=AsyncMock,
             ) as set_interaction,
         ):
             response = await generate(
@@ -425,8 +468,12 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
             attachments,
         )
         assert build_prompt.await_args is not None
-        self.assertEqual(build_prompt.await_args.kwargs["persona_id"], "persona-a")
-        self.assertEqual(build_prompt.await_args.kwargs["user_message"], "clean:hello")
+        self.assertEqual(
+            build_prompt.await_args.kwargs["persona_id"], "persona-a"
+        )
+        self.assertEqual(
+            build_prompt.await_args.kwargs["user_message"], "clean:hello"
+        )
         self.assertEqual(provider.call_args.args[0], "clean:hello")
         self.assertEqual(
             provider.call_args.kwargs["system_prompt"], "assembled context"
@@ -443,10 +490,14 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
     async def test_generate_classifies_provider_timeout(self):
         with (
             patch("utils.generation.rate_limit", new_callable=AsyncMock),
-            patch("utils.generation.sanitize_prompt", side_effect=lambda value: value),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
             patch("utils.generation.add_user_message", new_callable=AsyncMock),
             patch(
-                "utils.generation.get_recent_image_attachments", new_callable=AsyncMock
+                "utils.generation.get_recent_image_attachments",
+                new_callable=AsyncMock,
             ) as get_images,
             patch(
                 "utils.generation.build_system_prompt",
@@ -458,15 +509,22 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
                 side_effect=TimeoutError("request timed out"),
             ),
             patch("utils.generation.get_provider_name", return_value="openai"),
-            patch("utils.generation.get_provider_model", return_value="model-x"),
-            patch("utils.generation.get_model_name", return_value="fallback-model"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
             patch("utils.generation.get_model_temperature", return_value=0.4),
             patch("utils.generation.KB_ENABLED", False),
             patch("utils.generation.KB_TOP_K", 5),
             self.assertRaises(GenerationError) as raised,
         ):
             await generate("hello", current_persona="persona")
-        self.assertEqual(type(raised.exception).__name__, "TimeoutGenerationError")
+        self.assertEqual(
+            type(raised.exception).__name__, "TimeoutGenerationError"
+        )
         get_images.assert_not_awaited()
 
     async def test_safe_generate_accepts_plain_interaction_request(self):
@@ -489,7 +547,10 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
         world_accessor = object()
         with (
             patch("utils.generation.rate_limit", new_callable=AsyncMock),
-            patch("utils.generation.sanitize_prompt", side_effect=lambda value: value),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
             patch(
                 "utils.generation.add_user_message", new_callable=AsyncMock
             ) as add_user,
@@ -503,14 +564,21 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
                 return_value="assembled context",
             ) as build_prompt,
             patch(
-                "utils.generation.generate_text", return_value="We chose Friday."
+                "utils.generation.generate_text",
+                return_value="We chose Friday.",
             ) as provider,
             patch(
-                "utils.generation.add_assistant_message", new_callable=AsyncMock
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
             ) as add_assistant,
             patch("utils.generation.get_provider_name", return_value="openai"),
-            patch("utils.generation.get_provider_model", return_value="model-x"),
-            patch("utils.generation.get_model_name", return_value="fallback-model"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
             patch("utils.generation.get_model_temperature", return_value=0.4),
             patch("utils.generation.KB_ENABLED", False),
             patch("utils.generation.KB_TOP_K", 5),
@@ -555,17 +623,23 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.call_args.kwargs["max_output_tokens"], 2048)
         self.assertEqual(provider.call_args.kwargs["temperature"], 0.4)
         self.assertEqual(provider.call_args.kwargs["user_id"], request.user_id)
-        self.assertEqual(provider.call_args.kwargs["username"], request.username)
+        self.assertEqual(
+            provider.call_args.kwargs["username"], request.username
+        )
         self.assertEqual(
             provider.call_args.kwargs["instruction_prefix"],
             request.instruction_prefix,
         )
-        self.assertEqual(provider.call_args.kwargs["attachments"], request.attachments)
+        self.assertEqual(
+            provider.call_args.kwargs["attachments"], request.attachments
+        )
         add_assistant.assert_awaited_once_with(2, 3, 1, "We chose Friday.")
 
     async def test_safe_generate_keeps_legacy_command_arguments(self):
         response = ConversationResponse(
-            segments=[MessageSegment(text="Legacy response", typing=False, delay=0)]
+            segments=[
+                MessageSegment(text="Legacy response", typing=False, delay=0)
+            ]
         )
         with patch(
             "utils.generation.generate",
@@ -574,7 +648,9 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
         ) as generate_mock:
             result = await safe_generate("hello", current_persona="persona")
 
-        generate_mock.assert_awaited_once_with("hello", current_persona="persona")
+        generate_mock.assert_awaited_once_with(
+            "hello", current_persona="persona"
+        )
         self.assertIs(result, response)
 
 

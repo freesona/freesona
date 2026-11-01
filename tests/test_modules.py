@@ -34,7 +34,9 @@ class ModulesTests(unittest.TestCase):
         self.modules_module = importlib.reload(modules_module)
 
     def test_normalized_module_name(self):
-        self.assertEqual(self.modules_module.normalized_module_name("  MATH  "), "math")
+        self.assertEqual(
+            self.modules_module.normalized_module_name("  MATH  "), "math"
+        )
 
     def test_module_extension(self):
         self.assertEqual(

@@ -40,7 +40,9 @@ class ConfigModal(ui.Modal, title="Edit Config Value"):
         self.value_input = ui.TextInput(
             label=key,
             placeholder=(
-                f"Current: {current_value}" if current_value else "Enter value..."
+                f"Current: {current_value}"
+                if current_value
+                else "Enter value..."
             ),
             default=current_value,
             required=False,
@@ -138,12 +140,16 @@ class ConfigModal(ui.Modal, title="Edit Config Value"):
 class ConfigKeySelect(ui.Select):
     """Select menu for choosing a config key to edit."""
 
-    def __init__(self, keys: list[str], placeholder: str = "Select a config key..."):
+    def __init__(
+        self, keys: list[str], placeholder: str = "Select a config key..."
+    ):
 
         options = [
             discord.SelectOption(
                 label=key,
-                description=CONFIG_DESCRIPTIONS.get(key, "No description")[:100],
+                description=CONFIG_DESCRIPTIONS.get(key, "No description")[
+                    :100
+                ],
                 value=key,
             )
             for key in keys[:25]  # Discord limit
@@ -223,7 +229,9 @@ class ConfigPanelView(ui.View):
         else:
             embed = discord.Embed(
                 title="⚙️ Configuration Panel",
-                description=("Select a category to view and edit config values."),
+                description=(
+                    "Select a category to view and edit config values."
+                ),
                 color=discord.Color.blue(),
             )
 
@@ -238,7 +246,9 @@ class ConfigPanelView(ui.View):
 
         return embed
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self, interaction: discord.Interaction
+    ) -> bool:
 
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
@@ -278,7 +288,9 @@ class ConfigPanelView(ui.View):
 
         embed = discord.Embed(
             title=f"⚙️ {category} Settings",
-            description=("Select a key to edit its value. Current values shown."),
+            description=(
+                "Select a key to edit its value. Current values shown."
+            ),
             color=discord.Color.green(),
         )
 
@@ -331,7 +343,9 @@ class ConfigCategorySelect(ui.Select):
 
         view.add_item(ConfigCategorySelect())
 
-        view.add_item(ConfigKeySelect(CONFIG_CATEGORIES[view.current_category]))
+        view.add_item(
+            ConfigKeySelect(CONFIG_CATEGORIES[view.current_category])
+        )
 
         await interaction.response.edit_message(
             embed=view.create_key_embed(view.current_category), view=view
@@ -351,7 +365,9 @@ class ConfigResetConfirmView(ui.View):
 
         self.message: discord.Message | None = None
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self, interaction: discord.Interaction
+    ) -> bool:
 
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
@@ -363,7 +379,9 @@ class ConfigResetConfirmView(ui.View):
         return True
 
     @ui.button(label="Confirm Reset", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction: discord.Interaction, button: ui.Button):
+    async def confirm(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
 
         config = load_config()
 
@@ -391,7 +409,9 @@ class ConfigResetConfirmView(ui.View):
         self.stop()
 
     @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+    async def cancel(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
 
         await interaction.response.edit_message(
             content="❌ Reset cancelled.", embed=None, view=None
@@ -415,7 +435,9 @@ class ConfigSelectView(ui.View):
 
         self.add_item(ConfigKeySelectForMode(mode))
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self, interaction: discord.Interaction
+    ) -> bool:
 
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
@@ -444,14 +466,18 @@ class ConfigKeySelectForMode(ui.Select):
         options = [
             discord.SelectOption(
                 label=key,
-                description=CONFIG_DESCRIPTIONS.get(key, "No description")[:100],
+                description=CONFIG_DESCRIPTIONS.get(key, "No description")[
+                    :100
+                ],
                 value=key,
             )
             for key in sorted(all_keys)[:25]  # Discord limit
         ]
 
         placeholder = (
-            "Select a key to view..." if mode == "view" else "Select a key to reset..."
+            "Select a key to view..."
+            if mode == "view"
+            else "Select a key to reset..."
         )
 
         super().__init__(
@@ -499,7 +525,9 @@ class ConfigKeySelectForMode(ui.Select):
 
             else:
                 await interaction.response.edit_message(
-                    content=(f"`{key}` is already at default value (`{default}`)."),
+                    content=(
+                        f"`{key}` is already at default value (`{default}`)."
+                    ),
                     embed=None,
                     view=None,
                 )

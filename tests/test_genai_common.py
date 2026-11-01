@@ -3,7 +3,10 @@ from unittest.mock import MagicMock
 
 import discord
 
-from cogs.ai.genai_common import get_reply_target, should_respond_in_chat_channel
+from cogs.ai.genai_common import (
+    get_reply_target,
+    should_respond_in_chat_channel,
+)
 
 
 class TestChatResponseModes(unittest.TestCase):
@@ -22,11 +25,15 @@ class TestChatResponseModes(unittest.TestCase):
 
     def test_mentions_mode_requires_mention_or_reply_to_bot(self):
         self.assertFalse(
-            should_respond_in_chat_channel(self.message, self.bot_user, "mentions")
+            should_respond_in_chat_channel(
+                self.message, self.bot_user, "mentions"
+            )
         )
         self.message.mentions = [self.bot_user]
         self.assertTrue(
-            should_respond_in_chat_channel(self.message, self.bot_user, "mentions")
+            should_respond_in_chat_channel(
+                self.message, self.bot_user, "mentions"
+            )
         )
         self.message.mentions = []
         reference = MagicMock()
@@ -34,21 +41,29 @@ class TestChatResponseModes(unittest.TestCase):
         reference.resolved.author = self.bot_user
         self.message.reference = reference
         self.assertTrue(
-            should_respond_in_chat_channel(self.message, self.bot_user, "mentions")
+            should_respond_in_chat_channel(
+                self.message, self.bot_user, "mentions"
+            )
         )
 
     def test_smart_mode_also_accepts_attachments(self):
         self.assertFalse(
-            should_respond_in_chat_channel(self.message, self.bot_user, "smart")
+            should_respond_in_chat_channel(
+                self.message, self.bot_user, "smart"
+            )
         )
         self.message.attachments = [object()]
         self.assertTrue(
-            should_respond_in_chat_channel(self.message, self.bot_user, "smart")
+            should_respond_in_chat_channel(
+                self.message, self.bot_user, "smart"
+            )
         )
 
     def test_unknown_mode_preserves_current_accept_behavior(self):
         self.assertTrue(
-            should_respond_in_chat_channel(self.message, self.bot_user, "unknown")
+            should_respond_in_chat_channel(
+                self.message, self.bot_user, "unknown"
+            )
         )
 
 

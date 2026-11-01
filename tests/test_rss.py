@@ -45,7 +45,9 @@ class RssTests(unittest.TestCase):
             self.rss_module.normalize_date("Sun, 24 May 2026 01:00:00 GMT"),
             "2026-05-24 01:00 UTC",
         )
-        self.assertEqual(self.rss_module.normalize_date("invalid-date"), "invalid-date")
+        self.assertEqual(
+            self.rss_module.normalize_date("invalid-date"), "invalid-date"
+        )
         self.assertEqual(self.rss_module.normalize_date(None), "")
 
     def test_parse_feed_rss(self):
@@ -92,14 +94,18 @@ class RssTests(unittest.TestCase):
             ["https://example.com/1", "https://example.com/2"]
         )
         seen = self.rss_module.load_seen_links()
-        self.assertEqual(seen, {"https://example.com/1", "https://example.com/2"})
+        self.assertEqual(
+            seen, {"https://example.com/1", "https://example.com/2"}
+        )
 
     def test_feed_crud(self):
         # Initial feeds should include defaults
         feeds = self.rss_module.load_rss_feeds()
         self.assertIn("bbc-world", feeds)
         # Save a new custom feed
-        self.rss_module.save_rss_feed("my-custom-feed", "https://custom.com/rss")
+        self.rss_module.save_rss_feed(
+            "my-custom-feed", "https://custom.com/rss"
+        )
         feeds = self.rss_module.load_rss_feeds()
         self.assertIn("my-custom-feed", feeds)
         self.assertEqual(feeds["my-custom-feed"], "https://custom.com/rss")

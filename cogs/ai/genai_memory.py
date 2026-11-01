@@ -33,7 +33,9 @@ class GenAIMemoryCog(commands.Cog):
             "in this channel (default: False)."
         ),
     )
-    async def clear_memory(self, ctx: commands.Context, clear_facts: bool = False):
+    async def clear_memory(
+        self, ctx: commands.Context, clear_facts: bool = False
+    ):
         guild = ctx.guild
         if guild is None:
             await ctx.send("Conversation commands are server-only.")
@@ -44,7 +46,8 @@ class GenAIMemoryCog(commands.Cog):
             # Clear long-term facts for all users in this guild
             await clear_user_facts(guild.id)
             await ctx.send(
-                "Conversation memory and long-term facts cleared for this channel."
+                "Conversation memory and long-term facts cleared "
+                "for this channel."
             )
         else:
             await ctx.send("Conversation memory cleared for this channel.")
@@ -57,7 +60,9 @@ class GenAIMemoryCog(commands.Cog):
         aliases=["meml"],
         help="List long-term memory facts for a user.",
     )
-    @app_commands.describe(user="The user whose memory to list (defaults to you).")
+    @app_commands.describe(
+        user="The user whose memory to list (defaults to you)."
+    )
     async def memory_list(
         self, ctx: commands.Context, user: discord.User | None = None
     ):
@@ -75,7 +80,9 @@ class GenAIMemoryCog(commands.Cog):
             )
         )
         if target_user.id != ctx.author.id and not is_admin:
-            await ctx.send("❌ You can only view your own memory.", ephemeral=True)
+            await ctx.send(
+                "❌ You can only view your own memory.", ephemeral=True
+            )
             return
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             db.row_factory = aiosqlite.Row
@@ -112,10 +119,13 @@ class GenAIMemoryCog(commands.Cog):
         name="memoryclear",
         aliases=["memcl"],
         help=(
-            "Clear long-term facts. Users can clear their own; Admins can clear anyone."
+            "Clear long-term facts. Users can clear their own; "
+            "Admins can clear anyone."
         ),
     )
-    @app_commands.describe(user="The user whose memory to clear (defaults to you).")
+    @app_commands.describe(
+        user="The user whose memory to clear (defaults to you)."
+    )
     async def memory_clear_user(
         self, ctx: commands.Context, user: discord.User | None = None
     ):
@@ -133,23 +143,32 @@ class GenAIMemoryCog(commands.Cog):
             )
         )
         if target_user.id != ctx.author.id and not is_admin:
-            await ctx.send("❌ You can only clear your own memory.", ephemeral=True)
+            await ctx.send(
+                "❌ You can only clear your own memory.", ephemeral=True
+            )
             return
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             async with db.execute(
-                ("SELECT COUNT(*) FROM user_facts WHERE guild_id = ? AND user_id = ?"),
+                (
+                    "SELECT COUNT(*) FROM user_facts "
+                    "WHERE guild_id = ? AND user_id = ?"
+                ),
                 (str(guild.id), str(target_user.id)),
             ) as cursor:
                 row = await cursor.fetchone()
                 count = row[0] if row else 0
             if count > 0:
                 await db.execute(
-                    ("DELETE FROM user_facts WHERE guild_id = ? AND user_id = ?"),
+                    (
+                        "DELETE FROM user_facts "
+                        "WHERE guild_id = ? AND user_id = ?"
+                    ),
                     (str(guild.id), str(target_user.id)),
                 )
                 await db.commit()
                 msg = (
-                    f"✅ I have forgotten {count} facts about you in this server."
+                    f"✅ I have forgotten {count} facts about you "
+                    "in this server."
                     if target_user.id == ctx.author.id
                     else f"✅ Cleared {count} facts for {target_user.mention}."
                 )
@@ -245,4 +264,6 @@ class GenAIMemoryCog(commands.Cog):
         from utils.memory import run_migration
 
         success, message = await run_migration()
-        await ctx.send(f"{'✅' if success else '❌'} {message}", ephemeral=True)
+        await ctx.send(
+            f"{'✅' if success else '❌'} {message}", ephemeral=True
+        )

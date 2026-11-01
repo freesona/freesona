@@ -27,7 +27,10 @@ USER_AGENT = {"User-Agent": "FreesonaBot/1.0"}
 
 
 def _timeout(seconds: float) -> aiohttp.ClientTimeout:
-    """Build a total-request timeout (single place for the type-checker ignore)."""
+    """Build a total-request timeout.
+
+    This is the single place for the type-checker ignore.
+    """
     return aiohttp.ClientTimeout(total=seconds)  # pyright: ignore[reportCallIssue]
 
 
@@ -38,7 +41,9 @@ COLOR_WARN = discord.Color.from_rgb(254, 231, 92)
 COLOR_ERROR = discord.Color.from_rgb(237, 66, 69)
 
 
-def _status_embed(title: str, description: str, color: discord.Color) -> discord.Embed:
+def _status_embed(
+    title: str, description: str, color: discord.Color
+) -> discord.Embed:
     """Small, consistent embed for command feedback."""
     return discord.Embed(title=title, description=description, color=color)
 
@@ -77,7 +82,9 @@ def _batch_embeds(
     size = 0
     for embed in embeds:
         length = len(embed)
-        if current and (len(current) >= max_count or size + length > max_chars):
+        if current and (
+            len(current) >= max_count or size + length > max_chars
+        ):
             batches.append(current)
             current, size = [], 0
         current.append(embed)
@@ -124,7 +131,8 @@ class NewsCog(commands.Cog):
         # Quote-style summary reads cleanly under the title
         if summary:
             summary = "\n".join(
-                f"> {line}" if line.strip() else ">" for line in summary.splitlines()
+                f"> {line}" if line.strip() else ">"
+                for line in summary.splitlines()
             )
         embed = discord.Embed(
             title=title,
@@ -224,7 +232,10 @@ class NewsCog(commands.Cog):
     async def rss_group(self, ctx):
         embed = discord.Embed(
             title="RSS News Feeds",
-            description="Read feeds on demand or have new articles posted automatically.",
+            description=(
+                "Read feeds on demand or have new articles "
+                "posted automatically."
+            ),
             color=COLOR_NEWS,
         )
         embed.add_field(
@@ -240,7 +251,8 @@ class NewsCog(commands.Cog):
             value=(
                 "`/rss add <name> <url>`  \u2013  add or update a feed\n"
                 "`/rss remove <name>`  \u2013  remove a feed\n"
-                "`/rss setchannel <channel>`  \u2013  set the auto-post channel\n"
+                "`/rss setchannel <channel>`  \u2013  "
+                "set the auto-post channel\n"
                 "`/rss clearchannel`  \u2013  stop auto-posting"
             ),
             inline=False,
@@ -264,7 +276,9 @@ class NewsCog(commands.Cog):
             ephemeral=True,
         )
 
-    @rss_group.command(name="clearchannel", help="Stop auto-posting RSS (Admin only).")
+    @rss_group.command(
+        name="clearchannel", help="Stop auto-posting RSS (Admin only)."
+    )
     @commands.has_permissions(administrator=True)
     async def rss_clearchannel(self, ctx):
         config = load_config()
@@ -274,13 +288,16 @@ class NewsCog(commands.Cog):
             save_config(config)
             await ctx.send(
                 embed=_ok(
-                    "New articles will no longer be posted.", "Auto-post disabled"
+                    "New articles will no longer be posted.",
+                    "Auto-post disabled",
                 ),
                 ephemeral=True,
             )
         else:
             await ctx.send(
-                embed=_warn("No auto-post channel is configured for this server."),
+                embed=_warn(
+                    "No auto-post channel is configured for this server."
+                ),
                 ephemeral=True,
             )
 
@@ -305,11 +322,15 @@ class NewsCog(commands.Cog):
             color=COLOR_NEWS,
         )
         embed.add_field(name="Feeds", value=str(len(feeds)), inline=True)
-        embed.add_field(name="Auto-post channel", value=channel_mention, inline=True)
+        embed.add_field(
+            name="Auto-post channel", value=channel_mention, inline=True
+        )
         embed.set_footer(text=f"Checked every {POLL_INTERVAL_MINUTES} minutes")
         await ctx.send(embed=embed, ephemeral=True)
 
-    @rss_group.command(name="latest", help="Show latest items from an RSS feed.")
+    @rss_group.command(
+        name="latest", help="Show latest items from an RSS feed."
+    )
     @app_commands.autocomplete(name=feed_autocomplete)
     async def rss_latest(self, ctx, name: str, limit: int = 5):
         feeds = load_rss_feeds()
@@ -342,26 +363,33 @@ class NewsCog(commands.Cog):
                 _resolve_link(item, url)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as e:
             await ctx.send(
-                embed=_error(f"Could not read `{key}`.\n```{e}```"[:4096], "Feed error")
+                embed=_error(
+                    f"Could not read `{key}`.\n```{e}```"[:4096], "Feed error"
+                )
             )
             return
         if not items:
             await ctx.send(
-                embed=_warn("This feed has no items right now.", "Nothing to show")
+                embed=_warn(
+                    "This feed has no items right now.", "Nothing to show"
+                )
             )
             return
         embeds = [self._build_news_embed(item, key) for item in items]
         for batch in _batch_embeds(embeds):
             await ctx.send(embeds=batch)
 
-    @rss_group.command(name="add", help="Add or update an RSS feed (Admin only).")
+    @rss_group.command(
+        name="add", help="Add or update an RSS feed (Admin only)."
+    )
     @commands.has_permissions(administrator=True)
     async def rss_add(self, ctx, name: str, url: str):
         key = name.lower().strip()
         if not key.replace("-", "").replace("_", "").isalnum():
             await ctx.send(
                 embed=_error(
-                    "Names may only contain letters, numbers, hyphens and underscores.",
+                    "Names may only contain letters, numbers, "
+                    "hyphens and underscores.",
                     "Invalid name",
                 ),
                 ephemeral=True,
@@ -374,7 +402,9 @@ class NewsCog(commands.Cog):
             )
             return
         save_rss_feed(key, url)
-        await ctx.send(embed=_ok(f"**{key}**\n-# {url}", "Feed saved"), ephemeral=True)
+        await ctx.send(
+            embed=_ok(f"**{key}**\n-# {url}", "Feed saved"), ephemeral=True
+        )
 
     @rss_group.command(name="remove", help="Remove an RSS feed (Admin only).")
     @commands.has_permissions(administrator=True)
@@ -383,7 +413,8 @@ class NewsCog(commands.Cog):
         key = name.lower().strip()
         if delete_rss_feed(key):
             await ctx.send(
-                embed=_ok(f"`{key}` was removed.", "Feed removed"), ephemeral=True
+                embed=_ok(f"`{key}` was removed.", "Feed removed"),
+                ephemeral=True,
             )
         else:
             await ctx.send(

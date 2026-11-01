@@ -34,7 +34,8 @@ BUILTIN_OPTIONAL_MODULES = {
     "warns": "cogs.moderation.warns",
     "chroma": "cogs.ai.chroma",
     "conversion": "cogs.conversion.delphitools",
-    # Granular system modules are loaded by cogs.system.system (CORE_EXTENSIONS).
+    # Granular system modules are loaded by cogs.system.system
+    # (CORE_EXTENSIONS).
     # Keep the keys so /module list still shows them, but they map to the
     # aggregate loader so they aren't double-loaded.
     "module": "cogs.system.system",
@@ -65,7 +66,9 @@ def _load_local_modules():
                         valid[k] = v
 
                     else:
-                        logger.warning(f"Invalid entry in modules.local.json: {k}: {v}")
+                        logger.warning(
+                            f"Invalid entry in modules.local.json: {k}: {v}"
+                        )
 
                 return valid
 

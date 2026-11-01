@@ -59,7 +59,9 @@ class ChromaCollection(Protocol):
 
     def delete(self, **kwargs: Any) -> None: ...
 
-    def get(self, limit: int | None = None, **kwargs: Any) -> dict[str, Any]: ...
+    def get(
+        self, limit: int | None = None, **kwargs: Any
+    ) -> dict[str, Any]: ...
 
     def query(self, **kwargs: Any) -> dict[str, Any]: ...
 
@@ -89,11 +91,10 @@ OPTIONAL_METADATA_FIELDS = frozenset(
 )
 
 
-# Validation sets for metadata fields – these mirror the definitions used in the
-
-# Discord cog (`cogs/ai/chroma.py`). They are required by `_validate_metadata`
-
-# to ensure that user‑provided metadata conforms to expected values.
+# Validation sets for metadata fields – these mirror the definitions used in
+# the Discord cog (`cogs/ai/chroma.py`). They are required by
+# `_validate_metadata` to ensure that user‑provided metadata conforms to
+# expected values.
 
 VALID_ENTRY_TYPES = {
     "dialogue",
@@ -153,7 +154,9 @@ def get_collection(
 
     name = collection_name or os.getenv("CHROMA_COLLECTION", "freesona")
 
-    return cast(ChromaCollection, resolved_client.get_or_create_collection(name=name))
+    return cast(
+        ChromaCollection, resolved_client.get_or_create_collection(name=name)
+    )
 
 
 def parse_discord_chat_json(raw_bytes: bytes) -> str:
@@ -177,12 +180,16 @@ def parse_discord_chat_json(raw_bytes: bytes) -> str:
             continue
 
         author = (
-            msg.get("userName") or msg.get("author", {}).get("username") or "Unknown"
+            msg.get("userName")
+            or msg.get("author", {}).get("username")
+            or "Unknown"
         )
 
         content = (msg.get("content") or "").strip()
 
-        timestamp = msg.get("timestamp", "").split("T")[0]  # Extracts YYYY-MM-DD
+        timestamp = msg.get("timestamp", "").split("T")[
+            0
+        ]  # Extracts YYYY-MM-DD
 
         if content:
             if timestamp:
@@ -233,7 +240,8 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
 
     if lower_name.endswith(".epub"):
         try:
-            # Explicitly open the EPUB archive in read mode to satisfy Pylance and
+            # Explicitly open the EPUB archive in read mode to satisfy Pylance
+            # and
 
             # avoid runtime errors on some platforms.
 
@@ -344,7 +352,9 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                 return result
 
         except (OSError, ElementTree.ParseError, UnicodeDecodeError) as exc:
-            logger.warning(f"Failed to decode EPUB attachment {filename}: {exc}")
+            logger.warning(
+                f"Failed to decode EPUB attachment {filename}: {exc}"
+            )
 
             return ""
 
@@ -365,7 +375,10 @@ def _validate_metadata(metadata: dict[str, Any] | None) -> tuple[bool, str]:
     missing = REQUIRED_METADATA_FIELDS.difference(metadata.keys())
 
     if missing:
-        return False, f"Missing required metadata fields: {', '.join(sorted(missing))}"
+        return (
+            False,
+            f"Missing required metadata fields: {', '.join(sorted(missing))}",
+        )
 
     # Validate topics is a list
 
@@ -697,7 +710,10 @@ def chunk_semantic_units(
     current_chunk = ""
 
     for para in paragraphs:
-        if len(current_chunk) + len(para) + 2 > max_chunk_size and current_chunk:
+        if (
+            len(current_chunk) + len(para) + 2 > max_chunk_size
+            and current_chunk
+        ):
             if len(current_chunk) >= min_chunk_size:
                 chunks.append(
                     {
@@ -904,7 +920,8 @@ def add_knowledge(
 
         return ""
 
-    # Normalize metadata values (e.g., list of topics -> comma‑separated string)
+    # Normalize metadata values (e.g., list of topics ->
+    # comma‑separated string)
 
     normalized_meta = _normalize_metadata(meta)
 
@@ -936,7 +953,8 @@ def delete_knowledge(doc_id: str, collection_name: str | None = None) -> bool:
 
     Args:
         doc_id: Identifier of the document to delete.
-        collection_name: Optional collection name; defaults to the default collection.
+        collection_name: Optional collection name; defaults to the
+        default collection.
 
     Returns:
         True if deletion succeeded, False otherwise.
@@ -1018,7 +1036,9 @@ def query_knowledge(
                     {
                         "document": doc,
                         "metadata": metadatas[i] if i < len(metadatas) else {},
-                        "distance": (distances[i] if i < len(distances) else None),
+                        "distance": (
+                            distances[i] if i < len(distances) else None
+                        ),
                     }
                 )
 
@@ -1059,7 +1079,8 @@ def list_knowledge(
 
         A list of dictionaries, each containing ``id``, ``document`` and
 
-        ``metadata`` keys. An empty list is returned if the collection cannot be
+        ``metadata`` keys. An empty list is returned if the collection
+        cannot be
 
         accessed or an error occurs.
 
@@ -1071,7 +1092,9 @@ def list_knowledge(
         return []
 
     try:
-        result = collection.get(limit=limit, include=["documents", "metadatas"])
+        result = collection.get(
+            limit=limit, include=["documents", "metadatas"]
+        )
 
         ids = result.get("ids", []) or []
 

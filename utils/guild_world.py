@@ -126,7 +126,9 @@ class GuildWorldAccessor(Protocol):
 
         ...
 
-    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
+    async def get_guild_channels(
+        self, guild_id: int
+    ) -> list[GuildChannelInfo]:
         """
 
         Return a list of all channels in the guild with basic metadata.
@@ -180,7 +182,9 @@ class NullGuildWorldAccessor:
 
         return None
 
-    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
+    async def get_guild_channels(
+        self, guild_id: int
+    ) -> list[GuildChannelInfo]:
 
         _ = guild_id
 
@@ -366,7 +370,9 @@ class DiscordGuildWorldAccessor:
 
         return guild.member_count if guild else None
 
-    async def get_guild_channels(self, guild_id: int) -> list[GuildChannelInfo]:
+    async def get_guild_channels(
+        self, guild_id: int
+    ) -> list[GuildChannelInfo]:
         """
 
         Return all channels in the guild with lightweight metadata.

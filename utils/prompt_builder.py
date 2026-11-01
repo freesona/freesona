@@ -322,7 +322,9 @@ class PromptBuilder:
 
         from the registry."""
 
-        return cls(providers=_get_default_providers(), token_budget=token_budget)
+        return cls(
+            providers=_get_default_providers(), token_budget=token_budget
+        )
 
     @classmethod
     def with_providers(
@@ -373,7 +375,9 @@ class PromptBuilder:
                     blocks.append(context_block)
 
             except (RuntimeError, ValueError, OSError, TypeError) as e:
-                logger.warning(f"Context provider '{provider.name}' failed: {e}")
+                logger.warning(
+                    f"Context provider '{provider.name}' failed: {e}"
+                )
 
                 # Fail open — continue with other providers
 
@@ -383,7 +387,9 @@ class PromptBuilder:
 
         return "\n\n".join(block.content for block in blocks)
 
-    def _enforce_token_budget(self, blocks: list[ContextBlock]) -> list[ContextBlock]:
+    def _enforce_token_budget(
+        self, blocks: list[ContextBlock]
+    ) -> list[ContextBlock]:
         """
 
         Enforce token budget by dropping MUTABLE blocks
@@ -407,9 +413,13 @@ class PromptBuilder:
 
         # Separate immutable and mutable blocks
 
-        immutable_blocks = [b for b in blocks if b.mutability == Mutability.IMMUTABLE]
+        immutable_blocks = [
+            b for b in blocks if b.mutability == Mutability.IMMUTABLE
+        ]
 
-        mutable_blocks = [b for b in blocks if b.mutability == Mutability.MUTABLE]
+        mutable_blocks = [
+            b for b in blocks if b.mutability == Mutability.MUTABLE
+        ]
 
         # Sort mutable blocks by priority DESCENDING (highest priority number =
 
@@ -465,7 +475,9 @@ class PromptBuilder:
 
         return result
 
-    async def inspect(self, context: PromptBuildContext) -> dict[str, ContextBlock]:
+    async def inspect(
+        self, context: PromptBuildContext
+    ) -> dict[str, ContextBlock]:
         """
 
         Return each provider's ContextBlock for debugging/inspection.
@@ -488,7 +500,8 @@ class PromptBuilder:
 
             except (RuntimeError, ValueError, OSError, TypeError) as e:
                 logger.warning(
-                    f"Context provider '{provider.name}' failed during inspect: {e}"
+                    f"Context provider '{provider.name}' failed during "
+                    f"inspect: {e}"
                 )
 
                 result[provider.name] = ContextBlock(

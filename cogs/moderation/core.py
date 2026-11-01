@@ -23,7 +23,9 @@ def parse_time_string(time_str: str) -> timedelta | None:
         return None
 
 
-async def try_dm(user: discord.User | discord.Member, embed: discord.Embed) -> bool:
+async def try_dm(
+    user: discord.User | discord.Member, embed: discord.Embed
+) -> bool:
     try:
         await user.send(embed=embed)
         return True
@@ -40,7 +42,9 @@ class ModerationCog(commands.Cog):
         help="Kicks a member from the server.",
         usage="<member> [reason]",
     )
-    @app_commands.describe(member="The member to kick.", reason="Reason for the kick.")
+    @app_commands.describe(
+        member="The member to kick.", reason="Reason for the kick."
+    )
     @commands.has_permissions(kick_members=True)
     @commands.bot_has_permissions(kick_members=True)
     async def kick_cmd(
@@ -54,9 +58,13 @@ class ModerationCog(commands.Cog):
         if member == ctx.author:
             await ctx.send("You can't kick yourself.")
             return
-        if member.top_role >= ctx.author.top_role and ctx.guild.owner != ctx.author:
+        if (
+            member.top_role >= ctx.author.top_role
+            and ctx.guild.owner != ctx.author
+        ):
             await ctx.send(
-                "You can't kick someone with a role higher than or equal to yours."
+                "You can't kick someone with a role higher than "
+                "or equal to yours."
             )
             return
         dm_embed = discord.Embed(
@@ -68,7 +76,9 @@ class ModerationCog(commands.Cog):
         try:
             await member.kick(reason=f"Kicked by {ctx.author}: {reason}")
             note = "" if dm_sent else " *(couldn't DM user)*"
-            await ctx.send(f"**{member}** has been kicked. Reason: {reason}{note}")
+            await ctx.send(
+                f"**{member}** has been kicked. Reason: {reason}{note}"
+            )
         except discord.Forbidden:
             await ctx.send("I don't have permission to kick this member.")
 
@@ -102,7 +112,9 @@ class ModerationCog(commands.Cog):
     )
     @app_commands.describe(
         member="The user to ban.",
-        delete_messages=("How far back to delete messages (e.g. 1d, 7d). Max 7d."),
+        delete_messages=(
+            "How far back to delete messages (e.g. 1d, 7d). Max 7d."
+        ),
         reason="Why are they being banned?",
     )
     @commands.has_permissions(ban_members=True)
@@ -121,15 +133,21 @@ class ModerationCog(commands.Cog):
             if target == ctx.author:
                 await ctx.send("Why would you want to ban yourself?")
                 return
-            if target.top_role >= ctx.author.top_role and ctx.guild.owner != ctx.author:
+            if (
+                target.top_role >= ctx.author.top_role
+                and ctx.guild.owner != ctx.author
+            ):
                 await ctx.send(
-                    "You can't ban someone with a role higher than or equal to yours."
+                    "You can't ban someone with a role higher than "
+                    "or equal to yours."
                 )
                 return
             dm_embed = discord.Embed(
                 title="You have been banned", color=discord.Color.red()
             )
-            dm_embed.add_field(name="Server", value=ctx.guild.name, inline=False)
+            dm_embed.add_field(
+                name="Server", value=ctx.guild.name, inline=False
+            )
             dm_embed.add_field(name="Reason", value=reason, inline=False)
             dm_sent = await try_dm(target, dm_embed)
         else:
@@ -156,7 +174,8 @@ class ModerationCog(commands.Cog):
                 else ""
             )
             await ctx.send(
-                f"**{member}** has been banned{del_note}. Reason: {reason}{note}"
+                f"**{member}** has been banned{del_note}. "
+                f"Reason: {reason}{note}"
             )
         except discord.Forbidden:
             await ctx.send("I don't have permission to ban this user.")
@@ -187,9 +206,13 @@ class ModerationCog(commands.Cog):
         if member == ctx.author:
             await ctx.send("You can't softban yourself.")
             return
-        if member.top_role >= ctx.author.top_role and ctx.guild.owner != ctx.author:
+        if (
+            member.top_role >= ctx.author.top_role
+            and ctx.guild.owner != ctx.author
+        ):
             await ctx.send(
-                "You can't softban someone with a role higher than or equal to yours."
+                "You can't softban someone with a role higher than "
+                "or equal to yours."
             )
             return
         delta = parse_time_string(delete_messages)
@@ -247,11 +270,15 @@ class ModerationCog(commands.Cog):
     ):
         await ctx.defer()
         try:
-            await ctx.guild.unban(user, reason=f"Unbanned by {ctx.author}: {reason}")
+            await ctx.guild.unban(
+                user, reason=f"Unbanned by {ctx.author}: {reason}"
+            )
             dm_embed = discord.Embed(
                 title="You have been unbanned", color=discord.Color.green()
             )
-            dm_embed.add_field(name="Server", value=ctx.guild.name, inline=False)
+            dm_embed.add_field(
+                name="Server", value=ctx.guild.name, inline=False
+            )
             dm_embed.add_field(name="Reason", value=reason, inline=False)
             await try_dm(user, dm_embed)
             await ctx.send(f"**{user}** has been unbanned. Reason: {reason}")
@@ -290,9 +317,12 @@ class ModerationCog(commands.Cog):
             await ctx.send("Invalid format. Use `10s`, `5m`, `1h`, etc.")
             return
         try:
-            await member.timeout(delta, reason=f"Timed out by {ctx.author}: {reason}")
+            await member.timeout(
+                delta, reason=f"Timed out by {ctx.author}: {reason}"
+            )
             await ctx.send(
-                f"{member.mention} has been timed out for {length}. Reason: {reason}"
+                f"{member.mention} has been timed out for {length}. "
+                f"Reason: {reason}"
             )
         except discord.Forbidden:
             await ctx.send("I can't timeout that member.")
@@ -345,7 +375,10 @@ class ModerationCog(commands.Cog):
 
     @commands.hybrid_command(
         name="lock",
-        help=("Locks the current channel, preventing members from sending messages."),
+        help=(
+            "Locks the current channel, preventing members from "
+            "sending messages."
+        ),
         usage="[reason]",
     )
     @app_commands.describe(reason="Reason for locking the channel.")

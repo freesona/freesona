@@ -10,7 +10,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-import discord
 from dotenv import load_dotenv
 
 try:
@@ -370,122 +369,6 @@ def clean_text(text: str, limit: int = 4000) -> str:
 
 # ---------------------------------------------------------------------------
 
-# Multi-message sender
-
-# ---------------------------------------------------------------------------
-
-
-async def send_response(
-    response: ConversationResponse,
-    channel: discord.abc.Messageable,
-    *,
-    reply_to: discord.Message | None = None,
-) -> None:
-    """Send a formatted response to a Discord channel.
-
-    Args:
-        response: ConversationResponse containing message segments.
-        channel: Discord channel or messageable target.
-        reply_to: Optional message to reply to.
-    """
-
-    if not response.segments:
-        return
-
-    segments = [s for s in response.segments if s.text.strip()]
-
-    if not segments:
-        # Ensure we always have at least one segment to send
-
-        segments = [MessageSegment(text=".", delay=0, typing=False)]
-
-    for i, segment in enumerate(segments):
-        if segment.typing and segment.delay > 0:
-            async with channel.typing():
-                await asyncio.sleep(segment.delay)
-
-        try:
-            if i == 0 and reply_to is not None:
-                await _send_first_segment_with_reply(channel, segment.text, reply_to)
-
-            else:
-                await channel.send(segment.text)
-
-        except discord.Forbidden:
-            # Stop sending when Forbidden error occurs (e.g., lack of permissions)
-
-            return
-
-
-async def _send_first_segment_with_reply(
-    channel: discord.abc.Messageable,
-    text: str,
-    reply_to: discord.Message,
-) -> None:
-    """Send the first segment, trying reply first then
-
-    falling back to regular send."""
-
-    try:
-        await reply_to.reply(text)
-
-    except discord.NotFound:
-        # Message was deleted or is inaccessible; fall back to regular send
-
-        logger.debug("Reply target message not found, falling back to channel.send")
-
-        await channel.send(text)
-
-
-# ---------------------------------------------------------------------------
-
-# Attachment helper
-
-# ---------------------------------------------------------------------------
-
-
-async def extract_attachments(
-    message: discord.Message | None,
-    attachment: discord.Attachment | None = None,
-) -> list[tuple[bytes, str]]:
-    """Extract attachments from a Discord message.
-
-    Args:
-        message: Discord message object possibly containing attachments.
-        attachment: Attachment provided as a slash-command option.
-
-    Returns:
-        List of (bytes, mime_type) tuples for each attachment.
-    """
-
-    message_attachments = message.attachments if message else []
-    all_attachments = list(message_attachments)
-    if attachment is not None and attachment not in all_attachments:
-        all_attachments.append(attachment)
-
-    if not all_attachments:
-        return []
-
-    results = []
-
-    for att in all_attachments:
-        mime = att.content_type or ""
-
-        mime_base = mime.split(";")[0].strip()
-
-        try:
-            data = await att.read()
-
-            results.append((data, mime_base))
-
-        except (discord.HTTPException, OSError, asyncio.TimeoutError) as e:
-            logger.error(f"Failed to read attachment {att.filename}: {e}")
-
-    return results
-
-
-# ---------------------------------------------------------------------------
-
 # Knowledge Base Retrieval
 
 # ---------------------------------------------------------------------------
@@ -655,14 +538,22 @@ async def generate(
         re.IGNORECASE,
     )
 
-    if not attachments and image_reference and guild_id and channel_id and user_id:
+    if (
+        not attachments
+        and image_reference
+        and guild_id
+        and channel_id
+        and user_id
+    ):
         attachments = await get_recent_image_attachments(
             guild_id, channel_id, user_id
         )
         if not attachments:
             limitation = (
-                "The user refers to an image from earlier in the conversation, "
-                "but its original image data is no longer available. Be honest "
+                "The user refers to an image from earlier in the "
+                "conversation, "
+                "but its original image data is no longer available. "
+                "Be honest "
                 "about this; do not imply they never uploaded it."
             )
             instruction_prefix = "\n\n".join(
@@ -722,11 +613,11 @@ async def generate(
 
         # providers completely stateless and interchangeable.
 
-        # Get previous interaction ID for Gemini multi-turn support
+        # Get previous interaction ID for multi-turn support
 
         previous_interaction_id = None
 
-        if provider_name == "gemini" and guild_id and channel_id and user_id:
+        if guild_id and channel_id and user_id:
             from utils.conversation import get_last_interaction_id
 
             previous_interaction_id = await get_last_interaction_id(
@@ -768,16 +659,12 @@ async def generate(
 
         # Store interaction ID for next turn
 
-        if (
-            interaction_id
-            and provider_name == "gemini"
-            and guild_id
-            and channel_id
-            and user_id
-        ):
+        if interaction_id and guild_id and channel_id and user_id:
             from utils.conversation import set_last_interaction_id
 
-            await set_last_interaction_id(guild_id, channel_id, user_id, interaction_id)
+            await set_last_interaction_id(
+                guild_id, channel_id, user_id, interaction_id
+            )
 
         # Strip reasoning tags before storing in conversation history
 
@@ -786,9 +673,13 @@ async def generate(
         # Add assistant response to conversation history
 
         if guild_id and channel_id and user_id and output_text:
-            await add_assistant_message(guild_id, channel_id, user_id, output_text)
+            await add_assistant_message(
+                guild_id, channel_id, user_id, output_text
+            )
 
-        return build_response(clean_text(output_text or "Something went wrong."))
+        return build_response(
+            clean_text(output_text or "Something went wrong.")
+        )
 
     except Exception as e:
         logger.error(f"Generation error: {e}")
@@ -812,7 +703,9 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
             unexpected = set(kwargs) - {"guild_world_accessor"}
             if unexpected:
                 names = ", ".join(sorted(unexpected))
-                raise TypeError(f"Unexpected InteractionRequest options: {names}")
+                raise TypeError(
+                    f"Unexpected InteractionRequest options: {names}"
+                )
 
             request = args[0]
             prompt = {
@@ -841,7 +734,7 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
     except GenerationError as e:
         return build_response(_user_facing_error(e))
 
-    except (RuntimeError, ValueError, OSError, discord.DiscordException) as e:
+    except (RuntimeError, ValueError, OSError) as e:
         logger.error(f"Unexpected error in safe_generate: {e}")
 
         return build_response("Something went wrong. Try again.")
@@ -850,8 +743,6 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
 __all__ = [
     "ConversationResponse",
     "build_response",
-    "extract_attachments",
     "retrieve_knowledge_context",
     "safe_generate",
-    "send_response",
 ]

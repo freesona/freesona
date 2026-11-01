@@ -77,13 +77,15 @@ def is_direct_audio_url(url: str) -> bool:
 def should_download_with_ytdlp(url: str) -> bool:
     host = (urlparse(url).hostname or "").lower().rstrip(".")
     return any(
-        host == domain or host.endswith(f".{domain}") for domain in YTDLP_DOMAINS
+        host == domain or host.endswith(f".{domain}")
+        for domain in YTDLP_DOMAINS
     )
 
 
 def stem_label(file_info: dict, index: int) -> str:
     raw = " ".join(
-        str(file_info.get(key, "")) for key in ("name", "type", "stem", "instrument")
+        str(file_info.get(key, ""))
+        for key in ("name", "type", "stem", "instrument")
     )
     lower = raw.lower()
     link = str(
@@ -207,7 +209,9 @@ class MVSepCog(commands.Cog):
             if status == "done":
                 return payload
             if status == "failed":
-                reason = payload.get("data", {}).get("message", "No reason given.")
+                reason = payload.get("data", {}).get(
+                    "message", "No reason given."
+                )
                 raise RuntimeError(f"Separation failed: {reason}")
             if status == "not_found":
                 raise RuntimeError("Job hash not found — it may have expired.")
@@ -221,7 +225,9 @@ class MVSepCog(commands.Cog):
                         f"queue position: {queue_pos}"
                     )
                 if status_msg is not None:
-                    status_text = mvsep_status_text(status, queue_pos, job_hash)
+                    status_text = mvsep_status_text(
+                        status, queue_pos, job_hash
+                    )
                     if status_text != last_status_text:
                         await status_msg.edit(content=status_text)
                         last_status_text = status_text
@@ -263,7 +269,9 @@ class MVSepCog(commands.Cog):
                             f"queue position: {queue_pos}"
                         )
                     if status_msg is not None:
-                        status_text = mvsep_status_text(status, queue_pos, job_hash)
+                        status_text = mvsep_status_text(
+                            status, queue_pos, job_hash
+                        )
                         if status_text != last_status_text:
                             await status_msg.edit(content=status_text)
                             last_status_text = status_text
@@ -339,7 +347,9 @@ class MVSepCog(commands.Cog):
                 raise RuntimeError("yt-dlp failed to download audio.")
             return local, None
         # 4. Any other public URL — try yt-dlp as a fallback.
-        local = await ytdlp_cog.fetch_ytdlp(ctx, source, is_audio=True, tmp_dir=tmp_dir)
+        local = await ytdlp_cog.fetch_ytdlp(
+            ctx, source, is_audio=True, tmp_dir=tmp_dir
+        )
         if not local:
             raise RuntimeError("yt-dlp failed to download audio.")
         return local, None
@@ -351,7 +361,8 @@ class MVSepCog(commands.Cog):
         name="separate",
         aliases=["sep", "stems"],
         help=(
-            "Separate vocals and instrumental from audio. Attach a file or pass a URL."
+            "Separate vocals and instrumental from audio. "
+            "Attach a file or pass a URL."
         ),
     )
     @commands.cooldown(1, 60, commands.BucketType.guild)
@@ -398,7 +409,9 @@ class MVSepCog(commands.Cog):
                         ctx.command.reset_cooldown(ctx)
                         return
                     if not file_path and not pass_url:
-                        await status_msg.edit(content="❌ No valid input found.")
+                        await status_msg.edit(
+                            content="❌ No valid input found."
+                        )
                         ctx.command.reset_cooldown(ctx)
                         return
                     # Submit
@@ -407,11 +420,15 @@ class MVSepCog(commands.Cog):
                             session, file_path=file_path, url=pass_url
                         )
                     except aiohttp.ClientError as e:
-                        await status_msg.edit(content=f"❌ Submission error: {e}")
+                        await status_msg.edit(
+                            content=f"❌ Submission error: {e}"
+                        )
                         ctx.command.reset_cooldown(ctx)
                         return
                     if not result.get("success"):
-                        msg = result.get("data", {}).get("message", "Unknown error.")
+                        msg = result.get("data", {}).get(
+                            "message", "Unknown error."
+                        )
                         await status_msg.edit(
                             content=(f"❌ MVSEP rejected the job: {msg}")
                         )
@@ -463,7 +480,9 @@ class MVSepCog(commands.Cog):
                             return
                     if done is None:
                         try:
-                            done = await self._poll(session, job_hash, status_msg)
+                            done = await self._poll(
+                                session, job_hash, status_msg
+                            )
                         except (RuntimeError, TimeoutError) as e:
                             await status_msg.edit(content=f"❌ {e}")
                             ctx.command.reset_cooldown(ctx)
@@ -481,9 +500,13 @@ class MVSepCog(commands.Cog):
             )
             for idx, f in enumerate(files_data):
                 name = stem_label(f, idx)
-                link = f.get("download_link") or f.get("link") or f.get("url", "")
+                link = (
+                    f.get("download_link") or f.get("link") or f.get("url", "")
+                )
                 if link:
-                    embed.add_field(name=name, value=f"[Download]({link})", inline=True)
+                    embed.add_field(
+                        name=name, value=f"[Download]({link})", inline=True
+                    )
             embed.set_footer(
                 text="Links are hosted by MVSEP and expire after some time."
             )
@@ -495,7 +518,9 @@ class MVSepCog(commands.Cog):
     async def separate_error(self, ctx, error):
         self._busy = False
         if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"⏳ Wait **{error.retry_after:.1f}s**.", delete_after=10)
+            await ctx.send(
+                f"⏳ Wait **{error.retry_after:.1f}s**.", delete_after=10
+            )
         else:
             logger.error(f"Separate error: {error}")
             await ctx.send(f"❌ Unexpected error: {error}")

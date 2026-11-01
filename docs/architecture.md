@@ -653,7 +653,9 @@ Logs are written using Python's standard `logging` module:
 import logging
 
 logger = logging.getLogger(__name__)
-logger.info("Generation completed", extra={"user_id": 123, "provider": "gemini"})
+logger.info(
+    "Generation completed", extra={"user_id": 123, "provider": "gemini"}
+)
 ```
 
 The Discord log channel receives formatted messages in code blocks:

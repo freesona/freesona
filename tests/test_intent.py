@@ -32,7 +32,9 @@ class TestEvaluateIntent(unittest.TestCase):
         self.assertEqual(result.targets, ["empty_message"])
 
     def test_question_uses_semantic_and_question_signals(self):
-        result = evaluate_intent(self.make_message("How does this work?"), None)
+        result = evaluate_intent(
+            self.make_message("How does this work?"), None
+        )
         self.assertEqual(result.intent, INTENT_GENERAL_CHAT)
         self.assertAlmostEqual(result.confidence, 0.6, places=2)
         self.assertTrue(result.requires_response)

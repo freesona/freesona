@@ -92,7 +92,9 @@ def _get_conversation_token_budget() -> int:
 
 def _get_conversation_ttl_seconds() -> int:
 
-    return int(load_config().get("conversation_ttl_seconds", 3600))  # 1 hour default
+    return int(
+        load_config().get("conversation_ttl_seconds", 3600)
+    )  # 1 hour default
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +168,10 @@ async def add_message(
             for data, mime in attachments
             if mime.startswith("image/")
         ]
-        if sum(len(data) for data, _ in image_attachments) <= _MAX_RETAINED_IMAGE_BYTES:
+        if (
+            sum(len(data) for data, _ in image_attachments)
+            <= _MAX_RETAINED_IMAGE_BYTES
+        ):
             retained_attachments = image_attachments or None
 
     msg = ConversationMessage(
@@ -222,7 +227,9 @@ async def add_user_message(
 async def get_recent_image_attachments(
     guild_id: int, channel_id: int, user_id: int
 ) -> list[tuple[bytes, str]]:
-    """Return image bytes from the most recent attachment-bearing user message."""
+    """Return image bytes from the most recent attachment-bearing user
+    message.
+    """
     state = await get_conversation(guild_id, channel_id, user_id)
     for message in reversed(state.messages):
         if message.has_image_attachment:
@@ -483,7 +490,11 @@ def _estimate_tokens(state: ConversationState) -> int:
 
         # Include reply embeds in token estimation
 
-        if msg.reply and isinstance(msg.reply, dict) and msg.reply.get("embeds"):
+        if (
+            msg.reply
+            and isinstance(msg.reply, dict)
+            and msg.reply.get("embeds")
+        ):
             for embed_text in msg.reply["embeds"]:
                 total_chars += len(embed_text)
 

@@ -20,7 +20,9 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         # Use a temporary database for each test
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["MEMORY_FILE_PATH"] = self.temp_db_path
         # Re-import to pick up new path
@@ -145,7 +147,9 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
             # Check that only MAX_FACTS_PER_USER facts are stored
             from utils.memory import get_user_facts_prompt
 
-            prompt = await get_user_facts_prompt(guild_id, user_id, display_name)
+            prompt = await get_user_facts_prompt(
+                guild_id, user_id, display_name
+            )
             lines = prompt.split("\n")
             fact_lines = [line for line in lines if line.startswith("- ")]
             self.assertLessEqual(len(fact_lines), MAX_FACTS_PER_USER)
@@ -210,7 +214,9 @@ class UserFactsMemoryTests(unittest.IsolatedAsyncioTestCase):
             # Check that only the high importance fact was stored
             from utils.memory import get_user_facts_prompt
 
-            prompt = await get_user_facts_prompt(guild_id, user_id, display_name)
+            prompt = await get_user_facts_prompt(
+                guild_id, user_id, display_name
+            )
             self.assertIn("High importance fact", prompt)
             self.assertNotIn(
                 "Low importance fact", prompt

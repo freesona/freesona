@@ -33,7 +33,9 @@ class TimezoneCog(commands.Cog):
     )
     @commands.has_permissions(administrator=True)
     @discord.app_commands.describe(
-        timezone=("IANA timezone string, e.g. Asia/Manila, America/New_York, UTC")
+        timezone=(
+            "IANA timezone string, e.g. Asia/Manila, America/New_York, UTC"
+        )
     )
     @discord.app_commands.autocomplete(timezone=timezone_autocomplete)
     async def settimezone_cmd(self, ctx: commands.Context, timezone: str):

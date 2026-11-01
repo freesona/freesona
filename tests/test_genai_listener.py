@@ -1,4 +1,3 @@
-import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -71,13 +70,17 @@ class TestBuildPayload(unittest.TestCase):
 
 
 class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
-    def make_message(self, *, content="How does this work?", user_id=7, channel_id=5):
+    def make_message(
+        self, *, content="How does this work?", user_id=7, channel_id=5
+    ):
         bot_user = MagicMock(spec=discord.ClientUser)
         bot_user.id = 99
         bot_member = MagicMock()
         guild = MagicMock()
         guild.id = 3
-        guild.get_member = lambda member_id: bot_member if member_id == 99 else None
+        guild.get_member = lambda member_id: (
+            bot_member if member_id == 99 else None
+        )
         typing_context = AsyncMock()
         typing_context.__aenter__ = AsyncMock(return_value=None)
         typing_context.__aexit__ = AsyncMock(return_value=None)
@@ -117,12 +120,16 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         message, bot = self.make_message()
         message.guild = None
         cog = genai_listener.GenAIListenerCog(bot)
-        with patch.object(genai_listener, "safe_generate", new_callable=AsyncMock) as gen:
+        with patch.object(
+            genai_listener, "safe_generate", new_callable=AsyncMock
+        ) as gen:
             await cog.on_message(message)
         bot.get_prefix.assert_not_awaited()
         gen.assert_not_awaited()
 
-    async def test_chat_debounce_cancels_old_task_and_processes_latest_message(self):
+    async def test_chat_debounce_cancels_old_task_and_processes_latest_message(
+        self,
+    ):
         first, bot = self.make_message(content="first")
         second, _ = self.make_message(content="latest")
         second.author = first.author
@@ -141,19 +148,49 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         response = ConversationResponse(segments=[])
         with (
             patch.object(genai_listener, "_pending_responses", pending),
-            patch.object(genai_listener, "load_config", return_value={
-                "chat_channel_id": 5,
-                "conversation_response_mode": "all",
-                "debounce_seconds": 0,
-            }),
-            patch.object(genai_listener, "resolve_message_role", return_value="user"),
-            patch.object(genai_listener.asyncio, "create_task", side_effect=capture_task),
-            patch.object(genai_listener, "extract_attachments", new_callable=AsyncMock, return_value=[]),
-            patch.object(genai_listener, "safe_generate", new_callable=AsyncMock, return_value=response) as generate,
-            patch.object(genai_listener, "send_response", new_callable=AsyncMock) as send,
-            patch.object(genai_listener, "extract_and_store_fact", new_callable=AsyncMock),
-            patch.object(genai_listener, "get_reply_target", return_value=None),
-            patch.object(genai_listener, "DiscordGuildWorldAccessor", return_value=object()),
+            patch.object(
+                genai_listener,
+                "load_config",
+                return_value={
+                    "chat_channel_id": 5,
+                    "conversation_response_mode": "all",
+                    "debounce_seconds": 0,
+                },
+            ),
+            patch.object(
+                genai_listener, "resolve_message_role", return_value="user"
+            ),
+            patch.object(
+                genai_listener.asyncio, "create_task", side_effect=capture_task
+            ),
+            patch.object(
+                genai_listener,
+                "extract_attachments",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                genai_listener,
+                "safe_generate",
+                new_callable=AsyncMock,
+                return_value=response,
+            ) as generate,
+            patch.object(
+                genai_listener, "send_response", new_callable=AsyncMock
+            ) as send,
+            patch.object(
+                genai_listener,
+                "extract_and_store_fact",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                genai_listener, "get_reply_target", return_value=None
+            ),
+            patch.object(
+                genai_listener,
+                "DiscordGuildWorldAccessor",
+                return_value=object(),
+            ),
         ):
             cog = genai_listener.GenAIListenerCog(bot)
             try:
@@ -173,18 +210,28 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         send.assert_awaited_once_with(response, second.channel, reply_to=None)
         self.assertNotIn((7, 5), pending)
 
-    async def test_autonomy_permission_denial_skips_intent_and_generation(self):
+    async def test_autonomy_permission_denial_skips_intent_and_generation(
+        self,
+    ):
         message, bot = self.make_message()
         message.channel.permissions_for.return_value.send_messages = False
         cooldowns = {}
         user_cooldowns = {}
         with (
-            patch.object(genai_listener, "load_config", return_value={"autonomy": True}),
-            patch.object(genai_listener, "resolve_message_role", return_value="user"),
+            patch.object(
+                genai_listener, "load_config", return_value={"autonomy": True}
+            ),
+            patch.object(
+                genai_listener, "resolve_message_role", return_value="user"
+            ),
             patch.object(genai_listener, "_autonomy_cooldown", cooldowns),
-            patch.object(genai_listener, "_autonomy_user_cooldown", user_cooldowns),
+            patch.object(
+                genai_listener, "_autonomy_user_cooldown", user_cooldowns
+            ),
             patch.object(genai_listener, "evaluate_intent") as intent,
-            patch.object(genai_listener, "safe_generate", new_callable=AsyncMock) as generate,
+            patch.object(
+                genai_listener, "safe_generate", new_callable=AsyncMock
+            ) as generate,
         ):
             await genai_listener.GenAIListenerCog(bot).on_message(message)
         intent.assert_not_called()
@@ -192,7 +239,9 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cooldowns, {})
         self.assertEqual(user_cooldowns, {})
 
-    async def test_autonomy_below_threshold_does_not_generate_or_set_cooldowns(self):
+    async def test_autonomy_below_threshold_does_not_generate_or_set_cooldowns(
+        self,
+    ):
         message, bot = self.make_message()
         cooldowns = {}
         user_cooldowns = {}
@@ -202,13 +251,28 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
             requires_response=False,
         )
         with (
-            patch.object(genai_listener, "load_config", return_value={"autonomy": True, "autonomy_frequency": "default"}),
-            patch.object(genai_listener, "resolve_message_role", return_value="user"),
+            patch.object(
+                genai_listener,
+                "load_config",
+                return_value={
+                    "autonomy": True,
+                    "autonomy_frequency": "default",
+                },
+            ),
+            patch.object(
+                genai_listener, "resolve_message_role", return_value="user"
+            ),
             patch.object(genai_listener, "_autonomy_cooldown", cooldowns),
-            patch.object(genai_listener, "_autonomy_user_cooldown", user_cooldowns),
+            patch.object(
+                genai_listener, "_autonomy_user_cooldown", user_cooldowns
+            ),
             patch.object(genai_listener.time, "time", return_value=1000.0),
-            patch.object(genai_listener, "evaluate_intent", return_value=intent_result) as intent,
-            patch.object(genai_listener, "safe_generate", new_callable=AsyncMock) as generate,
+            patch.object(
+                genai_listener, "evaluate_intent", return_value=intent_result
+            ) as intent,
+            patch.object(
+                genai_listener, "safe_generate", new_callable=AsyncMock
+            ) as generate,
         ):
             await genai_listener.GenAIListenerCog(bot).on_message(message)
         intent.assert_called_once()
@@ -216,28 +280,63 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cooldowns, {})
         self.assertEqual(user_cooldowns, {})
 
-    async def test_autonomy_accepted_hands_payload_to_generation_and_sends_response(self):
+    async def test_autonomy_accepted_generates_and_sends_response(
+        self,
+    ):
         message, bot = self.make_message()
         cooldowns = {}
         user_cooldowns = {}
         response = ConversationResponse(segments=[])
         with (
-            patch.object(genai_listener, "load_config", return_value={"autonomy": True, "autonomy_frequency": "default"}),
-            patch.object(genai_listener, "resolve_message_role", return_value="user"),
+            patch.object(
+                genai_listener,
+                "load_config",
+                return_value={
+                    "autonomy": True,
+                    "autonomy_frequency": "default",
+                },
+            ),
+            patch.object(
+                genai_listener, "resolve_message_role", return_value="user"
+            ),
             patch.object(genai_listener, "_autonomy_cooldown", cooldowns),
-            patch.object(genai_listener, "_autonomy_user_cooldown", user_cooldowns),
+            patch.object(
+                genai_listener, "_autonomy_user_cooldown", user_cooldowns
+            ),
             patch.object(genai_listener.time, "time", return_value=1000.0),
             patch.object(
                 genai_listener,
                 "evaluate_intent",
                 return_value=IntentResult(INTENT_GENERAL_CHAT, 0.5, True),
             ),
-            patch.object(genai_listener, "extract_attachments", new_callable=AsyncMock, return_value=[]),
-            patch.object(genai_listener, "safe_generate", new_callable=AsyncMock, return_value=response) as generate,
-            patch.object(genai_listener, "send_response", new_callable=AsyncMock) as send,
-            patch.object(genai_listener, "extract_and_store_fact", new_callable=AsyncMock),
-            patch.object(genai_listener, "get_reply_target", return_value=None),
-            patch.object(genai_listener, "DiscordGuildWorldAccessor", return_value=object()),
+            patch.object(
+                genai_listener,
+                "extract_attachments",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                genai_listener,
+                "safe_generate",
+                new_callable=AsyncMock,
+                return_value=response,
+            ) as generate,
+            patch.object(
+                genai_listener, "send_response", new_callable=AsyncMock
+            ) as send,
+            patch.object(
+                genai_listener,
+                "extract_and_store_fact",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                genai_listener, "get_reply_target", return_value=None
+            ),
+            patch.object(
+                genai_listener,
+                "DiscordGuildWorldAccessor",
+                return_value=object(),
+            ),
         ):
             await genai_listener.GenAIListenerCog(bot).on_message(message)
 
@@ -251,7 +350,9 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.user_id, message.author.id)
         self.assertEqual(request.message_id, message.id)
         self.assertEqual(request.username, message.author.display_name)
-        self.assertEqual(request.current_persona, genai_listener.CURRENT_PERSONA)
+        self.assertEqual(
+            request.current_persona, genai_listener.CURRENT_PERSONA
+        )
         self.assertEqual(request.persona_id, genai_listener.CURRENT_PERSONA_ID)
         self.assertEqual(request.mentions, [])
         self.assertIsNone(request.reply)
@@ -273,18 +374,61 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         user_cooldowns = {}
         time_values = iter([1000.0, 1001.0, 1002.0])
         with (
-            patch.object(genai_listener, "load_config", return_value={"autonomy": True, "autonomy_frequency": "default"}),
-            patch.object(genai_listener, "resolve_message_role", return_value="user"),
-            patch.object(genai_listener, "_autonomy_cooldown", channel_cooldowns),
-            patch.object(genai_listener, "_autonomy_user_cooldown", user_cooldowns),
-            patch.object(genai_listener.time, "time", side_effect=lambda: next(time_values)),
-            patch.object(genai_listener, "evaluate_intent", return_value=IntentResult(INTENT_GENERAL_CHAT, 0.5, True)) as intent,
-            patch.object(genai_listener, "extract_attachments", new_callable=AsyncMock, return_value=[]),
-            patch.object(genai_listener, "safe_generate", new_callable=AsyncMock, return_value=ConversationResponse(segments=[])) as generate,
-            patch.object(genai_listener, "send_response", new_callable=AsyncMock),
-            patch.object(genai_listener, "extract_and_store_fact", new_callable=AsyncMock),
-            patch.object(genai_listener, "get_reply_target", return_value=None),
-            patch.object(genai_listener, "DiscordGuildWorldAccessor", return_value=object()),
+            patch.object(
+                genai_listener,
+                "load_config",
+                return_value={
+                    "autonomy": True,
+                    "autonomy_frequency": "default",
+                },
+            ),
+            patch.object(
+                genai_listener, "resolve_message_role", return_value="user"
+            ),
+            patch.object(
+                genai_listener, "_autonomy_cooldown", channel_cooldowns
+            ),
+            patch.object(
+                genai_listener, "_autonomy_user_cooldown", user_cooldowns
+            ),
+            patch.object(
+                genai_listener.time,
+                "time",
+                side_effect=lambda: next(time_values),
+            ),
+            patch.object(
+                genai_listener,
+                "evaluate_intent",
+                return_value=IntentResult(INTENT_GENERAL_CHAT, 0.5, True),
+            ) as intent,
+            patch.object(
+                genai_listener,
+                "extract_attachments",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                genai_listener,
+                "safe_generate",
+                new_callable=AsyncMock,
+                return_value=ConversationResponse(segments=[]),
+            ) as generate,
+            patch.object(
+                genai_listener, "send_response", new_callable=AsyncMock
+            ),
+            patch.object(
+                genai_listener,
+                "extract_and_store_fact",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                genai_listener, "get_reply_target", return_value=None
+            ),
+            patch.object(
+                genai_listener,
+                "DiscordGuildWorldAccessor",
+                return_value=object(),
+            ),
         ):
             cog = genai_listener.GenAIListenerCog(bot)
             await cog.on_message(first)

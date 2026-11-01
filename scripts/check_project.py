@@ -71,7 +71,11 @@ def declared_requirement_names(path: pathlib.Path) -> list[str]:
 
     for line in path.read_text(encoding="utf-8").splitlines():
         requirement = line.partition(" #")[0].strip()
-        if not requirement or requirement.startswith("#") or requirement.startswith("-"):
+        if (
+            not requirement
+            or requirement.startswith("#")
+            or requirement.startswith("-")
+        ):
             continue
         match = requirement_name.match(requirement)
         if match is not None:
@@ -211,7 +215,9 @@ def check_openai_compatible_providers() -> None:
 
     def fake_post(url, *, headers=None, json=None, timeout=None):
 
-        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        calls.append(
+            {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        )
 
         return Response()
 
@@ -241,7 +247,10 @@ def check_openai_compatible_providers() -> None:
 
         assert result[0] == "ok"
 
-        assert calls[-1]["url"] == "https://api.groq.com/openai/v1/chat/completions"
+        assert (
+            calls[-1]["url"]
+            == "https://api.groq.com/openai/v1/chat/completions"
+        )
 
         assert calls[-1]["headers"]["Authorization"] == "Bearer groq-key"
 
@@ -258,7 +267,9 @@ def check_openai_compatible_providers() -> None:
 
         assert result[0] == "ok"
 
-        assert calls[-1]["url"] == "https://openrouter.ai/api/v1/chat/completions"
+        assert (
+            calls[-1]["url"] == "https://openrouter.ai/api/v1/chat/completions"
+        )
 
         assert calls[-1]["headers"]["Authorization"] == "Bearer openrouter-key"
 
@@ -289,7 +300,9 @@ def load_mvsep_helpers() -> dict:
     for node in module.body:
         if isinstance(node, ast.Assign):
             names = {
-                target.id for target in node.targets if isinstance(target, ast.Name)
+                target.id
+                for target in node.targets
+                if isinstance(target, ast.Name)
             }
 
             if names & {"DIRECT_AUDIO_EXTS", "YTDLP_DOMAINS"}:
@@ -305,7 +318,9 @@ def load_mvsep_helpers() -> dict:
     namespace = {"urlparse": urlparse}
 
     exec(  # noqa: S102 – dev script: executes AST-extracted helpers in sandboxed namespace
-        compile(ast.Module(body=keep, type_ignores=[]), "cogs/mvsep.py", "exec"),
+        compile(
+            ast.Module(body=keep, type_ignores=[]), "cogs/mvsep.py", "exec"
+        ),
         namespace,
     )
 
@@ -427,7 +442,8 @@ def check_env_sample() -> None:
 
         if "#" in value:
             raise CheckFailure(
-                ".env.sample contains an inline comment on an active assignment "
+                ".env.sample contains an inline comment on an "
+                "active assignment "
                 f"at line {line_number}; move the comment to its own line"
             )
 
@@ -445,7 +461,9 @@ def check_env_sample() -> None:
     missing = sorted(required - keys)
 
     if missing:
-        raise CheckFailure(".env.sample is missing keys: " + ", ".join(missing))
+        raise CheckFailure(
+            ".env.sample is missing keys: " + ", ".join(missing)
+        )
 
 
 def check_secret_files_not_tracked() -> None:
@@ -473,7 +491,9 @@ def check_secret_files_not_tracked() -> None:
     tracked = [line for line in result.stdout.splitlines() if line.strip()]
 
     if tracked:
-        raise CheckFailure("Secret/runtime files are tracked: " + ", ".join(tracked))
+        raise CheckFailure(
+            "Secret/runtime files are tracked: " + ", ".join(tracked)
+        )
 
 
 def check_unit_tests() -> None:

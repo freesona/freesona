@@ -50,7 +50,9 @@ logging.getLogger("asyncio").setLevel(logging.ERROR)
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="asyncio")
 
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="asyncio")
+warnings.filterwarnings(
+    "ignore", category=DeprecationWarning, module="asyncio"
+)
 
 warnings.filterwarnings("ignore", module="discord")
 
@@ -97,7 +99,9 @@ def get_params(command: Any) -> list[dict]:
                     "name": param.name,
                     "required": param.required,
                     "type": (
-                        str(param.type.name) if hasattr(param.type, "name") else "Any"
+                        str(param.type.name)
+                        if hasattr(param.type, "name")
+                        else "Any"
                     ),
                 }
             )
@@ -119,7 +123,9 @@ def process_commands(cmds: Iterable[Any], is_tree: bool = False) -> list[dict]:
         entry = {
             "name": cmd.name,
             "qualified_name": cmd.qualified_name,
-            "description": getattr(cmd, "help", getattr(cmd, "description", ""))
+            "description": getattr(
+                cmd, "help", getattr(cmd, "description", "")
+            )
             or "No description provided.",
         }
 
@@ -161,7 +167,9 @@ async def main() -> None:
     enabled_modules = load_enabled_modules(config)
 
     extensions = CORE_EXTENSIONS + [
-        ext for name, ext in OPTIONAL_MODULES.items() if enabled_modules.get(name, True)
+        ext
+        for name, ext in OPTIONAL_MODULES.items()
+        if enabled_modules.get(name, True)
     ]
 
     bot.remove_command("help")
@@ -193,7 +201,9 @@ async def main() -> None:
             "failed_extensions": failed_extensions,
         },
         "prefix_commands": process_commands(bot.commands, is_tree=False),
-        "slash_commands": process_commands(bot.tree.get_commands(), is_tree=True),
+        "slash_commands": process_commands(
+            bot.tree.get_commands(), is_tree=True
+        ),
     }
 
     # Use sort_keys=False to preserve the order we built

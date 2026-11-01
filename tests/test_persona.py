@@ -46,7 +46,9 @@ class TestReloadPersona(unittest.TestCase):
                     '"beliefs": "", "language": "", '
                     '"system_instructions": "", "temperature": ""}'
                 )
-            with patch.dict(os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}):
+            with patch.dict(
+                os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}
+            ):
                 import utils.persona as persona_module
 
                 importlib.reload(persona_module)
@@ -115,7 +117,9 @@ class TestReloadPersona(unittest.TestCase):
                     '"background": "", "beliefs": "", "language": "", '
                     '"system_instructions": "", "temperature": ""}'
                 )
-            with patch.dict(os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}):
+            with patch.dict(
+                os.environ, {"AI_PERSONA_JSON_FILE": str(persona_path)}
+            ):
                 import utils.persona as persona_module
 
                 importlib.reload(persona_module)

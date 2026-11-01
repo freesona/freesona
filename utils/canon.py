@@ -547,7 +547,9 @@ async def create_snapshot(
     return snapshot
 
 
-async def get_snapshots(persona_id: str, limit: int = 10) -> list[CanonSnapshot]:
+async def get_snapshots(
+    persona_id: str, limit: int = 10
+) -> list[CanonSnapshot]:
     """Get recent snapshots for a persona."""
 
     async with aiosqlite.connect(_get_canon_file_path()) as db:
@@ -758,7 +760,9 @@ DEFAULT_CANON_TEMPLATES: dict[CanonComponentType, dict[str, str]] = {
 }
 
 
-async def ensure_default_canon(persona_id: str, author: str = "system") -> None:
+async def ensure_default_canon(
+    persona_id: str, author: str = "system"
+) -> None:
     """Create empty default canon components for a new
 
     persona if none exist."""

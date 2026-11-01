@@ -120,24 +120,59 @@ class TestAddUserMessage(unittest.IsolatedAsyncioTestCase):
         worksheet = [(b"worksheet-image", "image/png")]
         newer_image = [(b"newer-photo", "image/jpeg")]
         other_image = [(b"other-user-image", "image/jpeg")]
-        await add_user_message(1, 2, 3, "Solve this worksheet", 100, "user", attachments=worksheet)
-        await add_user_message(1, 2, 3, "Here is another photo", 103, "user", attachments=newer_image)
-        await add_user_message(1, 2, 4, "Different image", 101, "other", attachments=other_image)
-        await add_user_message(1, 2, 3, "What is in the same image?", 102, "user")
+        await add_user_message(
+            1, 2, 3, "Solve this worksheet", 100, "user", attachments=worksheet
+        )
+        await add_user_message(
+            1,
+            2,
+            3,
+            "Here is another photo",
+            103,
+            "user",
+            attachments=newer_image,
+        )
+        await add_user_message(
+            1, 2, 4, "Different image", 101, "other", attachments=other_image
+        )
+        await add_user_message(
+            1, 2, 3, "What is in the same image?", 102, "user"
+        )
 
-        self.assertEqual(await get_recent_image_attachments(1, 2, 3), newer_image)
-        self.assertEqual(await get_recent_image_attachments(1, 2, 4), other_image)
+        self.assertEqual(
+            await get_recent_image_attachments(1, 2, 3), newer_image
+        )
+        self.assertEqual(
+            await get_recent_image_attachments(1, 2, 4), other_image
+        )
         self.assertEqual(await get_recent_image_attachments(1, 3, 3), [])
         self.assertEqual(await get_recent_image_attachments(9, 2, 3), [])
 
-    async def test_oversized_image_is_not_retained_or_replaced_with_older_image(self):
+    async def test_oversized_image_does_not_replace_an_older_image(
+        self,
+    ):
         await add_user_message(
-            1, 2, 3, "First image", 100, "user",
+            1,
+            2,
+            3,
+            "First image",
+            100,
+            "user",
             attachments=[(b"small", "image/png")],
         )
         await add_user_message(
-            1, 2, 3, "New large image", 101, "user",
-            attachments=[(b"x" * (conversation_module._MAX_RETAINED_IMAGE_BYTES + 1), "image/png")],
+            1,
+            2,
+            3,
+            "New large image",
+            101,
+            "user",
+            attachments=[
+                (
+                    b"x" * (conversation_module._MAX_RETAINED_IMAGE_BYTES + 1),
+                    "image/png",
+                )
+            ],
         )
 
         self.assertEqual(await get_recent_image_attachments(1, 2, 3), [])

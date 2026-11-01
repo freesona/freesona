@@ -71,12 +71,16 @@ def build_messages(
     messages: list[dict[str, Any]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
+    user_text = format_user_text(
+        user_prompt, instruction_prefix, username, user_id
+    )
     if not attachments:
         messages.append({"role": "user", "content": user_text})
     else:
         # Standard OpenAI / NVIDIA NIM Multimodal Vision message format
-        content_parts: list[dict[str, Any]] = [{"type": "text", "text": user_text}]
+        content_parts: list[dict[str, Any]] = [
+            {"type": "text", "text": user_text}
+        ]
         # Add attachment parts
         for att_bytes, att_mime in attachments:
             b64 = base64.b64encode(att_bytes).decode("utf-8")
@@ -161,7 +165,8 @@ def _should_use_file_api(file_bytes: bytes, mime_type: str) -> bool:
         return True
     # Use File API for PDFs, audio, video (better handling)
     return bool(
-        mime_type == "application/pdf" or mime_type.startswith(("audio/", "video/"))
+        mime_type == "application/pdf"
+        or mime_type.startswith(("audio/", "video/"))
     )
 
 
@@ -329,12 +334,16 @@ def post_chat_completion(
         payload.update(extra_payload)
     response = None
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response = requests.post(
+            url, headers=headers, json=payload, timeout=60
+        )
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"]
     except requests.exceptions.HTTPError as e:
-        status_code = response.status_code if response is not None else "Unknown"
+        status_code = (
+            response.status_code if response is not None else "Unknown"
+        )
         text = response.text if response is not None else str(e)
         logger.error(f"HTTPError from {url} [{status_code}]: {text}")
         raise

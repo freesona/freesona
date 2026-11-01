@@ -57,7 +57,9 @@ class DuplicateClaimError(Exception):
 
         self.existing_entry = existing_entry
 
-        super().__init__("This anniversary has already been claimed in this server.")
+        super().__init__(
+            "This anniversary has already been claimed in this server."
+        )
 
 
 async def get_entry_by_id(entry_id: str) -> dict | None:
@@ -117,7 +119,9 @@ async def insert_entry(data: dict) -> None:
         await db.commit()
 
 
-async def update_calendar_event_id(entry_id: str, calendar_event_id: str) -> None:
+async def update_calendar_event_id(
+    entry_id: str, calendar_event_id: str
+) -> None:
     """Update the calendar_event_id for an entry after
 
     successful calendar sync."""
@@ -238,7 +242,9 @@ async def get_entries_on_date(guild_id: int, month_day: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def check_duplicate(guild_id: int, title: str, subtitle: str) -> dict | None:
+async def check_duplicate(
+    guild_id: int, title: str, subtitle: str
+) -> dict | None:
     """
 
     Check if a title+subtitle combination is already claimed in a guild.
@@ -294,7 +300,8 @@ async def get_entries_missing_thumbnail(
     """Get all entries with no thumbnail_url (for cover sync operations)."""
 
     sql = (
-        "SELECT * FROM anniversaries WHERE thumbnail_url IS NULL OR thumbnail_url = ''"
+        "SELECT * FROM anniversaries "
+        "WHERE thumbnail_url IS NULL OR thumbnail_url = ''"
     )
 
     params: list = []

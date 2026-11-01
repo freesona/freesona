@@ -24,7 +24,8 @@ class TestDiscordCommandGuards(unittest.TestCase):
 
     def test_slash_context_without_attachment_is_safe(self):
         ctx = SimpleNamespace(message=None)
-        self.assertFalse(_has_message_attachment(ctx))  # type: ignore[arg-type]
+        has_attachment = _has_message_attachment(ctx)  # type: ignore[arg-type]
+        self.assertFalse(has_attachment)
 
     def test_prefix_context_detects_attachment(self):
         ctx = SimpleNamespace(message=SimpleNamespace(attachments=[object()]))

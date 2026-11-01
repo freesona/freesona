@@ -42,7 +42,9 @@ async def test_run_capture_returns_exit_code_and_trimmed_stdout():
         "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
         new=AsyncMock(return_value=process),
     ) as create_process:
-        result = await _run_capture("dt", "encode", "--input", "abc", timeout=7)
+        result = await _run_capture(
+            "dt", "encode", "--input", "abc", timeout=7
+        )
 
     assert result == (3, "result")
     create_process.assert_awaited_once_with(

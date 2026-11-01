@@ -44,7 +44,10 @@ def migrate(file_path):
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "OPTIONAL_MODULES":
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "OPTIONAL_MODULES"
+                ):
                     optional_modules = ast.literal_eval(node.value)
 
                     break
@@ -70,7 +73,10 @@ def migrate(file_path):
     print(f"Found deployment-specific modules: {local_modules}")
 
     if os.path.exists("modules.local.json"):
-        print("modules.local.json already exists. Please manually merge the findings.")
+        print(
+            "modules.local.json already exists. "
+            "Please manually merge the findings."
+        )
 
         sys.exit(1)
 

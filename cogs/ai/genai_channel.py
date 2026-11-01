@@ -24,7 +24,9 @@ class GenAIChannelCog(commands.Cog):
     )
     @app_commands.describe(channel="The channel to set for AI conversations.")
     @commands.has_permissions(administrator=True)
-    async def set_channel(self, ctx: commands.Context, channel: discord.TextChannel):
+    async def set_channel(
+        self, ctx: commands.Context, channel: discord.TextChannel
+    ):
         config = load_config()
         config["chat_channel_id"] = channel.id
         save_config(config)
@@ -68,6 +70,7 @@ class GenAIChannelCog(commands.Cog):
             "smart": "respond to bot mentions, replies, or attachments",
         }
         await ctx.send(
-            f"Conversation response mode set to `{mode}`: {descriptions[mode]}.",
+            f"Conversation response mode set to `{mode}`: "
+            f"{descriptions[mode]}.",
             ephemeral=bool(ctx.interaction),
         )

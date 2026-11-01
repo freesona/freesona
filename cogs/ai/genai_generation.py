@@ -6,11 +6,8 @@ import discord
 from discord.ext import commands
 
 from utils.config import embed_footer
-from utils.generation import (
-    ConversationResponse,
-    extract_attachments,
-    safe_generate,
-)
+from utils.discord_adapter import extract_attachments
+from utils.generation import ConversationResponse, safe_generate
 from utils.persona import CURRENT_PERSONA, CURRENT_PERSONA_ID
 
 from .genai_common import BOT_NAME, clean_sources_block, logger
@@ -26,7 +23,10 @@ class GenAIGenerationCog(commands.Cog):
     @commands.hybrid_command(
         name="write",
         aliases=["w"],
-        help="Ask the AI to write or create something; optionally attach a file.",
+        help=(
+            "Ask the AI to write or create something; "
+            "optionally attach a file."
+        ),
     )
     async def write_cmd(
         self,
@@ -63,7 +63,9 @@ class GenAIGenerationCog(commands.Cog):
             )
         else:
             async with ctx.typing():
-                attachments = await extract_attachments(ctx.message, attachment)
+                attachments = await extract_attachments(
+                    ctx.message, attachment
+                )
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,
@@ -83,7 +85,9 @@ class GenAIGenerationCog(commands.Cog):
                     attachments=attachments,
                 )
         if response is None:
-            logger.error("Write command completed without a generation response.")
+            logger.error(
+                "Write command completed without a generation response."
+            )
             await ctx.send("The response could not be generated.")
             return
         embed = discord.Embed(
@@ -135,7 +139,9 @@ class GenAIGenerationCog(commands.Cog):
             )
         else:
             async with ctx.typing():
-                attachments = await extract_attachments(ctx.message, attachment)
+                attachments = await extract_attachments(
+                    ctx.message, attachment
+                )
                 response = await safe_generate(
                     query,
                     current_persona=CURRENT_PERSONA,
@@ -153,7 +159,9 @@ class GenAIGenerationCog(commands.Cog):
                     attachments=attachments,
                 )
         if response is None:
-            logger.error("Ask command completed without a generation response.")
+            logger.error(
+                "Ask command completed without a generation response."
+            )
             await ctx.send("The response could not be generated.")
             return
         embed = discord.Embed(
@@ -194,7 +202,9 @@ class GenAIGenerationCog(commands.Cog):
                 ),
                 color=discord.Color.red(),
             )
-            url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            url = (
+                f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            )
             embed.add_field(name="Full results", value=url, inline=False)
             embed.set_footer(text=embed_footer(ctx.author.display_name, query))
             await ctx.send(embed=embed)
@@ -232,7 +242,9 @@ class GenAIGenerationCog(commands.Cog):
                         ),
                     )
             if response is None:
-                logger.error("Search command completed without a generation response.")
+                logger.error(
+                    "Search command completed without a generation response."
+                )
                 text = "Search results could not be summarized."
             else:
                 text = response.first_text()[:4096]
@@ -242,10 +254,14 @@ class GenAIGenerationCog(commands.Cog):
             color=discord.Color.blue(),
         )
         if result.has_sources:
-            sources_text = clean_sources_block(result.sources_block(max_items=5))
+            sources_text = clean_sources_block(
+                result.sources_block(max_items=5)
+            )
             embed.add_field(name="Sources", value=sources_text, inline=False)
         else:
-            url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            url = (
+                f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            )
             embed.add_field(name="Full results", value=url, inline=False)
         embed.set_footer(text=embed_footer(ctx.author.display_name, query))
         await ctx.send(embed=embed)

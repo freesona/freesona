@@ -22,7 +22,11 @@ class CustomEndpointProviderTests(unittest.TestCase):
     def test_custom_endpoint_allows_anonymous_access(self):
         with patch.dict(
             os.environ,
-            {"CUSTOM_API_BASE_URL": "http://localhost:8000/v1/chat/completions"},
+            {
+                "CUSTOM_API_BASE_URL": (
+                    "http://localhost:8000/v1/chat/completions"
+                )
+            },
             clear=True,
         ):
             provider = get_provider("custom")
@@ -37,7 +41,9 @@ class CustomEndpointProviderTests(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "CUSTOM_API_BASE_URL": "https://example.test/v1/chat/completions",
+                "CUSTOM_API_BASE_URL": (
+                    "https://example.test/v1/chat/completions"
+                ),
                 "CUSTOM_API_KEY": "test-key",
             },
             clear=True,
@@ -81,7 +87,11 @@ class CustomEndpointProviderTests(unittest.TestCase):
         }
         with patch.dict(
             os.environ,
-            {"CUSTOM_API_BASE_URL": "http://localhost:8000/v1/chat/completions"},
+            {
+                "CUSTOM_API_BASE_URL": (
+                    "http://localhost:8000/v1/chat/completions"
+                )
+            },
             clear=True,
         ):
             provider = get_provider("custom")
@@ -95,12 +105,15 @@ class CustomEndpointProviderTests(unittest.TestCase):
     def test_custom_is_exposed_as_a_provider_choice(self):
         self.assertIn("custom", PROVIDER_CHOICES)
         self.assertIn("custom", CONFIG_ALLOWED_VALUES["provider"])
-        self.assertEqual(normalize_provider_name("openai-compatible"), "custom")
+        self.assertEqual(
+            normalize_provider_name("openai-compatible"), "custom"
+        )
 
 
 class ProviderCommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_custom_is_offered_by_discord_provider_autocomplete(self):
         choices = await provider_autocomplete(MagicMock(), "cust")
         self.assertEqual(
-            [(choice.name, choice.value) for choice in choices], [("custom", "custom")]
+            [(choice.name, choice.value) for choice in choices],
+            [("custom", "custom")],
         )

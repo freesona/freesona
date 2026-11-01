@@ -100,7 +100,9 @@ class SectionFilter(logging.Filter):
         config = load_config()
 
         self._enabled_sections = {
-            section for section, key in LOG_SECTIONS.items() if config.get(key, False)
+            section
+            for section, key in LOG_SECTIONS.items()
+            if config.get(key, False)
         }
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -120,7 +122,9 @@ class SectionFilter(logging.Filter):
         longest_match = ""
 
         for prefix, sec in LOGGER_SECTION_MAP.items():
-            if logger_name.startswith(prefix) and len(prefix) > len(longest_match):
+            if logger_name.startswith(prefix) and len(prefix) > len(
+                longest_match
+            ):
                 section = sec
 
                 longest_match = prefix
@@ -195,7 +199,9 @@ class MonthlyRotatingFileHandler(logging.handlers.BaseRotatingHandler):
 
         period_start_month = ((now.month - 1) // self.months) * self.months + 1
 
-        period_start = datetime(now.year, period_start_month, 1, tzinfo=timezone.utc)
+        period_start = datetime(
+            now.year, period_start_month, 1, tzinfo=timezone.utc
+        )
 
         # Calculate period end accurately using calendar.monthrange
 
@@ -214,11 +220,18 @@ class MonthlyRotatingFileHandler(logging.handlers.BaseRotatingHandler):
             period_end_year, period_end_month, last_day, tzinfo=timezone.utc
         )
 
-        suffix = period_start.strftime("%Y-%m") + "_to_" + period_end.strftime("%Y-%m")
+        suffix = (
+            period_start.strftime("%Y-%m")
+            + "_to_"
+            + period_end.strftime("%Y-%m")
+        )
 
         stem = self.base_filename.stem
 
-        return self.base_filename.parent / f"{stem}_{suffix}{self.base_filename.suffix}"
+        return (
+            self.base_filename.parent
+            / f"{stem}_{suffix}{self.base_filename.suffix}"
+        )
 
     def should_rollover(self, record: logging.LogRecord) -> bool:
         """Check if we should rollover to a new file."""
@@ -250,7 +263,9 @@ class MonthlyRotatingFileHandler(logging.handlers.BaseRotatingHandler):
 class DiscordLogHandler(logging.Handler):
     """Logging handler that sends log records to a Discord channel."""
 
-    def __init__(self, bot: Client, channel_id: int, level: int = logging.INFO):
+    def __init__(
+        self, bot: Client, channel_id: int, level: int = logging.INFO
+    ):
 
         super().__init__(level)
 
@@ -261,7 +276,9 @@ class DiscordLogHandler(logging.Handler):
         self._channel: discord.abc.Messageable | None = None
 
         self.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+            logging.Formatter(
+                "%(asctime)s %(levelname)s %(name)s: %(message)s"
+            )
         )
 
     async def _get_channel(self) -> discord.abc.Messageable | None:
@@ -534,7 +551,9 @@ async def send_log_message(bot: Client, message: str, level: str = "INFO"):
 
     if isinstance(channel, discord.abc.Messageable):
         try:
-            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now(timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
 
             formatted = f"[{timestamp}] [{level}] {message}"
 

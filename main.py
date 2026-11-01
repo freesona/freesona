@@ -53,7 +53,9 @@ LEGACY_PERSONA_NOTICE = (
     "state."
 )
 if not bot_token or not channel_id_str:
-    raise ValueError("Missing BOT_TOKEN or CHANNEL_ID in environment variables")
+    raise ValueError(
+        "Missing BOT_TOKEN or CHANNEL_ID in environment variables"
+    )
 try:
     CHANNEL_ID = int(channel_id_str)
 except ValueError:
@@ -73,7 +75,9 @@ class Freesona(commands.Bot):
         # Cache config in memory to eliminate disk read on prefix checks
         self.config = load_config()
         self._legacy_notice_sent = False  # guard: only DM once per session
-        self._startup_sent = False  # guard: only send startup message once per session
+        self._startup_sent = (
+            False  # guard: only send startup message once per session
+        )
 
     @property
     def startup_sent(self) -> bool:
@@ -127,7 +131,9 @@ class Freesona(commands.Bot):
             owner = info.owner
             await owner.send(LEGACY_PERSONA_NOTICE.format(bot_name=bot_name))
         except (discord.HTTPException, discord.Forbidden, AttributeError) as e:
-            logger.warning(f"Could not DM owner for legacy persona notice: {e}")
+            logger.warning(
+                f"Could not DM owner for legacy persona notice: {e}"
+            )
 
 
 # Initialize Bot
@@ -250,24 +256,31 @@ async def on_app_command_error(
     """Handle slash command errors safely without
     type or attribute exceptions."""
     raw_error = (
-        error.original if isinstance(error, app_commands.CommandInvokeError) else error
+        error.original
+        if isinstance(error, app_commands.CommandInvokeError)
+        else error
     )
     if isinstance(raw_error, app_commands.MissingPermissions):
         await send_app_error(
             interaction, "You don't have permission to use this command."
         )
     elif isinstance(raw_error, app_commands.BotMissingPermissions):
-        await send_app_error(interaction, "I don't have permission to do that.")
+        await send_app_error(
+            interaction, "I don't have permission to do that."
+        )
     elif isinstance(raw_error, app_commands.CommandOnCooldown):
         await send_app_error(
             interaction,
             f"Cooldown. Try again in {raw_error.retry_after:.1f}s.",
         )
-    elif isinstance(raw_error, (commands.BadArgument, app_commands.TransformerError)):
+    elif isinstance(
+        raw_error, (commands.BadArgument, app_commands.TransformerError)
+    ):
         await send_app_error(interaction, f"Invalid argument: {raw_error}")
     else:
         logger.error(
-            f"Unhandled slash command error: {type(raw_error).__name__}: {raw_error}"
+            f"Unhandled slash command error: "
+            f"{type(raw_error).__name__}: {raw_error}"
         )
         await send_app_error(
             interaction, "An unexpected error occurred. Please try again."
@@ -295,7 +308,9 @@ HTTP_PORT = int(os.getenv("HTTP_PORT", "10000"))
 
 
 async def start_http():
-    config = uvicorn.Config(app, host="0.0.0.0", port=HTTP_PORT, log_level="warning")
+    config = uvicorn.Config(
+        app, host="0.0.0.0", port=HTTP_PORT, log_level="warning"
+    )
     server = uvicorn.Server(config)
     await server.serve()
 

@@ -50,7 +50,9 @@ class ProviderConfigTests(unittest.TestCase):
             "Alice", long_query, max_query_len=20
         )
         self.assertTrue(footer_truncated.endswith("…"))
-        self.assertEqual(len(footer_truncated), len("Asked by Alice  •  ") + 20)
+        self.assertEqual(
+            len(footer_truncated), len("Asked by Alice  •  ") + 20
+        )
 
 
 if __name__ == "__main__":

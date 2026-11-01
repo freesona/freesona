@@ -175,7 +175,11 @@ def load_profiles() -> dict:
 def save_profiles(profiles: dict):
 
     os.makedirs(
-        (os.path.dirname(PERSONAS_PATH) if os.path.dirname(PERSONAS_PATH) else "."),
+        (
+            os.path.dirname(PERSONAS_PATH)
+            if os.path.dirname(PERSONAS_PATH)
+            else "."
+        ),
         exist_ok=True,
     )
 
@@ -212,7 +216,9 @@ def _load_and_assemble_persona() -> tuple[str, bool, dict]:
         else:
             persona_data = default_persona_json()
 
-            current_persona = os.getenv("AI_PERSONA", "You are a helpful assistant.")
+            current_persona = os.getenv(
+                "AI_PERSONA", "You are a helpful assistant."
+            )
 
             legacy_detected = False
 
@@ -223,7 +229,9 @@ def init_persona():
 
     global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
 
-    CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = _load_and_assemble_persona()
+    CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = (
+        _load_and_assemble_persona()
+    )
 
 
 def reload_persona() -> tuple[str, bool]:
@@ -237,7 +245,9 @@ def reload_persona() -> tuple[str, bool]:
 
     global PERSONA_DATA, CURRENT_PERSONA, LEGACY_DETECTED
 
-    CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = _load_and_assemble_persona()
+    CURRENT_PERSONA, LEGACY_DETECTED, PERSONA_DATA = (
+        _load_and_assemble_persona()
+    )
 
     return CURRENT_PERSONA, LEGACY_DETECTED
 
@@ -260,7 +270,9 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
         style=discord.TextStyle.paragraph,
         required=False,
         max_length=1024,
-        placeholder=("Describe the bot's personality, identity, and core traits."),
+        placeholder=(
+            "Describe the bot's personality, identity, and core traits."
+        ),
     )
 
     background = ui.TextInput(
@@ -326,7 +338,9 @@ class PersonaCoreModal(ui.Modal, title="Persona: Core & Background"):
             )
 
         except (OSError, TypeError, UnicodeEncodeError) as e:
-            await interaction.response.send_message(f"Save failed: {e}", ephemeral=True)
+            await interaction.response.send_message(
+                f"Save failed: {e}", ephemeral=True
+            )
 
 
 class PersonaStyleModal(ui.Modal, title="Persona: Style & Instructions"):
@@ -380,7 +394,9 @@ class PersonaStyleModal(ui.Modal, title="Persona: Style & Instructions"):
 
         PERSONA_DATA["language"] = self.language.value.strip()
 
-        PERSONA_DATA["system_instructions"] = self.system_instructions.value.strip()
+        PERSONA_DATA["system_instructions"] = (
+            self.system_instructions.value.strip()
+        )
 
         CURRENT_PERSONA = assemble_persona(PERSONA_DATA)
 
@@ -392,7 +408,9 @@ class PersonaStyleModal(ui.Modal, title="Persona: Style & Instructions"):
             )
 
         except (OSError, TypeError, UnicodeEncodeError) as e:
-            await interaction.response.send_message(f"Save failed: {e}", ephemeral=True)
+            await interaction.response.send_message(
+                f"Save failed: {e}", ephemeral=True
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +470,9 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
 
             value = data.get(field_name, "")
 
-            getattr(self, field_name).default = str(value) if value is not None else ""
+            getattr(self, field_name).default = (
+                str(value) if value is not None else ""
+            )
 
     async def on_submit(self, interaction: discord.Interaction):
 
@@ -478,12 +498,15 @@ class PersonaFullModal(ui.Modal, title="Persona Editor"):
             save_persona_json(PERSONA_DATA)
 
             await interaction.response.send_message(
-                "Persona saved. (Temperature is edited in Core & Background modal)",
+                "Persona saved. (Temperature is edited in the "
+                "Core & Background modal)",
                 ephemeral=True,
             )
 
         except (OSError, TypeError, UnicodeEncodeError) as e:
-            await interaction.response.send_message(f"Save failed: {e}", ephemeral=True)
+            await interaction.response.send_message(
+                f"Save failed: {e}", ephemeral=True
+            )
 
 
 class PersonaPanelView(ui.View):
@@ -493,22 +516,34 @@ class PersonaPanelView(ui.View):
 
         self.bot = bot
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self, interaction: discord.Interaction
+    ) -> bool:
 
         if not await self.bot.is_owner(interaction.user):
-            await interaction.response.send_message("Owner only.", ephemeral=True)
+            await interaction.response.send_message(
+                "Owner only.", ephemeral=True
+            )
 
             return False
 
         return True
 
-    @ui.button(label="Edit Persona", style=discord.ButtonStyle.primary, emoji="✏️")
-    async def edit_persona(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(
+        label="Edit Persona", style=discord.ButtonStyle.primary, emoji="✏️"
+    )
+    async def edit_persona(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
 
         await interaction.response.send_modal(PersonaFullModal(PERSONA_DATA))
 
-    @ui.button(label="Preview Prompt", style=discord.ButtonStyle.secondary, emoji="📄")
-    async def preview_prompt(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(
+        label="Preview Prompt", style=discord.ButtonStyle.secondary, emoji="📄"
+    )
+    async def preview_prompt(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
 
         persona = CURRENT_PERSONA.strip() or "*(no persona assembled yet)*"
 
@@ -521,20 +556,28 @@ class PersonaPanelView(ui.View):
         )
 
         if len(persona) > 3900:
-            embed.set_footer(text=f"Truncated — full prompt is {len(persona)} chars.")
+            embed.set_footer(
+                text=f"Truncated — full prompt is {len(persona)} chars."
+            )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @ui.button(label="Debug", style=discord.ButtonStyle.secondary, emoji="🔍")
-    async def debug_persona(self, interaction: discord.Interaction, button: ui.Button):
+    async def debug_persona(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
 
         locked = "🔒 Locked" if PERSONA_LOCKED else "🔓 Unlocked"
 
         legacy = "Yes — migrate via `/setpersona`" if LEGACY_DETECTED else "No"
 
-        filled = sum(1 for f in PERSONA_FIELDS if PERSONA_DATA.get(f, "").strip())
+        filled = sum(
+            1 for f in PERSONA_FIELDS if PERSONA_DATA.get(f, "").strip()
+        )
 
-        embed = discord.Embed(title="Persona Debug", color=discord.Color.og_blurple())
+        embed = discord.Embed(
+            title="Persona Debug", color=discord.Color.og_blurple()
+        )
 
         embed.add_field(name="Lock State", value=locked, inline=True)
 
@@ -547,7 +590,9 @@ class PersonaPanelView(ui.View):
         )
 
         embed.add_field(
-            name="Prompt Length", value=f"{len(CURRENT_PERSONA)} chars", inline=True
+            name="Prompt Length",
+            value=f"{len(CURRENT_PERSONA)} chars",
+            inline=True,
         )
 
         for field_name in ASSEMBLY_ORDER:
@@ -561,8 +606,12 @@ class PersonaPanelView(ui.View):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Lock / Unlock", style=discord.ButtonStyle.danger, emoji="🔐")
-    async def toggle_lock(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(
+        label="Lock / Unlock", style=discord.ButtonStyle.danger, emoji="🔐"
+    )
+    async def toggle_lock(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
 
         global PERSONA_LOCKED
 
@@ -580,7 +629,9 @@ async def open_persona_panel(interaction: discord.Interaction):
     bot = interaction.client
 
     if not isinstance(bot, commands.Bot):
-        await interaction.response.send_message("Owner check failed.", ephemeral=True)
+        await interaction.response.send_message(
+            "Owner check failed.", ephemeral=True
+        )
 
         return
 

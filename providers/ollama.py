@@ -8,6 +8,7 @@ import requests
 from providers.base import BaseProvider
 from utils.providers import build_messages
 
+
 class OllamaProvider(BaseProvider):
     def generate_text(
         self,

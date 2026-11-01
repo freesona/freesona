@@ -26,7 +26,9 @@ class ProviderCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_group(name="provider", help="Show or change the active provider.")
+    @commands.hybrid_group(
+        name="provider", help="Show or change the active provider."
+    )
     @commands.is_owner()
     async def provider_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
