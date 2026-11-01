@@ -2,38 +2,57 @@
 
 This document follows ASD-STE100 Simplified Technical English.
 
-This document lists all environment variables used by Freesona. Copy `.env.sample` to `.env` and set the values for your deployment.
+This document lists the environment variables used by Freesona. Copy
+`.env.sample` to `.env` and set the values for your deployment.
 
 ## Required variables
 
 | Variable | Description | Example |
 | :------- | :---------- | :------ |
 | `BOT_TOKEN` | Discord bot token | `MTIz...` |
-| `CHANNEL_ID` | Log channel ID | `123456789` |
-| `AI_PROVIDER` | AI provider to use | `gemini` |
-| `GOOGLE_API_KEY` | Gemini API key | `AI...` |
+| `CHANNEL_ID` | Discord channel ID for the startup message | `123456789` |
+
+Set credentials for the selected AI provider. For example, Gemini needs
+`GOOGLE_API_KEY`, which is also used by web search. `AI_PROVIDER` defaults to
+`gemini`; it is not required. Ollama does not need a provider API key.
 
 ## AI Provider variables
 
 | Variable | Description | Example |
 | :------- | :---------- | :------ |
 | `AI_PROVIDER` | Provider name: `gemini`, `openai`, `ollama`, `nim`, `azure`, `groq`, `openrouter`, `custom` | `gemini` |
-| `AI_PROVIDER_MODEL` | Override default model | `gemini-1.5-flash` |
+| `AI_PROVIDER_MODEL` | Override the configured provider model | `gemini-2.5-flash` |
 | `MODEL_NAME` | Default model name | `gemini-flash-lite-latest` |
 | `MODEL_TEMPERATURE` | Model temperature 0.0-2.0 | `0.7` |
 | `OPENAI_API_KEY` | OpenAI API key | `sk-...` |
-| `OPENAI_BASE_URL` | OpenAI API base URL | `https://api.openai.com/v1/chat/completions` |
 | `OLLAMA_BASE_URL` | Ollama base URL | `http://localhost:11434/api/chat` |
-| `NVIDIA_API_KEY` | NVIDIA NIM API key | `nvapi-...` |
+| `NVIDIA_API_KEY` or `NIM_API_KEY` | NVIDIA NIM API key | `nvapi-...` |
 | `NVIDIA_NIM_BASE_URL` | NVIDIA NIM base URL | `https://integrate.api.nvidia.com/v1/chat/completions` |
+| `NIM_BASE_URL` | Alias for `NVIDIA_NIM_BASE_URL` | `https://integrate.api.nvidia.com/v1/chat/completions` |
 | `AZURE_AI_KEY` | Azure AI Foundry key | `...` |
-| `AZURE_AI_BASE_URL` | Azure AI Foundry endpoint | `https://...` |
 | `GROQ_API_KEY` | Groq API key | `gsk_...` |
 | `OPENROUTER_API_KEY` | OpenRouter API key | `sk-or-...` |
 | `OPENROUTER_SITE_URL` | OpenRouter site URL | `https://example.com` |
 | `OPENROUTER_SITE_NAME` | OpenRouter site name | `Freesona` |
 | `CUSTOM_API_BASE_URL` | OpenAI-compatible chat-completions URL | `http://localhost:8000/v1/chat/completions` |
 | `CUSTOM_API_KEY` | Custom API key (optional) | `...` |
+
+The OpenAI and Azure provider URLs are set in the provider implementation.
+`OPENAI_BASE_URL` and `AZURE_AI_BASE_URL` are not read as environment
+variables. The Azure provider currently uses a code-defined placeholder URL;
+it does not read your Azure AI Foundry endpoint.
+
+## Application and knowledge base
+
+| Variable | Description | Example |
+| :------- | :---------- | :------ |
+| `BOT_NAME` | Name shown in messages and startup notices | `Freesona` |
+| `AI_PERSONA` | Fallback persona text when no persona file is available | `You are a helpful assistant.` |
+| `KB_ENABLED` | Enable knowledge base retrieval (`true` or `false`) | `true` |
+| `KB_TOP_K` | Maximum knowledge entries retrieved for a response | `5` |
+| `KNOWLEDGE_BASE_DATABASE` | SQLite database for knowledge base entries | `knowledge.db` |
+| `EMBEDDING_MODEL` | Embedding model label added to knowledge metadata | `text-embedding-3-large` |
+| `LEGACY_PATH` | Legacy JSON memory file used by the migration command | `memory.json` |
 
 ## ChromaDB variables
 
@@ -57,7 +76,7 @@ This document lists all environment variables used by Freesona. Copy `.env.sampl
 | `MESSAGE_CLAIM_INSTANCE_ID` | Unique instance ID | `instance-1` |
 | `MESSAGE_CLAIM_LEASE_SECONDS` | Lease duration in seconds | `300` |
 
-## Complimentary service tokens
+## Optional integrations
 
 | Variable | Description | Example |
 | :------- | :---------- | :------ |
