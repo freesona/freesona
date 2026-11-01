@@ -122,6 +122,10 @@ reference and [Storage](docs/storage.md) for file path details.
 
 Licensed under the **MIT License**. See [LICENSE](LICENSE).
 
+## Acknowledgements
+
+Freesona integrates the [Delphitools CLI](https://github.com/1612elphi/delphitools-cli), licensed under the [0BSD License](https://opensource.org/licenses/0BSD), for image conversion, color simulation, and utility commands.
+
 ---
 
 ### AI-assisted development notice
