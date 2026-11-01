@@ -346,10 +346,27 @@ def post_chat_completion(
         )
         text = response.text if response is not None else str(e)
         logger.error(f"HTTPError from {url} [{status_code}]: {text}")
-        raise
+        from providers.base import (
+            ProviderError,
+            RateLimitError,
+            TransientError,
+        )
+
+        if status_code == 429:
+            raise RateLimitError(text) from e
+        if status_code in (500, 502, 503, 504):
+            raise TransientError(text) from e
+        raise ProviderError(text) from e
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout calling {url}: {e}")
+        from providers.base import ProviderTimeoutError
+
+        raise ProviderTimeoutError(str(e)) from e
     except Exception as e:
         logger.error(f"Request error calling {url}: {e}")
-        raise
+        from providers.base import ProviderError
+
+        raise ProviderError(str(e)) from e
 
 
 def generate_text(

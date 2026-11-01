@@ -22,7 +22,14 @@ except ImportError:
     types = None
 
 
-from utils.chroma import query_knowledge
+from providers.base import (
+    MalformedResponseError as ProviderMalformedResponseError,
+    ProviderError,
+    RateLimitError as ProviderRateLimitError,
+    ProviderTimeoutError,
+    TransientError as ProviderTransientError,
+)
+from utils.kb_interface import KnowledgeBase
 from utils.config import (
     get_kb_top_k,
     get_model_name,
@@ -182,15 +189,42 @@ class TimeoutGenerationError(GenerationError):
 
 def _classify_error(e: Exception) -> GenerationError:
 
+    # Typed provider errors map directly to GenerationError subclasses
+
+    if isinstance(e, ProviderRateLimitError):
+
+        return RateLimitError(str(e))
+
+    if isinstance(e, ProviderTimeoutError):
+
+        return TimeoutGenerationError(str(e))
+
+    if isinstance(e, ProviderTransientError):
+
+        return TransientError(str(e))
+
+    if isinstance(e, ProviderMalformedResponseError):
+
+        return MalformedResponseError(str(e))
+
+    if isinstance(e, ProviderError):
+
+        return GenerationError(str(e))
+
+    # Fall back to string matching for untyped exceptions
+
     msg = str(e).lower()
 
     if "429" in msg or "quota" in msg or "rate" in msg:
+
         return RateLimitError(str(e))
 
     if "timeout" in msg or "timed out" in msg:
+
         return TimeoutGenerationError(str(e))
 
     if "500" in msg or "503" in msg or "internal" in msg:
+
         return TransientError(str(e))
 
     return GenerationError(str(e))
@@ -378,6 +412,7 @@ async def retrieve_knowledge_context(
     query: str,
     persona: str,
     top_k: int = KB_TOP_K,
+    kb: KnowledgeBase | None = None,
 ) -> str:
     """
 
@@ -395,6 +430,10 @@ async def retrieve_knowledge_context(
 
         top_k: Maximum number of entries to retrieve.
 
+        kb: Optional knowledge base implementation. Defaults to
+
+            ChromaKnowledgeBase.
+
 
 
     Returns:
@@ -411,11 +450,16 @@ async def retrieve_knowledge_context(
     if not persona or not persona.strip():
         return ""
 
+    if kb is None:
+        from utils.kb_interface import ChromaKnowledgeBase
+
+        kb = ChromaKnowledgeBase()
+
     try:
         # Run query off-thread to avoid blocking
 
         entries = await asyncio.to_thread(
-            query_knowledge, query, limit=top_k, persona=persona
+            kb.query, query, limit=top_k, persona=persona
         )
 
         if not entries:

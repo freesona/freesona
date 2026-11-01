@@ -51,8 +51,8 @@ and your infrastructure set the available capacity and cost.
 1. Clone the repository and create a virtual environment.
 
 ```bash
-git clone https://github.com/soquincy/Freesona.git
-cd Freesona
+git clone https://github.com/freesona/freesona
+cd freesona
 python3 -m venv .venv
 ```
 
