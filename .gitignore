@@ -117,3 +117,4 @@ test_*.txt
 .agents/skills/mintlify/SKILL.md
 skills-lock.json
 /outputs/*audit*
+.work/*
