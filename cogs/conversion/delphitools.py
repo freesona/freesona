@@ -73,8 +73,9 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
 async def _run_capture(
     *cmd: str, timeout: int | None = None
 ) -> tuple[int, str]:
-    """Run a subprocess, capture stdout, and return
-    (exit_code, stdout_text).
+    """Run a subprocess and return its exit code and relevant output.
+
+    On failure, return stderr when available so callers can report diagnostics.
     """
 
     if timeout is None:
@@ -97,7 +98,9 @@ async def _run_capture(
         ) from e
 
     try:
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
 
     except asyncio.TimeoutError:
         proc.kill()
@@ -109,7 +112,8 @@ async def _run_capture(
     if return_code is None:
         raise RuntimeError("Subprocess finished without an exit code.")
 
-    return return_code, stdout.decode().strip()
+    output = stderr if return_code != 0 and stderr else stdout
+    return return_code, output.decode().strip()
 
 
 class Delphitools(commands.Cog):

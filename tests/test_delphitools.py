@@ -35,16 +35,18 @@ class MockContext:
 @pytest.mark.anyio
 async def test_run_capture_returns_exit_code_and_trimmed_stdout():
     process = MagicMock()
-    process.communicate = AsyncMock(return_value=(b" result \n", b"ignored"))
-    process.returncode = 3
+    process.communicate = AsyncMock(return_value=(b" result \n", b"warning"))
+    process.returncode = 0
 
     with patch(
         "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
         new=AsyncMock(return_value=process),
     ) as create_process:
-        result = await _run_capture("dt", "encode", "--input", "abc", timeout=7)
+        result = await _run_capture(
+            "dt", "encode", "--input", "abc", timeout=7
+        )
 
-    assert result == (3, "result")
+    assert result == (0, "result")
     create_process.assert_awaited_once_with(
         "dt",
         "encode",
@@ -53,6 +55,23 @@ async def test_run_capture_returns_exit_code_and_trimmed_stdout():
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
+
+
+@pytest.mark.anyio
+async def test_run_capture_returns_stderr_for_failed_command():
+    process = MagicMock()
+    process.communicate = AsyncMock(
+        return_value=(b"", b"invalid barcode format\n")
+    )
+    process.returncode = 1
+
+    with patch(
+        "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=process),
+    ):
+        result = await _run_capture("dt", "barcode", "hello", timeout=7)
+
+    assert result == (1, "invalid barcode format")
 
 
 @pytest.mark.anyio
@@ -80,7 +99,9 @@ async def test_run_capture_uses_configured_delphitools_executable(monkeypatch):
 @pytest.mark.anyio
 async def test_run_capture_kills_process_and_raises_on_timeout():
     process = MagicMock()
-    process.communicate = AsyncMock(side_effect=[asyncio.TimeoutError, (b"", b"")])
+    process.communicate = AsyncMock(
+        side_effect=[asyncio.TimeoutError, (b"", b"")]
+    )
     process.returncode = -9
 
     with (
@@ -132,7 +153,9 @@ async def test_barcodegen_uses_delphitools_cli_arguments():
     with patch(
         "cogs.conversion.delphitools._run_capture", side_effect=run_cli
     ) as run_capture:
-        await cast(Any, cog.barcodegen.callback)(cog, ctx, "12345678", "code128")
+        await cast(Any, cog.barcodegen.callback)(
+            cog, ctx, "12345678", "code128"
+        )
 
     call = run_capture.await_args
     assert call is not None
