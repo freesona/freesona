@@ -13,6 +13,22 @@ load_dotenv()
 BOT_NAME = os.getenv("BOT_NAME", "Bot")
 logger = logging.getLogger(__name__)
 
+DELPHITOOLS_COMMANDS = (
+    "**Delphitools CLI** (`dt`, `delphi`, `delphitools`)\n"
+    "**Colour:** `colour`, `contrast`, `harmony`, `tailwind-shades`, "
+    "`palette`, `colorblind`\n"
+    "**Image:** `crop`, `matte`, `scroll`, `watermark`, `favicon`, `split`, "
+    "`convert`, `noise`, `clip`, `trace`, `svgo`, `rmbg`\n"
+    "**PDF:** `preflight`, `zine`, `impose`\n"
+    "**Text and type:** `px2rem`, `rem2px`, `line-height`, `typo`, `wc`, "
+    "`paper`, `glyph`, `font-info`, `regex`, `shavian`\n"
+    "**Generators:** `qr`, `barcode`, `meta`\n"
+    "**Calculators:** `calc`, `base`, `time`, `unit`, `encode`, `decode`, "
+    "`hash`\n"
+    "**CLI utilities:** `agent`, `install-man`, `completions`\n"
+    "Use `dt <command> --help` for command options."
+)
+
 
 def _split_embed_text(text: str, limit: int = 1024) -> list[str]:
     """Split long help text into Discord-safe chunks."""
@@ -129,6 +145,16 @@ class HelpView(discord.ui.View):
         _ = button
         view = cast("HelpView", self)
         await view.update_help(interaction, "News")
+
+    @discord.ui.button(
+        label="Conversion", style=discord.ButtonStyle.secondary, emoji="🛠️"
+    )
+    async def conversion_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "Conversion")
 
     @discord.ui.button(
         label="Utility", style=discord.ButtonStyle.secondary, emoji="🔧"
@@ -274,6 +300,7 @@ class HelpCog(commands.Cog):
                 "Moderation": [],
                 "Utility": [],
                 "Media": [],
+                "Conversion": [],
                 "AI Persona": [],
                 "News": [],
             }
@@ -301,6 +328,10 @@ class HelpCog(commands.Cog):
                     "`/rss latest <name>` — Fetch articles\n"
                     "`/rss add <name> <url>` — Add feed\n"
                     "`/rss setchannel <#ch>` — Auto-post"
+                )
+            if "Conversion" in formatted_cats:
+                formatted_cats["Conversion"] += (
+                    "\n\n" + DELPHITOOLS_COMMANDS
                 )
             embed = discord.Embed(
                 title=f"{BOT_NAME} Help Menu",
