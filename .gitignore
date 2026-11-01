@@ -54,6 +54,7 @@ Thumbs.db
 config.json
 persona.json
 .chroma/
+.ua/
 
 # IDE/editor
 .vscode/
