@@ -74,6 +74,10 @@ The module requires the Delphitools executable. Each command applies the
 configured subprocess timeout and Discord upload-size limit. Set
 `DELPHITOOLS_EXECUTABLE` to the executable name or full path. The bot process
 must be able to access the executable.
+The interactive `/help` menu lists Delphitools command groups for colour,
+image, PDF, text and type, generators, calculators, and CLI utilities. Use
+`dt <command> --help` to show the options for a Delphitools command. The bot
+commands in the table above are the commands that Freesona exposes in Discord.
 
 ---
 
