@@ -179,6 +179,23 @@ class TestExtractAttachments(unittest.IsolatedAsyncioTestCase):
             [(b"message-image", "image/jpeg"), (b"slash-image", "image/png")],
         )
 
+    async def test_extracts_multiple_explicit_attachments_in_order(self):
+        first_attachment = MagicMock(spec=discord.Attachment)
+        first_attachment.content_type = "image/png"
+        first_attachment.read = AsyncMock(return_value=b"first-image")
+        second_attachment = MagicMock(spec=discord.Attachment)
+        second_attachment.content_type = "image/webp"
+        second_attachment.read = AsyncMock(return_value=b"second-image")
+
+        result = await extract_attachments(
+            None, first_attachment, second_attachment
+        )
+
+        self.assertEqual(
+            result,
+            [(b"first-image", "image/png"), (b"second-image", "image/webp")],
+        )
+
 
 class TestSendFirstSegmentWithReply(unittest.IsolatedAsyncioTestCase):
     """Tests for _send_first_segment_with_reply helper function."""
