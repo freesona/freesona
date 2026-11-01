@@ -54,8 +54,9 @@ Freesona/
     ├── character_memory.py   # Character Memory — shared experiences, promises, relationships
     ├── config.py             # Config I/O (config.json), embed_footer
     ├── config_schema.py      # Centralized configuration schema definitions
-    ├── conversation.py       # ConversationManager — short-term memory, budgets, context
-    ├── generation.py         # Provider orchestration, PromptBuilder integration, Discord response sending
+    ├── conversation.py       # Short-term conversation history, budgets, context
+    ├── generation.py         # Provider orchestration and PromptBuilder integration
+    ├── discord_adapter.py    # Discord response sending and attachment extraction
     ├── interaction.py        # Plain request data for the reusable interaction path
     ├── guild_world.py        # Guild World Context — environmental grounding
     ├── anniversaries_db.py   # Anniversary storage helpers
@@ -145,32 +146,36 @@ Legacy `safe_generate(prompt, **options)` calls remain available for commands. A
 
 1. **Security pre-check** — `detect_injection(prompt)`: if the prompt contains a known injection attempt, `sanitize_prompt` redacts the matched phrase(s) before sending.
 2. **Prompt assembly** — `build_system_prompt()` via PromptBuilder assembles the system instruction from independent context providers (System, Persona, Canon, Conversation History, User Memory, Character Memory, Guild World, PKB).
-3. **Conversation history injection** — `ConversationHistoryProvider` injects recent conversation context (summary + messages) from ConversationManager into the system prompt. All providers receive identical context.
+3. **Conversation history injection** — `ConversationHistoryProvider` injects recent conversation messages from `utils.conversation` into the system prompt. All providers receive the same assembled context.
 4. **Attachment multimodal processing** — `extract_attachments(message)` downloads and encodes images/PDFs/audio/video for the active provider's multimodal input pipeline when supported.
-5. **Response storage** — Assistant responses are added to ConversationManager via `add_assistant_message()` for conversation continuity across all providers.
+5. **Response storage** — Assistant responses are added through `utils.conversation.add_assistant_message()` for conversation continuity across providers.
 6. **Output safety** — `unsafe_output(text)` checks the model's response for injection artifacts before sending.
 
 ---
 
 ## Memory System
 
-### Short-term Memory — ConversationManager (`utils/conversation.py`)
+### Short-term Memory — Conversation history (`utils/conversation.py`)
 
-Freesona owns conversation history through the **ConversationManager** — a provider-agnostic short-term memory subsystem. All providers (Gemini, OpenAI, Ollama, NIM, Azure, Groq, OpenRouter) are now **stateless** and receive identical conversation context via the system prompt.
+Freesona owns recent conversation history through the provider-agnostic functions in `utils/conversation.py`. The runtime uses this module-level store for each `(guild_id, channel_id, user_id)` scope. All providers receive the same assembled context via the system prompt.
 
-**ConversationManager responsibilities:**
+The module-level compatibility functions delegate to the `conversation_manager` singleton. They use the same instance-owned state and preserve the existing function signatures. New `ConversationManager` instances have independent state.
+
+**Conversation history responsibilities:**
 
 - Stores recent messages per `(guild_id, channel_id, user_id)` scope
 - Enforces configurable limits:
   - `conversation_max_messages` (default: 20)
   - `conversation_token_budget` (default: 4000, rough estimation)
   - `conversation_ttl_seconds` (default: 3600 / 1 hour)
-- Provides `build_conversation_context()` for prompt injection (summary + recent messages format)
+- Provides `build_conversation_context()` for prompt injection from recent messages
 - Runs periodic cleanup of expired conversations
 
-**Provider-owned continuity has been removed.** The legacy Gemini Interactions API (`previous_interaction_id`) and `utils/memory.py::_interaction_store` are deprecated. The `/clearmemory` command now clears ConversationManager state via `clear_conversation()`.
+The `/clearmemory` command clears the module-level conversation history via `clear_conversation()`.
 
-Conversation history is injected into the system prompt through `ConversationHistoryProvider` (priority 30 in PromptBuilder), ensuring all providers receive the same context regardless of native capabilities.
+Conversation history is injected into the system prompt through `ConversationHistoryProvider` (priority 30 in PromptBuilder). The runtime still supports provider response tuples containing an interaction ID; this compatibility behavior is separate from the shared conversation history.
+
+Run the Python regression suite with `python -m pytest tests/`. The listener-to-generation flow is covered without connecting to a Discord gateway or calling a provider service.
 
 ### Long-term Memory — User Facts (`utils/memory.py`)
 

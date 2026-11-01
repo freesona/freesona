@@ -5,6 +5,11 @@ import discord
 
 from cogs.ai import genai_listener
 from utils.generation import ConversationResponse
+from utils.conversation import (
+    clear_conversation,
+    conversation_manager,
+    get_recent_messages,
+)
 from utils.interaction import InteractionRequest
 from utils.intent import INTENT_GENERAL_CHAT, IntentResult
 
@@ -209,6 +214,129 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.content, "latest")
         send.assert_awaited_once_with(response, second.channel, reply_to=None)
         self.assertNotIn((7, 5), pending)
+
+    async def test_chat_message_flows_through_generation_and_response_adapter(
+        self,
+    ):
+        message, bot = self.make_message(content="How does this work?")
+        message.id = 42
+        message.channel.send = AsyncMock()
+        pending = {}
+        messages = []
+        manager_messages = []
+        responses = []
+        send_response = genai_listener.send_response
+        await clear_conversation(message.guild.id, message.channel.id)
+
+        async def capture_response(response, channel, *, reply_to=None):
+            responses.append(response)
+            await send_response(response, channel, reply_to=reply_to)
+
+        with (
+            patch.object(genai_listener, "_pending_responses", pending),
+            patch.object(
+                genai_listener,
+                "load_config",
+                return_value={
+                    "chat_channel_id": message.channel.id,
+                    "conversation_response_mode": "all",
+                    "debounce_seconds": 0,
+                },
+            ),
+            patch.object(
+                genai_listener, "resolve_message_role", return_value="user"
+            ),
+            patch.object(
+                genai_listener,
+                "extract_and_store_fact",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                genai_listener,
+                "DiscordGuildWorldAccessor",
+                return_value=object(),
+            ),
+            patch.object(genai_listener, "get_reply_target", return_value=None),
+            patch.object(
+                genai_listener,
+                "send_response",
+                side_effect=capture_response,
+            ) as response_adapter,
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="assembled context",
+            ) as build_prompt,
+            patch(
+                "utils.generation.generate_text",
+                return_value="The answer.",
+            ) as provider,
+            patch(
+                "utils.generation.get_provider_name", return_value="openai"
+            ),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch(
+                "utils.generation.get_model_temperature",
+                return_value=0.4,
+            ),
+            patch("utils.generation._get_split_min_length", return_value=1000),
+            patch("utils.generation._get_split_delay_base", return_value=0),
+            patch(
+                "utils.generation._get_split_delay_per_char", return_value=0
+            ),
+            patch("utils.generation._get_split_delay_max", return_value=0),
+        ):
+            try:
+                await genai_listener.GenAIListenerCog(bot).on_message(message)
+                await pending[(message.author.id, message.channel.id)]
+                messages = await get_recent_messages(
+                    message.guild.id,
+                    message.channel.id,
+                    message.author.id,
+                )
+                manager_messages = await conversation_manager.get_recent_messages(
+                    message.guild.id,
+                    message.channel.id,
+                    message.author.id,
+                )
+            finally:
+                await clear_conversation(
+                    message.guild.id,
+                    message.channel.id,
+                    message.author.id,
+                )
+
+        build_prompt.assert_awaited_once()
+        prompt_call = build_prompt.await_args
+        assert prompt_call is not None
+        prompt_options = prompt_call.kwargs
+        self.assertEqual(prompt_options["guild_id"], message.guild.id)
+        self.assertEqual(prompt_options["channel_id"], message.channel.id)
+        self.assertEqual(prompt_options["user_id"], message.author.id)
+        self.assertEqual(prompt_options["user_message"], message.content)
+        provider.assert_called_once()
+        self.assertEqual(provider.call_args.args[0], message.content)
+        self.assertEqual(
+            provider.call_args.kwargs["system_prompt"], "assembled context"
+        )
+        response_adapter.assert_awaited_once()
+        self.assertEqual(responses[0].first_text(), "The answer.")
+        message.channel.send.assert_awaited_once_with("The answer.")
+        self.assertEqual(
+            [(item.role, item.content) for item in messages],
+            [("user", message.content), ("assistant", "The answer.")],
+        )
+        self.assertEqual(
+            [(item.role, item.content) for item in manager_messages],
+            [(item.role, item.content) for item in messages],
+        )
 
     async def test_autonomy_permission_denial_skips_intent_and_generation(
         self,
