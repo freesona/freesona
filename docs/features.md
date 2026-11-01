@@ -520,7 +520,9 @@ Prompt injection attempts (`"ignore previous instructions"`, `"jailbreak"`, `"de
 
 ## Hybrid Commands
 
-Every command works as both a prefix command (`~write`) and a slash command (`/write`). The prefix is configurable per server and persists across restarts via `config.json`.
+Most commands work as both a prefix command (`~write`) and a slash command (`/write`). The prefix is configurable per server and persists across restarts via `config.json`.
+
+Delphitools conversion commands are all available as prefix commands (`~command`). Twenty-five of them are also grouped under the slash command `/tools` to stay within Discord's 100 global slash-command limit; the remaining Delphitools commands are prefix-only.
 
 ---
 

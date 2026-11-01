@@ -55,7 +55,8 @@ as a secondary index; an unavailable index does not discard the SQLite record.
 ## Conversion and Utility Commands
 
 The optional `conversion` module loads `cogs.conversion.delphitools` and calls the
-`delphitools` CLI. Commands are available as prefix and slash commands:
+`delphitools` CLI. Majority of Delphitools commands are available as prefix commands. Twenty-five of them are also grouped under the slash command
+`/tools` to stay within Discord's 100 global slash-command limit:
 
 | Command        | Action                                                                                    | Permissions |
 | :------------- | :---------------------------------------------------------------------------------------- | :---------- |
@@ -74,10 +75,10 @@ The module requires the Delphitools executable. Each command applies the
 configured subprocess timeout and Discord upload-size limit. Set
 `DELPHITOOLS_EXECUTABLE` to the executable name or full path. The bot process
 must be able to access the executable.
-The interactive `/help` menu lists Delphitools command groups for colour,
-image, PDF, text and type, generators, calculators, and CLI utilities. Use
-`dt <command> --help` to show the options for a Delphitools command. The bot
-commands in the table above are the commands that Freesona exposes in Discord.
+The interactive `/help` menu lists Delphitools commands under the **Tools**
+category. Use `dt <command> --help` to show the options for a Delphitools
+command. The bot commands in the table above are the commands that Freesona
+exposes in Discord.
 
 ---
 
