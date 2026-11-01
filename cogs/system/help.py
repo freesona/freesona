@@ -13,22 +13,6 @@ load_dotenv()
 BOT_NAME = os.getenv("BOT_NAME", "Bot")
 logger = logging.getLogger(__name__)
 
-DELPHITOOLS_COMMANDS = (
-    "**Delphitools CLI** (`dt`, `delphi`, `delphitools`)\n"
-    "**Colour:** `colour`, `contrast`, `harmony`, `tailwind-shades`, "
-    "`palette`, `colorblind`\n"
-    "**Image:** `crop`, `matte`, `scroll`, `watermark`, `favicon`, `split`, "
-    "`convert`, `noise`, `clip`, `trace`, `svgo`, `rmbg`\n"
-    "**PDF:** `preflight`, `zine`, `impose`\n"
-    "**Text and type:** `px2rem`, `rem2px`, `line-height`, `typo`, `wc`, "
-    "`paper`, `glyph`, `font-info`, `regex`, `shavian`\n"
-    "**Generators:** `qr`, `barcode`, `meta`\n"
-    "**Calculators:** `calc`, `base`, `time`, `unit`, `encode`, `decode`, "
-    "`hash`\n"
-    "**CLI utilities:** `agent`, `install-man`, `completions`\n"
-    "Use `dt <command> --help` for command options."
-)
-
 
 def _split_embed_text(text: str, limit: int = 1024) -> list[str]:
     """Split long help text into Discord-safe chunks."""
@@ -329,10 +313,6 @@ class HelpCog(commands.Cog):
                     "`/rss add <name> <url>` — Add feed\n"
                     "`/rss setchannel <#ch>` — Auto-post"
                 )
-            if "Conversion" in formatted_cats:
-                formatted_cats["Conversion"] += (
-                    "\n\n" + DELPHITOOLS_COMMANDS
-                )
             embed = discord.Embed(
                 title=f"{BOT_NAME} Help Menu",
                 description=(
@@ -356,13 +336,18 @@ class HelpCog(commands.Cog):
                     title += f" (alias: `{prefix}{search_name}`)"
                 embed = discord.Embed(
                     title=title,
-                    description=command.help or "No description provided.",
+                    description=(
+                        (command.help or "No description provided.").replace(
+                            "{prefix}", prefix
+                        )
+                    ),
                     color=discord.Color.green(),
                 )
-                if command.usage:
+                usage = command.usage or command.signature
+                if usage:
                     embed.add_field(
                         name="Usage",
-                        value=(f"`{prefix}{command.name} {command.usage}`"),
+                        value=f"`{prefix}{command.name} {usage}`",
                         inline=False,
                     )
                 if command.aliases:

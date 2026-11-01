@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 
 import discord
@@ -19,13 +20,17 @@ from utils.discord_adapter import extract_attachments
 
 log = logging.getLogger(__name__)
 
+COLORBLIND_SIMULATIONS = (
+    "protanopia",
+    "deuteranopia",
+    "tritanopia",
+    "achromatopsia",
+)
 
-# Configurable values loaded from config.json (settable via /config
-# slash commands)
+# The subprocess timeout and output-size limit come from config.json.
 
 
 def _get_subprocess_timeout() -> int:
-
     return int(load_config().get("delphitools_subprocess_timeout", 300))
 
 
@@ -139,9 +144,14 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="imgconvert",
-        description=(
-            "Convert image formats (PNG, JPG, WebP, etc.) with optional resize"
+        description=("Convert an attached image and optionally resize it."),
+        help=(
+            "Convert an attached image to PNG, JPG, WebP, GIF, BMP, TIFF, "
+            "or ICO. You can also set a width and height in pixels. "
+            "Attach the image to the command message. "
+            "Example: `{prefix}imgconvert webp` with an image attached."
         ),
+        usage="<format> [width] [height] (attach image)",
     )
     @app_commands.describe(
         attachment="The image to convert",
@@ -160,7 +170,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="ICO", value="ico"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def imgconvert(
         self,
         ctx: commands.Context,
@@ -192,7 +202,9 @@ class Delphitools(commands.Cog):
             try:
                 # Extract attachment data
 
-                attachments = await extract_attachments(ctx.message)
+                attachments = await extract_attachments(
+                    ctx.message, attachment
+                )
 
                 if not attachments:
                     await ctx.send("Failed to read the attached image.")
@@ -224,7 +236,15 @@ class Delphitools(commands.Cog):
 
                     # Build delphitools convert command
 
-                    cmd = ["dt", "convert", str(input_file), str(output_file)]
+                    cmd = [
+                        "dt",
+                        "convert",
+                        str(input_file),
+                        "--to",
+                        format,
+                        "--output",
+                        str(output_file),
+                    ]
 
                     # Add resize parameters if provided
 
@@ -232,7 +252,7 @@ class Delphitools(commands.Cog):
                         cmd.extend(["--resize", f"{width}x{height}"])
 
                     elif width is not None:
-                        cmd.extend(["--resize", f"{width}"])
+                        cmd.extend(["--resize", f"{width}x"])
 
                     elif height is not None:
                         cmd.extend(["--resize", f"x{height}"])
@@ -304,56 +324,71 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="watermark",
-        description="Add a watermark to an image",
+        description="Overlay a watermark image onto an image.",
+        help=(
+            "Overlay a second image as a watermark on the first image. "
+            "Opacity is from 0.0 (transparent) to 1.0 (opaque). "
+            "Attach the base image and watermark image to the command. "
+            "Example: `{prefix}watermark` with both images attached."
+        ),
+        usage="[opacity] [position] (attach base and watermark images)",
     )
     @app_commands.describe(
-        attachment="The image to watermark",
-        text="Watermark text",
-        opacity="Opacity percentage (0-100, default: 50)",
+        attachment="The base image",
+        mark="The watermark image",
+        opacity="Opacity from 0.0 to 1.0 (default: 0.3)",
         position=(
-            "Position of watermark (top-left, top-right, bottom-left, "
-            "bottom-right, center)"
+            "Position (top-left, top, top-right, left, center, right, "
+            "bottom-left, bottom, bottom-right)"
         ),
     )
     @app_commands.choices(
         position=[
             app_commands.Choice(name="Top Left", value="top-left"),
+            app_commands.Choice(name="Top", value="top"),
             app_commands.Choice(name="Top Right", value="top-right"),
-            app_commands.Choice(name="Bottom Left", value="bottom-left"),
-            app_commands.Choice(name="Bottom Right", value="bottom-right"),
+            app_commands.Choice(name="Left", value="left"),
             app_commands.Choice(name="Center", value="center"),
+            app_commands.Choice(name="Right", value="right"),
+            app_commands.Choice(name="Bottom Left", value="bottom-left"),
+            app_commands.Choice(name="Bottom", value="bottom"),
+            app_commands.Choice(name="Bottom Right", value="bottom-right"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def watermark(
         self,
         ctx: commands.Context,
-        text: str,
         attachment: discord.Attachment | None = None,
-        opacity: int = 50,
+        mark: discord.Attachment | None = None,
+        opacity: float = 0.3,
         position: str = "bottom-right",
     ) -> None:
-        """Add a watermark to an image."""
+        """Overlay a watermark image onto a base image."""
 
         if not attachment:
-            await ctx.send("Please attach an image to watermark.")
+            await ctx.send("Please attach a base image.")
 
             return
 
-        # Check if it's an image
+        if not mark:
+            await ctx.send("Please attach a watermark image.")
 
-        if (
-            not attachment.content_type
-            or not attachment.content_type.startswith("image/")
+            return
+
+        if any(
+            not selected.content_type
+            or not selected.content_type.startswith("image/")
+            for selected in (attachment, mark)
         ):
-            await ctx.send("Please attach a valid image file.")
+            await ctx.send("Please attach valid image files.")
 
             return
 
         # Validate opacity
 
-        if opacity < 0 or opacity > 100:
-            await ctx.send("Opacity must be between 0 and 100.")
+        if opacity < 0.0 or opacity > 1.0:
+            await ctx.send("Opacity must be between 0.0 and 1.0.")
 
             return
 
@@ -363,14 +398,17 @@ class Delphitools(commands.Cog):
             try:
                 # Extract attachment data
 
-                attachments = await extract_attachments(ctx.message)
+                attachments = await extract_attachments(
+                    ctx.message, attachment, mark
+                )
 
-                if not attachments:
-                    await ctx.send("Failed to read the attached image.")
+                if len(attachments) < 2:
+                    await ctx.send("Failed to read both attached images.")
 
                     return
 
                 image_data, _mime_type = attachments[0]
+                mark_data, _mark_mime_type = attachments[1]
 
                 # Create a temporary directory for processing
 
@@ -382,9 +420,13 @@ class Delphitools(commands.Cog):
                     input_file = (
                         tmp_path / f"input{Path(attachment.filename).suffix}"
                     )
+                    mark_file = tmp_path / f"mark{Path(mark.filename).suffix}"
 
                     await asyncio.to_thread(
                         Path(input_file).write_bytes, image_data
+                    )
+                    await asyncio.to_thread(
+                        Path(mark_file).write_bytes, mark_data
                     )
 
                     # Determine output filename
@@ -401,18 +443,15 @@ class Delphitools(commands.Cog):
                         "dt",
                         "watermark",
                         str(input_file),
+                        "--mark",
+                        str(mark_file),
+                        "--output",
                         str(output_file),
-                        "--text",
-                        text,
+                        "--opacity",
+                        str(opacity),
+                        "--position",
+                        position,
                     ]
-
-                    # Add opacity parameter
-
-                    cmd.extend(["--opacity", str(opacity)])
-
-                    # Add position parameter
-
-                    cmd.extend(["--position", position])
 
                     # Run the watermark command
 
@@ -481,12 +520,19 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="palette",
-        description="Generate a color palette using various strategies",
+        description="Generate a palette of related colors.",
+        help=(
+            "Create a palette with an analogous, complementary, triadic, "
+            "monochromatic, true-random, or random-cohesive strategy. "
+            "Choose 1-20 colors (default 5). PNG is the supported image "
+            "format. Example: `{prefix}palette analogous 5 png`."
+        ),
+        usage="<strategy> [count] [format]",
     )
     @app_commands.describe(
         strategy="Palette generation strategy",
         count="Number of colors in the palette (default: 5)",
-        format="Output format (png, jpg, webp, svg)",
+        format="Output format (PNG)",
     )
     @app_commands.choices(
         strategy=[
@@ -494,19 +540,18 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="Complementary", value="complementary"),
             app_commands.Choice(name="Triadic", value="triadic"),
             app_commands.Choice(name="Monochromatic", value="monochromatic"),
-            app_commands.Choice(name="Random", value="random"),
-            app_commands.Choice(name="Gradient", value="gradient"),
+            app_commands.Choice(name="True Random", value="true-random"),
+            app_commands.Choice(
+                name="Random Cohesive", value="random-cohesive"
+            ),
         ]
     )
     @app_commands.choices(
         format=[
             app_commands.Choice(name="PNG", value="png"),
-            app_commands.Choice(name="JPG", value="jpg"),
-            app_commands.Choice(name="WebP", value="webp"),
-            app_commands.Choice(name="SVG", value="svg"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def palette(
         self,
         ctx: commands.Context,
@@ -520,6 +565,23 @@ class Delphitools(commands.Cog):
 
         if count < 1 or count > 20:
             await ctx.send("Color count must be between 1 and 20.")
+
+            return
+
+        if strategy not in {
+            "analogous",
+            "complementary",
+            "triadic",
+            "monochromatic",
+            "true-random",
+            "random-cohesive",
+        }:
+            await ctx.send("Please select a supported palette strategy.")
+
+            return
+
+        if format != "png":
+            await ctx.send("PNG is the supported palette image format.")
 
             return
 
@@ -543,7 +605,7 @@ class Delphitools(commands.Cog):
                     cmd = [
                         "dt",
                         "palette",
-                        "--count",
+                        "--size",
                         str(count),
                         "--format",
                         format,
@@ -623,12 +685,20 @@ class Delphitools(commands.Cog):
     @commands.hybrid_command(
         name="colorblind",
         description="Simulate colorblindness on an image",
+        help=(
+            "Show how an attached image looks with protanopia, "
+            "deuteranopia, tritanopia, or achromatopsia. Select `all` to "
+            "generate all four variants. "
+            "Attach the image to the command message. "
+            "Example: `{prefix}colorblind all` with an image attached."
+        ),
+        usage="<type> (attach image)",
     )
     @app_commands.describe(
         attachment="The image to process",
         type=(
-            "Type of colorblindness to simulate "
-            "(protanopia, deuteranopia, tritanopia, achromatopsia)"
+            "Select protanopia, deuteranopia, tritanopia, achromatopsia, "
+            "or all four"
         ),
     )
     @app_commands.choices(
@@ -637,9 +707,10 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="Deuteranopia", value="deuteranopia"),
             app_commands.Choice(name="Tritanopia", value="tritanopia"),
             app_commands.Choice(name="Achromatopsia", value="achromatopsia"),
+            app_commands.Choice(name="All four", value="all"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def colorblind(
         self,
         ctx: commands.Context,
@@ -667,9 +738,13 @@ class Delphitools(commands.Cog):
 
         async with ctx.typing():
             try:
+                started_at = time.perf_counter()
+
                 # Extract attachment data
 
-                attachments = await extract_attachments(ctx.message)
+                attachments = await extract_attachments(
+                    ctx.message, attachment
+                )
 
                 if not attachments:
                     await ctx.send("Failed to read the attached image.")
@@ -693,80 +768,87 @@ class Delphitools(commands.Cog):
                         Path(input_file).write_bytes, image_data
                     )
 
-                    # Determine output filename
-
-                    output_filename = (
-                        f"colorblind_{type}_"
-                        f"{Path(attachment.filename).stem}.png"
+                    simulation_types = (
+                        COLORBLIND_SIMULATIONS if type == "all" else (type,)
                     )
+                    output_files: list[Path] = []
 
-                    output_file = tmp_path / output_filename
+                    for simulation_type in simulation_types:
+                        output_file = (
+                            tmp_path / f"colorblind_{simulation_type}_"
+                            f"{Path(attachment.filename).stem}.png"
+                        )
+                        cmd = [
+                            "dt",
+                            "colorblind",
+                            str(input_file),
+                            "--output",
+                            str(output_file),
+                            "--cb-type",
+                            simulation_type,
+                        ]
 
-                    # Build delphitools colorblind command
-
-                    cmd = [
-                        "dt",
-                        "colorblind",
-                        str(input_file),
-                        str(output_file),
-                        "--type",
-                        type,
-                    ]
-
-                    # Run the colorblind simulation
-
-                    exit_code, stdout = await _run_capture(
-                        *cmd, timeout=_get_subprocess_timeout()
-                    )
-
-                    if exit_code != 0:
-                        await ctx.send(
-                            f"❌ **Colorblind simulation failed.** "
-                            f"delphitools exited with code {exit_code}."
+                        exit_code, stdout = await _run_capture(
+                            *cmd, timeout=_get_subprocess_timeout()
                         )
 
-                        if stdout:
-                            await ctx.send(f"Error details: `{stdout}`")
+                        if exit_code != 0:
+                            await ctx.send(
+                                f"❌ **Colorblind simulation failed for "
+                                f"{simulation_type}.** delphitools exited "
+                                f"with code {exit_code}."
+                            )
 
-                        return
+                            if stdout:
+                                await ctx.send(f"Error details: `{stdout}`")
 
-                    # Check if output file was created
+                            return
 
-                    if not output_file.exists():
+                        if not output_file.exists():
+                            await ctx.send(
+                                f"❌ **Colorblind simulation failed for "
+                                f"{simulation_type}.** Output file was not "
+                                "generated."
+                            )
+
+                            return
+
+                        file_size = output_file.stat().st_size
+                        if file_size > self.LIMIT_BYTES:
+                            await ctx.send(
+                                f"⚠️ **Colorblind simulation successful but "
+                                f"{simulation_type} file is too large.** "
+                                f"The processed image is "
+                                f"{file_size / (1024 * 1024):.1f} MB, "
+                                f"which exceeds the "
+                                f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
+                                "Discord limit."
+                            )
+
+                            return
+
+                        output_files.append(output_file)
+
+                    elapsed = time.perf_counter() - started_at
+                    if type == "all":
                         await ctx.send(
-                            "❌ **Colorblind simulation failed.** "
-                            "Output file was not generated."
+                            content=(
+                                f"✅ **All simulations done in "
+                                f"{elapsed:.2f}s**"
+                            ),
+                            files=[
+                                discord.File(str(output_file))
+                                for output_file in output_files
+                            ],
                         )
-
-                        return
-
-                    # Check file size
-
-                    file_size = output_file.stat().st_size
-
-                    if file_size > self.LIMIT_BYTES:
+                    else:
                         await ctx.send(
-                            f"⚠️ **Colorblind simulation successful but "
-                            "file too large.** "
-                            f"The processed image is "
-                            f"{file_size / (1024 * 1024):.1f} MB, "
-                            f"which exceeds the "
-                            f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
-                            "Discord limit."
+                            content=(
+                                f"✅ **{type.capitalize()} done in "
+                                f"{elapsed:.2f}s**"
+                            ),
+                            file=discord.File(str(output_files[0])),
                         )
-
-                        return
-
-                    # Send the processed image
-
-                    await ctx.send(
-                        content=(
-                            f"✅ **Colorblind simulation completed** "
-                            f"({type} simulation applied to "
-                            f"{attachment.filename})"
-                        ),
-                        file=discord.File(str(output_file)),
-                    )
 
             except asyncio.TimeoutError:
                 await ctx.send(
@@ -781,12 +863,17 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="qrgen",
-        description="Generate a QR code from text",
+        description="Create a QR code from text or a link.",
+        help=(
+            "Create a QR code that contains the text or link you provide. "
+            "Example: `{prefix}qrgen https://example.com`."
+        ),
+        usage="<text or link>",
     )
     @app_commands.describe(
         text="Text to encode in QR code",
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def qrgen(self, ctx: commands.Context, text: str) -> None:
         """Generate QR code."""
 
@@ -840,7 +927,13 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="barcodegen",
-        description="Generate a barcode from text",
+        description="Create a barcode from text or a number.",
+        help=(
+            "Encode text or a number as a Code 128 or EAN-13 barcode. "
+            "Choose the format after the data. "
+            "Example: `{prefix}barcodegen 12345678 code128`."
+        ),
+        usage="<data> <type>",
     )
     @app_commands.describe(
         text="Data to encode",
@@ -850,10 +943,9 @@ class Delphitools(commands.Cog):
         type=[
             app_commands.Choice(name="Code128", value="code128"),
             app_commands.Choice(name="EAN13", value="ean13"),
-            app_commands.Choice(name="QR", value="qr"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def barcodegen(
         self, ctx: commands.Context, text: str, type: str
     ) -> None:
@@ -918,14 +1010,20 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="unitconvert",
-        description="Convert units",
+        description="Convert a value from one unit to another.",
+        help=(
+            "Convert a number between units. Enter the value, source unit, "
+            "then target unit. The available units depend on the unit type. "
+            "Example: `{prefix}unitconvert 10 km mi`."
+        ),
+        usage="<value> <from_unit> <to_unit>",
     )
     @app_commands.describe(
         value="Numeric value",
         from_unit="Source unit",
         to_unit="Target unit",
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def unitconvert(
         self, ctx: commands.Context, value: float, from_unit: str, to_unit: str
     ) -> None:
@@ -933,7 +1031,7 @@ class Delphitools(commands.Cog):
 
         async with ctx.typing():
             try:
-                cmd = ["dt", "unit", str(value), from_unit, to_unit]
+                cmd = ["dt", "unit", f"{value:g} {from_unit}", to_unit]
 
                 exit_code, stdout = await _run_capture(
                     *cmd, timeout=_get_subprocess_timeout()
@@ -962,7 +1060,12 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="encode",
-        description="Encode data",
+        description="Encode text as Base64, hexadecimal, or URL text.",
+        help=(
+            "Encode text as Base64 or URL text. "
+            "Example: `{prefix}encode hello base64`."
+        ),
+        usage="<text> <encoding>",
     )
     @app_commands.describe(
         data="Data to encode",
@@ -971,11 +1074,10 @@ class Delphitools(commands.Cog):
     @app_commands.choices(
         encoding=[
             app_commands.Choice(name="Base64", value="base64"),
-            app_commands.Choice(name="Hex", value="hex"),
             app_commands.Choice(name="URL", value="url"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def encode(
         self, ctx: commands.Context, data: str, encoding: str
     ) -> None:
@@ -983,7 +1085,7 @@ class Delphitools(commands.Cog):
 
         async with ctx.typing():
             try:
-                cmd = ["dt", "encode", "--type", encoding, "--input", data]
+                cmd = ["dt", "encode", encoding, data]
 
                 exit_code, stdout = await _run_capture(
                     *cmd, timeout=_get_subprocess_timeout()
@@ -1012,7 +1114,12 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="decode",
-        description="Decode data",
+        description="Decode Base64 or URL text.",
+        help=(
+            "Convert encoded Base64 or URL text back to text. "
+            "Example: `{prefix}decode aGVsbG8= base64`."
+        ),
+        usage="<encoded_text> <encoding>",
     )
     @app_commands.describe(
         data="Data to decode",
@@ -1021,11 +1128,10 @@ class Delphitools(commands.Cog):
     @app_commands.choices(
         encoding=[
             app_commands.Choice(name="Base64", value="base64"),
-            app_commands.Choice(name="Hex", value="hex"),
             app_commands.Choice(name="URL", value="url"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def decode(
         self, ctx: commands.Context, data: str, encoding: str
     ) -> None:
@@ -1033,7 +1139,7 @@ class Delphitools(commands.Cog):
 
         async with ctx.typing():
             try:
-                cmd = ["dt", "decode", "--type", encoding, "--input", data]
+                cmd = ["dt", "decode", encoding, data]
 
                 exit_code, stdout = await _run_capture(
                     *cmd, timeout=_get_subprocess_timeout()
@@ -1062,7 +1168,15 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="hash",
-        description="Generate hash of data",
+        description=(
+            "Create a one-way hash of text with MD5, SHA-1, or SHA-256."
+        ),
+        help=(
+            "Create a fixed-length digest of text. A hash cannot be reversed. "
+            "Select `md5`, `sha1`, or `sha256`. "
+            "Example: `{prefix}hash hello sha256`."
+        ),
+        usage="<data> <algorithm>",
     )
     @app_commands.describe(
         data="Data to hash",
@@ -1075,7 +1189,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="SHA1", value="sha1"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def hash(
         self, ctx: commands.Context, data: str, algorithm: str
     ) -> None:
@@ -1083,7 +1197,7 @@ class Delphitools(commands.Cog):
 
         async with ctx.typing():
             try:
-                cmd = ["dt", "hash", "--algo", algorithm, "--input", data]
+                cmd = ["dt", "hash", algorithm, data]
 
                 exit_code, stdout = await _run_capture(
                     *cmd, timeout=_get_subprocess_timeout()

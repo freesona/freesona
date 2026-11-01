@@ -8,6 +8,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from discord.ext import commands as discord_commands
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -24,11 +25,18 @@ class MockContext:
         yield
 
     async def send(self, *args: Any, **kwargs: Any) -> None:
-        file = kwargs.get("file")
-        if file is not None:
-            kwargs["uploaded_filename"] = file.filename
-            kwargs["uploaded_bytes"] = file.fp.read()
-            file.close()
+        files = kwargs.get("files", [])
+        if "file" in kwargs:
+            files = [kwargs["file"], *files]
+        if files:
+            kwargs["uploaded_files"] = [
+                (file.filename, file.fp.read()) for file in files
+            ]
+            if len(files) == 1:
+                kwargs["uploaded_filename"] = files[0].filename
+                kwargs["uploaded_bytes"] = kwargs["uploaded_files"][0][1]
+            for file in files:
+                file.close()
         self.sent.append({"args": args, **kwargs})
 
 
@@ -42,15 +50,13 @@ async def test_run_capture_returns_exit_code_and_trimmed_stdout():
         "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
         new=AsyncMock(return_value=process),
     ) as create_process:
-        result = await _run_capture(
-            "dt", "encode", "--input", "abc", timeout=7
-        )
+        result = await _run_capture("dt", "encode", "base64", "abc", timeout=7)
 
     assert result == (0, "result")
     create_process.assert_awaited_once_with(
         "dt",
         "encode",
-        "--input",
+        "base64",
         "abc",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -111,7 +117,7 @@ async def test_run_capture_kills_process_and_raises_on_timeout():
         ),
         pytest.raises(asyncio.TimeoutError),
     ):
-        await _run_capture("dt", "encode", "--input", "abc", timeout=1)
+        await _run_capture("dt", "encode", "base64", "abc", timeout=1)
 
     process.kill.assert_called_once_with()
     assert process.communicate.await_count == 2
@@ -184,7 +190,7 @@ async def test_encode_reports_cli_result():
         await cast(Any, cog.encode.callback)(cog, ctx, "abc", "base64")
 
     run_capture.assert_awaited_once_with(
-        "dt", "encode", "--type", "base64", "--input", "abc", timeout=300
+        "dt", "encode", "base64", "abc", timeout=300
     )
     assert ctx.sent == [{"args": ("✅ **Encoded:** YWJj",)}]
 
@@ -200,7 +206,7 @@ async def test_imgconvert_sends_generated_image():
 
     async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
         input_path = Path(command[2])
-        output_path = Path(command[3])
+        output_path = Path(command[command.index("--output") + 1])
         assert input_path.read_bytes() == b"image-data"
         output_path.write_bytes(b"converted-image")
         return 0, ""
@@ -223,14 +229,291 @@ async def test_imgconvert_sends_generated_image():
     command = call.args
     assert command[:2] == ("dt", "convert")
     assert command[2].endswith("input.png")
-    assert command[3].endswith("output.webp")
-    assert command[4:] == ("--resize", "640")
+    assert command[3:5] == ("--to", "webp")
+    assert command[5] == "--output"
+    assert command[6].endswith("output.webp")
+    assert command[7:] == ("--resize", "640x")
     assert call.kwargs == {"timeout": 300}
     assert len(ctx.sent) == 1
     assert "sample.png → output.webp" in ctx.sent[0]["content"]
 
     assert ctx.sent[0]["uploaded_filename"] == "output.webp"
     assert ctx.sent[0]["uploaded_bytes"] == b"converted-image"
+
+
+@pytest.mark.anyio
+async def test_palette_uses_supported_cli_arguments():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        output_path = Path(command[command.index("--output") + 1])
+        output_path.write_bytes(b"palette-image")
+        return 0, ""
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+    ) as run_capture:
+        await cast(Any, cog.palette.callback)(cog, ctx, "analogous", 7, "png")
+
+    call = run_capture.await_args
+    assert call is not None
+    command = call.args
+    assert command[:2] == ("dt", "palette")
+    assert command[2:7] == (
+        "--size",
+        "7",
+        "--format",
+        "png",
+        "--output",
+    )
+    assert command[7].endswith("palette.png")
+    assert command[8:] == ("--strategy", "analogous")
+    assert call.kwargs == {"timeout": 300}
+    assert ctx.sent[0]["uploaded_bytes"] == b"palette-image"
+
+
+@pytest.mark.anyio
+async def test_qrgen_uses_supported_cli_arguments():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        output_path = Path(command[command.index("--output") + 1])
+        output_path.write_bytes(b"qr-image")
+        return 0, ""
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+    ) as run_capture:
+        await cast(Any, cog.qrgen.callback)(cog, ctx, "https://example.com")
+
+    call = run_capture.await_args
+    assert call is not None
+    assert call.args[:3] == (
+        "dt",
+        "qr",
+        "https://example.com",
+    )
+    assert call.args[3] == "--output"
+    assert call.args[4].endswith("qr.png")
+    assert call.kwargs == {"timeout": 300}
+    assert ctx.sent[0]["uploaded_bytes"] == b"qr-image"
+
+
+@pytest.mark.anyio
+async def test_unitconvert_combines_value_with_source_unit():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture",
+        new=AsyncMock(return_value=(0, "6.21371192")),
+    ) as run_capture:
+        await cast(Any, cog.unitconvert.callback)(cog, ctx, 10.0, "km", "mi")
+
+    run_capture.assert_awaited_once_with(
+        "dt", "unit", "10 km", "mi", timeout=300
+    )
+
+
+@pytest.mark.anyio
+async def test_decode_uses_cli_positional_arguments():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture",
+        new=AsyncMock(return_value=(0, "hello")),
+    ) as run_capture:
+        await cast(Any, cog.decode.callback)(cog, ctx, "aGVsbG8=", "base64")
+
+    run_capture.assert_awaited_once_with(
+        "dt", "decode", "base64", "aGVsbG8=", timeout=300
+    )
+
+
+@pytest.mark.anyio
+async def test_hash_uses_cli_positional_arguments():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture",
+        new=AsyncMock(return_value=(0, "digest")),
+    ) as run_capture:
+        await cast(Any, cog.hash.callback)(cog, ctx, "hello", "sha256")
+
+    run_capture.assert_awaited_once_with(
+        "dt", "hash", "sha256", "hello", timeout=300
+    )
+
+
+@pytest.mark.anyio
+async def test_watermark_uses_two_images_and_supported_cli_options():
+    cog = Delphitools(bot=MagicMock())
+    base_image = MagicMock(
+        filename="base.png",
+        content_type="image/png",
+    )
+    mark_image = MagicMock(
+        filename="mark.png",
+        content_type="image/png",
+    )
+    ctx = MockContext(message=MagicMock(attachments=[]))
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        output_path = Path(command[command.index("--output") + 1])
+        output_path.write_bytes(b"watermarked-image")
+        return 0, ""
+
+    with (
+        patch(
+            "cogs.conversion.delphitools.extract_attachments",
+            new=AsyncMock(
+                return_value=[
+                    (b"base-image", "image/png"),
+                    (b"mark-image", "image/png"),
+                ]
+            ),
+        ) as extract,
+        patch(
+            "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+        ) as run_capture,
+    ):
+        await cast(Any, cog.watermark.callback)(
+            cog, ctx, base_image, mark_image, 0.5, "center"
+        )
+
+    call = run_capture.await_args
+    assert call is not None
+    command = call.args
+    assert command[:2] == ("dt", "watermark")
+    assert command[2].endswith("input.png")
+    assert command[3] == "--mark"
+    assert command[4].endswith("mark.png")
+    assert command[5] == "--output"
+    assert command[6].endswith("watermarked_base.png")
+    assert command[7:] == (
+        "--opacity",
+        "0.5",
+        "--position",
+        "center",
+    )
+    assert call.kwargs == {"timeout": 300}
+    assert ctx.sent[0]["uploaded_bytes"] == b"watermarked-image"
+    extract.assert_awaited_once_with(ctx.message, base_image, mark_image)
+
+
+@pytest.mark.anyio
+async def test_colorblind_all_runs_four_simulations_and_sends_all_images():
+    cog = Delphitools(bot=MagicMock())
+    simulation_types = (
+        "protanopia",
+        "deuteranopia",
+        "tritanopia",
+        "achromatopsia",
+    )
+    commands: list[tuple[str, ...]] = []
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        assert command[:2] == ("dt", "colorblind")
+        assert command[2].endswith("input.png")
+        assert command[3] == "--output"
+        simulation_type = command[-1]
+        assert command[4].endswith(f"colorblind_{simulation_type}_sample.png")
+        assert command[5:] == ("--cb-type", simulation_type)
+        assert simulation_type in simulation_types
+        commands.append(command)
+        Path(command[4]).write_bytes(b"simulated-image")
+        return 0, ""
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+    ) as run_capture:
+        attachment = MagicMock(
+            filename="sample.png",
+            content_type="image/png",
+        )
+        ctx = MockContext(message=MagicMock())
+
+        with patch(
+            "cogs.conversion.delphitools.extract_attachments",
+            new=AsyncMock(return_value=[(b"image-data", "image/png")]),
+        ) as extract:
+            await cast(Any, cog.colorblind.callback)(
+                cog, ctx, "all", attachment
+            )
+
+        extract.assert_awaited_once_with(ctx.message, attachment)
+        assert len(ctx.sent) == 1
+        assert ctx.sent[0]["content"].startswith(
+            "✅ **All simulations done in "
+        )
+        assert ctx.sent[0]["uploaded_files"] == [
+            (
+                f"colorblind_{simulation_type}_sample.png",
+                b"simulated-image",
+            )
+            for simulation_type in simulation_types
+        ]
+
+    assert len(commands) == len(simulation_types)
+    assert [command[-1] for command in commands] == list(simulation_types)
+    assert all(command[5] == "--cb-type" for command in commands)
+    assert all(
+        call.kwargs == {"timeout": 300} for call in run_capture.await_args_list
+    )
+
+
+def test_discord_choices_only_include_cli_supported_values():
+    commands = {
+        command.name: command
+        for command in Delphitools(bot=MagicMock()).get_commands()
+    }
+
+    def choices(command_name: str, parameter_name: str) -> set[str]:
+        app_command = cast(Any, commands[command_name]).app_command
+        parameter = next(
+            parameter
+            for parameter in app_command.parameters
+            if parameter.name == parameter_name
+        )
+        return {choice.value for choice in parameter.choices}
+
+    assert choices("palette", "format") == {"png"}
+    assert choices("palette", "strategy") == {
+        "analogous",
+        "complementary",
+        "triadic",
+        "monochromatic",
+        "true-random",
+        "random-cohesive",
+    }
+    assert choices("barcodegen", "type") == {"code128", "ean13"}
+    assert choices("colorblind", "type") == {
+        "protanopia",
+        "deuteranopia",
+        "tritanopia",
+        "achromatopsia",
+        "all",
+    }
+    assert choices("encode", "encoding") == {"base64", "url"}
+    assert choices("decode", "encoding") == {"base64", "url"}
+
+
+def test_all_delphitools_commands_have_three_second_user_cooldowns():
+    commands = Delphitools(bot=MagicMock()).get_commands()
+
+    assert len(commands) == 10
+    for command in commands:
+        buckets = command._buckets
+        assert buckets is not None
+        cooldown = buckets._cooldown
+        assert cooldown is not None
+        assert cooldown.per == 3
+        assert cooldown.rate == 1
+        assert buckets.type == discord_commands.BucketType.user
 
 
 @pytest.mark.anyio

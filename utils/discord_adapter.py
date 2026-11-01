@@ -83,12 +83,14 @@ async def _send_first_segment_with_reply(
 async def extract_attachments(
     message: discord.Message | None,
     attachment: discord.Attachment | None = None,
+    *additional_attachments: discord.Attachment,
 ) -> list[tuple[bytes, str]]:
     """Extract attachments from a Discord message.
 
     Args:
         message: Discord message object possibly containing attachments.
-        attachment: Attachment provided as a slash-command option.
+        attachment: First attachment provided as a slash-command option.
+        additional_attachments: Additional slash-command attachments.
 
     Returns:
         List of (bytes, mime_type) tuples for each attachment.
@@ -96,8 +98,12 @@ async def extract_attachments(
 
     message_attachments = message.attachments if message else []
     all_attachments = list(message_attachments)
-    if attachment is not None and attachment not in all_attachments:
-        all_attachments.append(attachment)
+    for selected_attachment in (attachment, *additional_attachments):
+        if (
+            selected_attachment is not None
+            and selected_attachment not in all_attachments
+        ):
+            all_attachments.append(selected_attachment)
 
     if not all_attachments:
         return []
