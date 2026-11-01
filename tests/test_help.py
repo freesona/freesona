@@ -24,13 +24,13 @@ class MockContext:
 
 
 @pytest.mark.anyio
-async def test_help_menu_lists_delphitools_commands_in_conversion_category():
-    conversion_cog = SimpleNamespace(help_category="Conversion")
+async def test_help_menu_lists_delphitools_commands_in_tools_category():
+    tools_cog = SimpleNamespace(help_category="Tools")
     command = SimpleNamespace(
         name="barcodegen",
         help="Generate a barcode from text",
         hidden=False,
-        cog=conversion_cog,
+        cog=tools_cog,
     )
     bot = SimpleNamespace(
         command_prefix="~",
@@ -43,9 +43,9 @@ async def test_help_menu_lists_delphitools_commands_in_conversion_category():
     await cast(Any, cog.help_cmd.callback)(cog, ctx)
 
     view = ctx.sent[0]["view"]
-    conversion_help = view.categories["Conversion"]
-    assert conversion_help == "`barcodegen` - Generate a barcode from text"
-    assert any(button.label == "Conversion" for button in view.children)
+    tools_help = view.categories["Tools"]
+    assert tools_help == "`barcodegen` - Generate a barcode from text"
+    assert any(button.label == "Tools" for button in view.children)
 
 
 @pytest.mark.anyio
@@ -56,11 +56,12 @@ async def test_help_does_not_list_delphitools_cli_utilities_as_commands():
         tree=SimpleNamespace(walk_commands=lambda: []),
     )
     cog = HelpCog(cast(Any, bot))
-    ctx = MockContext()
 
-    await cast(Any, cog.help_cmd.callback)(cog, ctx, command_name="agent")
+    for name in ("agent", "install-man"):
+        ctx = MockContext()
+        await cast(Any, cog.help_cmd.callback)(cog, ctx, command_name=name)
 
-    assert ctx.sent == [{"args": ("No command named `agent` found.",)}]
+        assert ctx.sent == [{"args": (f"No command named `{name}` found.",)}]
 
 
 @pytest.mark.anyio
@@ -107,18 +108,7 @@ async def test_all_delphitools_commands_have_usage_and_examples():
     )
     cog = HelpCog(cast(Any, bot))
 
-    for name in (
-        "imgconvert",
-        "watermark",
-        "palette",
-        "colorblind",
-        "qrgen",
-        "barcodegen",
-        "unitconvert",
-        "encode",
-        "decode",
-        "hash",
-    ):
+    for name in commands:
         ctx = MockContext()
         await cast(Any, cog.help_cmd.callback)(cog, ctx, command_name=name)
 

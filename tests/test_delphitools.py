@@ -81,6 +81,29 @@ async def test_run_capture_returns_stderr_for_failed_command():
 
 
 @pytest.mark.anyio
+async def test_run_capture_can_preserve_report_output_with_failure_status():
+    process = MagicMock()
+    process.communicate = AsyncMock(
+        return_value=(b"preflight report", b"error: warning found")
+    )
+    process.returncode = 3
+
+    with patch(
+        "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=process),
+    ):
+        result = await _run_capture(
+            "dt",
+            "preflight",
+            "input.pdf",
+            timeout=7,
+            include_stdout_on_failure=True,
+        )
+
+    assert result == (3, "preflight report\nerror: warning found")
+
+
+@pytest.mark.anyio
 async def test_run_capture_uses_configured_delphitools_executable(monkeypatch):
     process = MagicMock()
     process.communicate = AsyncMock(return_value=(b"result", b""))
@@ -318,6 +341,163 @@ async def test_unitconvert_combines_value_with_source_unit():
 
 
 @pytest.mark.anyio
+async def test_regex_passes_pattern_and_text_as_separate_cli_arguments():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture",
+        new=AsyncMock(return_value=(0, "Match 1: 'hello'")),
+    ) as run_capture:
+        await cast(Any, cog.regex.callback)(
+            cog, ctx, r"\w+", "hello && do-not-run", "i"
+        )
+
+    run_capture.assert_awaited_once_with(
+        "dt",
+        "regex",
+        r"\w+",
+        "hello && do-not-run",
+        "--flags",
+        "i",
+        timeout=300,
+    )
+    assert "Match 1" in ctx.sent[0]["args"][0]
+
+
+@pytest.mark.anyio
+async def test_completions_returns_shell_script_as_downloadable_file():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture",
+        new=AsyncMock(return_value=(0, "complete -W 'help convert' dt")),
+    ) as run_capture:
+        await cast(Any, cog.completions.callback)(cog, ctx, "bash")
+
+    run_capture.assert_awaited_once_with(
+        "dt", "completions", "bash", timeout=300
+    )
+    assert ctx.sent[0]["content"].startswith(
+        "✅ **Shell completion script generated.**"
+    )
+    assert ctx.sent[0]["uploaded_files"] == [
+        (
+            "delphitools-completions.bash",
+            b"complete -W 'help convert' dt",
+        )
+    ]
+
+
+@pytest.mark.anyio
+async def test_convert_uses_output_file_and_supported_resize_flags():
+    cog = Delphitools(bot=MagicMock())
+    attachment = MagicMock(filename="sample.png", content_type="image/png")
+    ctx = MockContext(message=MagicMock())
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        output_path = Path(command[command.index("--output") + 1])
+        output_path.write_bytes(b"jpeg-data")
+        return 0, ""
+
+    with (
+        patch(
+            "cogs.conversion.delphitools.extract_attachments",
+            new=AsyncMock(return_value=[(b"image-data", "image/png")]),
+        ),
+        patch(
+            "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+        ) as run_capture,
+    ):
+        await cast(Any, cog.convert.callback)(
+            cog, ctx, "jpeg", attachment, "800x", 70
+        )
+
+    assert run_capture.await_args is not None
+    command = run_capture.await_args.args
+    assert command[:2] == ("dt", "convert")
+    assert command[2].endswith("input_0.png")
+    assert command[3:9] == (
+        "--to",
+        "jpeg",
+        "--quality",
+        "70",
+        "--resize",
+        "800x",
+    )
+    assert command[9] == "--output"
+    assert command[10].endswith("result.jpeg")
+    assert ctx.sent[0]["uploaded_files"] == [("result.jpeg", b"jpeg-data")]
+
+
+@pytest.mark.anyio
+async def test_preflight_sends_cli_analysis_for_attached_pdf():
+    cog = Delphitools(bot=MagicMock())
+    attachment = MagicMock(
+        filename="sample.pdf", content_type="application/pdf"
+    )
+    ctx = MockContext(message=MagicMock())
+
+    with (
+        patch(
+            "cogs.conversion.delphitools.extract_attachments",
+            new=AsyncMock(return_value=[(b"pdf-data", "application/pdf")]),
+        ),
+        patch(
+            "cogs.conversion.delphitools._run_capture",
+            new=AsyncMock(
+                return_value=(3, "PDF report\nWarnings (1): no BleedBox")
+            ),
+        ) as run_capture,
+    ):
+        await cast(Any, cog.preflight.callback)(cog, ctx, attachment)
+
+    assert run_capture.await_args is not None
+    command = run_capture.await_args.args
+    assert command[:2] == ("dt", "preflight")
+    assert command[2].endswith("input_0.pdf")
+    assert "--output" not in command
+    assert "PDF report" in ctx.sent[0]["args"][0]
+    assert "Warnings (1)" in ctx.sent[0]["args"][0]
+    assert "failed" not in ctx.sent[0]["args"][0]
+
+
+@pytest.mark.anyio
+async def test_split_sends_each_generated_tile():
+    cog = Delphitools(bot=MagicMock())
+    attachment = MagicMock(filename="sample.png", content_type="image/png")
+    ctx = MockContext(message=MagicMock())
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        output_dir = Path(command[command.index("--output") + 1])
+        (output_dir / "tile-1.png").write_bytes(b"tile-one")
+        (output_dir / "tile-2.png").write_bytes(b"tile-two")
+        return 0, ""
+
+    with (
+        patch(
+            "cogs.conversion.delphitools.extract_attachments",
+            new=AsyncMock(return_value=[(b"image-data", "image/png")]),
+        ),
+        patch(
+            "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+        ) as run_capture,
+    ):
+        await cast(Any, cog.split.callback)(cog, ctx, attachment, 1, 2)
+
+    assert run_capture.await_args is not None
+    command = run_capture.await_args.args
+    assert command[:2] == ("dt", "split")
+    assert command[3:7] == ("--rows", "1", "--cols", "2")
+    assert command[7] == "--output"
+    assert ctx.sent[0]["uploaded_files"] == [
+        ("tile-1.png", b"tile-one"),
+        ("tile-2.png", b"tile-two"),
+    ]
+
+
+@pytest.mark.anyio
 async def test_decode_uses_cli_positional_arguments():
     cog = Delphitools(bot=MagicMock())
     ctx = MockContext()
@@ -399,6 +579,8 @@ async def test_watermark_uses_two_images_and_supported_cli_options():
         "0.5",
         "--position",
         "center",
+        "--scale",
+        "0.2",
     )
     assert call.kwargs == {"timeout": 300}
     assert ctx.sent[0]["uploaded_bytes"] == b"watermarked-image"
@@ -504,8 +686,53 @@ def test_discord_choices_only_include_cli_supported_values():
 
 def test_all_delphitools_commands_have_three_second_user_cooldowns():
     commands = Delphitools(bot=MagicMock()).get_commands()
+    command_names = {command.name for command in commands}
 
-    assert len(commands) == 10
+    assert command_names == {
+        "barcodegen",
+        "base",
+        "clip",
+        "colorblind",
+        "colour",
+        "completions",
+        "contrast",
+        "convert",
+        "crop",
+        "decode",
+        "encode",
+        "favicon",
+        "font-info",
+        "glyph",
+        "harmony",
+        "hash",
+        "imgconvert",
+        "impose",
+        "line-height",
+        "matte",
+        "meta",
+        "noise",
+        "palette",
+        "paper",
+        "preflight",
+        "px2rem",
+        "qrgen",
+        "regex",
+        "rem2px",
+        "rmbg",
+        "scroll",
+        "shavian",
+        "split",
+        "svgo",
+        "time",
+        "trace",
+        "typo",
+        "unit",
+        "unitconvert",
+        "watermark",
+        "wc",
+        "zine",
+    }
+
     for command in commands:
         buckets = command._buckets
         assert buckets is not None

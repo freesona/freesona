@@ -131,14 +131,14 @@ class HelpView(discord.ui.View):
         await view.update_help(interaction, "News")
 
     @discord.ui.button(
-        label="Conversion", style=discord.ButtonStyle.secondary, emoji="🛠️"
+        label="Tools", style=discord.ButtonStyle.secondary, emoji="🛠️"
     )
-    async def conversion_button(
+    async def tools_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         _ = button
         view = cast("HelpView", self)
-        await view.update_help(interaction, "Conversion")
+        await view.update_help(interaction, "Tools")
 
     @discord.ui.button(
         label="Utility", style=discord.ButtonStyle.secondary, emoji="🔧"
@@ -284,7 +284,7 @@ class HelpCog(commands.Cog):
                 "Moderation": [],
                 "Utility": [],
                 "Media": [],
-                "Conversion": [],
+                "Tools": [],
                 "AI Persona": [],
                 "News": [],
             }
