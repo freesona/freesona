@@ -20,13 +20,17 @@ from utils.discord_adapter import extract_attachments
 
 log = logging.getLogger(__name__)
 
+COLORBLIND_SIMULATIONS = (
+    "protanopia",
+    "deuteranopia",
+    "tritanopia",
+    "achromatopsia",
+)
 
-# Configurable values loaded from config.json (settable via /config
-# slash commands)
+# The subprocess timeout and output-size limit come from config.json.
 
 
 def _get_subprocess_timeout() -> int:
-
     return int(load_config().get("delphitools_subprocess_timeout", 300))
 
 
@@ -166,7 +170,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="ICO", value="ico"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def imgconvert(
         self,
         ctx: commands.Context,
@@ -351,7 +355,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="Bottom Right", value="bottom-right"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def watermark(
         self,
         ctx: commands.Context,
@@ -547,7 +551,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="PNG", value="png"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def palette(
         self,
         ctx: commands.Context,
@@ -682,36 +686,31 @@ class Delphitools(commands.Cog):
         name="colorblind",
         description="Simulate colorblindness on an image",
         help=(
-            "Show how an attached image looks with normal vision, "
-            "protanopia, deuteranopia, tritanopia, protanomaly, "
-            "deuteranomaly, tritanomaly, achromatopsia, or achromatomaly. "
+            "Show how an attached image looks with protanopia, "
+            "deuteranopia, tritanopia, or achromatopsia. Select `all` to "
+            "generate all four variants. "
             "Attach the image to the command message. "
-            "Example: `{prefix}colorblind protanopia` with an image attached."
+            "Example: `{prefix}colorblind all` with an image attached."
         ),
         usage="<type> (attach image)",
     )
     @app_commands.describe(
         attachment="The image to process",
         type=(
-            "Simulation type: normal, protanopia, deuteranopia, tritanopia, "
-            "protanomaly, deuteranomaly, tritanomaly, achromatopsia, "
-            "achromatomaly"
+            "Select protanopia, deuteranopia, tritanopia, achromatopsia, "
+            "or all four"
         ),
     )
     @app_commands.choices(
         type=[
-            app_commands.Choice(name="Normal", value="normal"),
             app_commands.Choice(name="Protanopia", value="protanopia"),
             app_commands.Choice(name="Deuteranopia", value="deuteranopia"),
             app_commands.Choice(name="Tritanopia", value="tritanopia"),
-            app_commands.Choice(name="Protanomaly", value="protanomaly"),
-            app_commands.Choice(name="Deuteranomaly", value="deuteranomaly"),
-            app_commands.Choice(name="Tritanomaly", value="tritanomaly"),
             app_commands.Choice(name="Achromatopsia", value="achromatopsia"),
-            app_commands.Choice(name="Achromatomaly", value="achromatomaly"),
+            app_commands.Choice(name="All four", value="all"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def colorblind(
         self,
         ctx: commands.Context,
@@ -769,81 +768,87 @@ class Delphitools(commands.Cog):
                         Path(input_file).write_bytes, image_data
                     )
 
-                    # Determine output filename
-
-                    output_filename = (
-                        f"colorblind_{type}_"
-                        f"{Path(attachment.filename).stem}.png"
+                    simulation_types = (
+                        COLORBLIND_SIMULATIONS if type == "all" else (type,)
                     )
+                    output_files: list[Path] = []
 
-                    output_file = tmp_path / output_filename
+                    for simulation_type in simulation_types:
+                        output_file = (
+                            tmp_path / f"colorblind_{simulation_type}_"
+                            f"{Path(attachment.filename).stem}.png"
+                        )
+                        cmd = [
+                            "dt",
+                            "colorblind",
+                            str(input_file),
+                            "--output",
+                            str(output_file),
+                            "--cb-type",
+                            simulation_type,
+                        ]
 
-                    # Build delphitools colorblind command
-
-                    cmd = [
-                        "dt",
-                        "colorblind",
-                        str(input_file),
-                        "--output",
-                        str(output_file),
-                        "--cb-type",
-                        type,
-                    ]
-
-                    # Run the colorblind simulation
-
-                    exit_code, stdout = await _run_capture(
-                        *cmd, timeout=_get_subprocess_timeout()
-                    )
-
-                    if exit_code != 0:
-                        await ctx.send(
-                            f"❌ **Colorblind simulation failed.** "
-                            f"delphitools exited with code {exit_code}."
+                        exit_code, stdout = await _run_capture(
+                            *cmd, timeout=_get_subprocess_timeout()
                         )
 
-                        if stdout:
-                            await ctx.send(f"Error details: `{stdout}`")
+                        if exit_code != 0:
+                            await ctx.send(
+                                f"❌ **Colorblind simulation failed for "
+                                f"{simulation_type}.** delphitools exited "
+                                f"with code {exit_code}."
+                            )
 
-                        return
+                            if stdout:
+                                await ctx.send(f"Error details: `{stdout}`")
 
-                    # Check if output file was created
+                            return
 
-                    if not output_file.exists():
-                        await ctx.send(
-                            "❌ **Colorblind simulation failed.** "
-                            "Output file was not generated."
-                        )
+                        if not output_file.exists():
+                            await ctx.send(
+                                f"❌ **Colorblind simulation failed for "
+                                f"{simulation_type}.** Output file was not "
+                                "generated."
+                            )
 
-                        return
+                            return
 
-                    # Check file size
+                        file_size = output_file.stat().st_size
+                        if file_size > self.LIMIT_BYTES:
+                            await ctx.send(
+                                f"⚠️ **Colorblind simulation successful but "
+                                f"{simulation_type} file is too large.** "
+                                f"The processed image is "
+                                f"{file_size / (1024 * 1024):.1f} MB, "
+                                f"which exceeds the "
+                                f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
+                                "Discord limit."
+                            )
 
-                    file_size = output_file.stat().st_size
+                            return
 
-                    if file_size > self.LIMIT_BYTES:
-                        await ctx.send(
-                            f"⚠️ **Colorblind simulation successful but "
-                            "file too large.** "
-                            f"The processed image is "
-                            f"{file_size / (1024 * 1024):.1f} MB, "
-                            f"which exceeds the "
-                            f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
-                            "Discord limit."
-                        )
-
-                        return
-
-                    # Send the processed image
+                        output_files.append(output_file)
 
                     elapsed = time.perf_counter() - started_at
-                    await ctx.send(
-                        content=(
-                            f"✅ **{type.capitalize()} done in "
-                            f"{elapsed:.2f}s**"
-                        ),
-                        file=discord.File(str(output_file)),
-                    )
+                    if type == "all":
+                        await ctx.send(
+                            content=(
+                                f"✅ **All simulations done in "
+                                f"{elapsed:.2f}s**"
+                            ),
+                            files=[
+                                discord.File(str(output_file))
+                                for output_file in output_files
+                            ],
+                        )
+                    else:
+                        await ctx.send(
+                            content=(
+                                f"✅ **{type.capitalize()} done in "
+                                f"{elapsed:.2f}s**"
+                            ),
+                            file=discord.File(str(output_files[0])),
+                        )
 
             except asyncio.TimeoutError:
                 await ctx.send(
@@ -868,7 +873,7 @@ class Delphitools(commands.Cog):
     @app_commands.describe(
         text="Text to encode in QR code",
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def qrgen(self, ctx: commands.Context, text: str) -> None:
         """Generate QR code."""
 
@@ -940,7 +945,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="EAN13", value="ean13"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def barcodegen(
         self, ctx: commands.Context, text: str, type: str
     ) -> None:
@@ -1018,7 +1023,7 @@ class Delphitools(commands.Cog):
         from_unit="Source unit",
         to_unit="Target unit",
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def unitconvert(
         self, ctx: commands.Context, value: float, from_unit: str, to_unit: str
     ) -> None:
@@ -1072,7 +1077,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="URL", value="url"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def encode(
         self, ctx: commands.Context, data: str, encoding: str
     ) -> None:
@@ -1126,7 +1131,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="URL", value="url"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def decode(
         self, ctx: commands.Context, data: str, encoding: str
     ) -> None:
@@ -1184,7 +1189,7 @@ class Delphitools(commands.Cog):
             app_commands.Choice(name="SHA1", value="sha1"),
         ]
     )
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def hash(
         self, ctx: commands.Context, data: str, algorithm: str
     ) -> None:

@@ -8,6 +8,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from discord.ext import commands as discord_commands
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -24,11 +25,18 @@ class MockContext:
         yield
 
     async def send(self, *args: Any, **kwargs: Any) -> None:
-        file = kwargs.get("file")
-        if file is not None:
-            kwargs["uploaded_filename"] = file.filename
-            kwargs["uploaded_bytes"] = file.fp.read()
-            file.close()
+        files = kwargs.get("files", [])
+        if "file" in kwargs:
+            files = [kwargs["file"], *files]
+        if files:
+            kwargs["uploaded_files"] = [
+                (file.filename, file.fp.read()) for file in files
+            ]
+            if len(files) == 1:
+                kwargs["uploaded_filename"] = files[0].filename
+                kwargs["uploaded_bytes"] = kwargs["uploaded_files"][0][1]
+            for file in files:
+                file.close()
         self.sent.append({"args": args, **kwargs})
 
 
@@ -398,18 +406,13 @@ async def test_watermark_uses_two_images_and_supported_cli_options():
 
 
 @pytest.mark.anyio
-async def test_colorblind_all_supported_simulations_use_cli_and_send_images():
+async def test_colorblind_all_runs_four_simulations_and_sends_all_images():
     cog = Delphitools(bot=MagicMock())
     simulation_types = (
-        "normal",
         "protanopia",
         "deuteranopia",
         "tritanopia",
-        "protanomaly",
-        "deuteranomaly",
-        "tritanomaly",
         "achromatopsia",
-        "achromatomaly",
     )
     commands: list[tuple[str, ...]] = []
 
@@ -428,36 +431,38 @@ async def test_colorblind_all_supported_simulations_use_cli_and_send_images():
     with patch(
         "cogs.conversion.delphitools._run_capture", side_effect=run_cli
     ) as run_capture:
-        for simulation_type in simulation_types:
-            attachment = MagicMock(
-                filename="sample.png",
-                content_type="image/png",
-            )
-            ctx = MockContext(message=MagicMock())
+        attachment = MagicMock(
+            filename="sample.png",
+            content_type="image/png",
+        )
+        ctx = MockContext(message=MagicMock())
 
-            with patch(
-                "cogs.conversion.delphitools.extract_attachments",
-                new=AsyncMock(return_value=[(b"image-data", "image/png")]),
-            ) as extract:
-                await cast(Any, cog.colorblind.callback)(
-                    cog, ctx, simulation_type, attachment
-                )
+        with patch(
+            "cogs.conversion.delphitools.extract_attachments",
+            new=AsyncMock(return_value=[(b"image-data", "image/png")]),
+        ) as extract:
+            await cast(Any, cog.colorblind.callback)(
+                cog, ctx, "all", attachment
+            )
 
-            extract.assert_awaited_once_with(ctx.message, attachment)
-            assert len(ctx.sent) == 1
-            assert ctx.sent[0]["content"].startswith(
-                f"✅ **{simulation_type.capitalize()} done in "
+        extract.assert_awaited_once_with(ctx.message, attachment)
+        assert len(ctx.sent) == 1
+        assert ctx.sent[0]["content"].startswith(
+            "✅ **All simulations done in "
+        )
+        assert ctx.sent[0]["uploaded_files"] == [
+            (
+                f"colorblind_{simulation_type}_sample.png",
+                b"simulated-image",
             )
-            assert ctx.sent[0]["uploaded_filename"] == (
-                f"colorblind_{simulation_type}_sample.png"
-            )
-            assert ctx.sent[0]["uploaded_bytes"] == b"simulated-image"
+            for simulation_type in simulation_types
+        ]
 
     assert len(commands) == len(simulation_types)
     assert [command[-1] for command in commands] == list(simulation_types)
+    assert all(command[5] == "--cb-type" for command in commands)
     assert all(
-        run_capture.await_args_list[index].kwargs == {"timeout": 300}
-        for index in range(len(simulation_types))
+        call.kwargs == {"timeout": 300} for call in run_capture.await_args_list
     )
 
 
@@ -487,18 +492,28 @@ def test_discord_choices_only_include_cli_supported_values():
     }
     assert choices("barcodegen", "type") == {"code128", "ean13"}
     assert choices("colorblind", "type") == {
-        "normal",
         "protanopia",
         "deuteranopia",
         "tritanopia",
-        "protanomaly",
-        "deuteranomaly",
-        "tritanomaly",
         "achromatopsia",
-        "achromatomaly",
+        "all",
     }
     assert choices("encode", "encoding") == {"base64", "url"}
     assert choices("decode", "encoding") == {"base64", "url"}
+
+
+def test_all_delphitools_commands_have_three_second_user_cooldowns():
+    commands = Delphitools(bot=MagicMock()).get_commands()
+
+    assert len(commands) == 10
+    for command in commands:
+        buckets = command._buckets
+        assert buckets is not None
+        cooldown = buckets._cooldown
+        assert cooldown is not None
+        assert cooldown.per == 3
+        assert cooldown.rate == 1
+        assert buckets.type == discord_commands.BucketType.user
 
 
 @pytest.mark.anyio
