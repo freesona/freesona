@@ -2,7 +2,7 @@
 # cogs/system/help.py: Help index with interactive button-based navigation.
 import logging
 import os
-from typing import cast
+from typing import Any, Callable, cast
 
 import discord
 from discord import app_commands
@@ -37,12 +37,20 @@ def _split_embed_text(text: str, limit: int = 1024) -> list[str]:
 
 
 class HelpView(discord.ui.View):
-    def __init__(self, bot, ctx, categories, prefix):
+    def __init__(
+        self,
+        bot,
+        ctx,
+        categories,
+        prefix,
+        category_resolver: Callable[[Any], str] | None = None,
+    ):
         super().__init__(timeout=None)
         self.bot = bot
         self.ctx = ctx
         self.categories = categories
         self.prefix = prefix
+        self.category_resolver = category_resolver
         self.current_category = None
         self.page_index = 0
 
@@ -66,6 +74,59 @@ class HelpView(discord.ui.View):
             if avatar:
                 embed.set_thumbnail(url=avatar)
             content = self.categories.get(category, "No commands found.")
+            if category == "Tools" and self.category_resolver is not None:
+                tool_entries: dict[str, str] = {}
+                for cmd in self.bot.commands:
+                    if (
+                        not cmd.hidden
+                        and self.category_resolver(cmd) == "Tools"
+                    ):
+                        tool_entries[cmd.name] = (
+                            f"`{cmd.name}` - {cmd.help or 'No description'}"
+                        )
+
+                tree = getattr(self.bot, "tree", None)
+                walker = getattr(tree, "walk_commands", None)
+                if walker is not None:
+                    for cmd in walker():
+                        subcommands = getattr(cmd, "commands", None)
+                        if subcommands is not None:
+                            tool_subcommands = [
+                                subcommand
+                                for subcommand in subcommands
+                                if self.category_resolver(
+                                    getattr(subcommand, "binding", None)
+                                )
+                                == "Tools"
+                            ]
+                            if tool_subcommands:
+                                names = ", ".join(
+                                    f"`/{cmd.name} {subcommand.name}`"
+                                    for subcommand in tool_subcommands
+                                )
+                                tool_entries[f"/{cmd.name}"] = (
+                                    f"`/{cmd.name}` - {cmd.description}\n"
+                                    f"Slash subcommands: {names}"
+                                )
+                            continue
+
+                        binding = getattr(cmd, "binding", None)
+                        if (
+                            binding is not None
+                            and self.category_resolver(binding) == "Tools"
+                            and cmd.name not in tool_entries
+                        ):
+                            tool_entries[cmd.name] = (
+                                f"`/{cmd.name}` - "
+                                f"{cmd.description or 'No description'}"
+                            )
+
+                content = (
+                    "\n".join(tool_entries.values())
+                    if tool_entries
+                    else "No tools commands are currently loaded."
+                )
+                self.categories[category] = content
             chunks = _split_embed_text(content)
             self.current_category = category
             self.page_index = max(0, min(page, len(chunks) - 1))
@@ -225,10 +286,16 @@ class HelpCog(commands.Cog):
 
     def get_command_category(self, cmd):
         # 1. Check for registered cog category
-        if cmd.cog and hasattr(cmd.cog, "help_category"):
-            return cmd.cog.help_category
+        cog = getattr(cmd, "cog", None)
+        if cog is None:
+            cog = getattr(cmd, "binding", None)
+        if cog is None and hasattr(cmd, "help_category"):
+            cog = cmd
+        if cog is not None and hasattr(cog, "help_category"):
+            return cog.help_category
+        command_name = getattr(cmd, "name", "")
         # 2. Hardcoded fallback (maintaining current behavior)
-        if cmd.name in [
+        if command_name in [
             "hello",
             "randommember",
             "coinflip",
@@ -236,7 +303,7 @@ class HelpCog(commands.Cog):
             "pick",
         ]:
             return "Fun"
-        elif cmd.name in [
+        elif command_name in [
             "kick",
             "purge",
             "removetimeout",
@@ -254,13 +321,13 @@ class HelpCog(commands.Cog):
             "unlock",
         ]:
             return "Moderation"
-        elif cmd.name in ["math", "help", "ping", "docs"]:
+        elif command_name in ["math", "help", "ping", "docs"]:
             return "Utility"
-        elif cmd.name in ["download", "audio", "separate"]:
+        elif command_name in ["download", "audio", "separate"]:
             return "Media"
-        elif cmd.name == "rss":
+        elif command_name == "rss":
             return "News"
-        elif cmd.name in self.ai_commands:
+        elif command_name in self.ai_commands:
             return "AI Persona"
         return "Utility"  # Default fallback
 
@@ -324,7 +391,13 @@ class HelpCog(commands.Cog):
             bot_user = self.bot.user
             if bot_user is not None:
                 embed.set_thumbnail(url=bot_user.display_avatar.url)
-            view = HelpView(self.bot, ctx, formatted_cats, prefix)
+            view = HelpView(
+                self.bot,
+                ctx,
+                formatted_cats,
+                prefix,
+                self.get_command_category,
+            )
             await ctx.send(embed=embed, view=view)
         else:
             search_name = command_name.lower().lstrip("/")
