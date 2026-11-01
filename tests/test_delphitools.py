@@ -42,9 +42,7 @@ async def test_run_capture_returns_exit_code_and_trimmed_stdout():
         "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
         new=AsyncMock(return_value=process),
     ) as create_process:
-        result = await _run_capture(
-            "dt", "encode", "--input", "abc", timeout=7
-        )
+        result = await _run_capture("dt", "encode", "--input", "abc", timeout=7)
 
     assert result == (3, "result")
     create_process.assert_awaited_once_with(
@@ -58,11 +56,31 @@ async def test_run_capture_returns_exit_code_and_trimmed_stdout():
 
 
 @pytest.mark.anyio
+async def test_run_capture_uses_configured_delphitools_executable(monkeypatch):
+    process = MagicMock()
+    process.communicate = AsyncMock(return_value=(b"result", b""))
+    process.returncode = 0
+    monkeypatch.setenv("DELPHITOOLS_EXECUTABLE", "/opt/delphitools/dt")
+
+    with patch(
+        "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=process),
+    ) as create_process:
+        await _run_capture("dt", "barcode", "hello", timeout=7)
+
+    create_process.assert_awaited_once_with(
+        "/opt/delphitools/dt",
+        "barcode",
+        "hello",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+
+@pytest.mark.anyio
 async def test_run_capture_kills_process_and_raises_on_timeout():
     process = MagicMock()
-    process.communicate = AsyncMock(
-        side_effect=[asyncio.TimeoutError, (b"", b"")]
-    )
+    process.communicate = AsyncMock(side_effect=[asyncio.TimeoutError, (b"", b"")])
     process.returncode = -9
 
     with (
@@ -86,9 +104,7 @@ async def test_barcodegen_reports_missing_delphitools_cli():
     with patch(
         "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
         new=AsyncMock(
-            side_effect=FileNotFoundError(
-                2, "No such file or directory", "dt"
-            )
+            side_effect=FileNotFoundError(2, "No such file or directory", "dt")
         ),
     ):
         await cast(Any, cog.barcodegen.callback)(cog, ctx, "hello", "code128")
@@ -96,11 +112,41 @@ async def test_barcodegen_reports_missing_delphitools_cli():
     assert ctx.sent == [
         {
             "args": (
-                "❌ **Barcode generation failed.** Delphitools CLI (`dt`) "
-                "is not installed or not available on PATH.",
+                "❌ **Barcode generation failed.** Cannot start the "
+                "Delphitools CLI. Set `DELPHITOOLS_EXECUTABLE` to its "
+                "executable path or add it to the bot process PATH.",
             )
         }
     ]
+
+
+@pytest.mark.anyio
+async def test_barcodegen_uses_delphitools_cli_arguments():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    async def run_cli(*command: str, timeout: int) -> tuple[int, str]:
+        Path(command[-1]).write_bytes(b"barcode-image")
+        return 0, ""
+
+    with patch(
+        "cogs.conversion.delphitools._run_capture", side_effect=run_cli
+    ) as run_capture:
+        await cast(Any, cog.barcodegen.callback)(cog, ctx, "12345678", "code128")
+
+    call = run_capture.await_args
+    assert call is not None
+    assert call.args[:5] == (
+        "dt",
+        "barcode",
+        "12345678",
+        "--format",
+        "code128",
+    )
+    assert call.args[5] == "--output"
+    assert call.args[6].endswith("barcode.code128.png")
+    assert call.kwargs == {"timeout": 300}
+    assert ctx.sent[0]["uploaded_bytes"] == b"barcode-image"
 
 
 @pytest.mark.anyio

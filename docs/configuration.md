@@ -66,6 +66,10 @@ This document lists all environment variables used by Freesona. Copy `.env.sampl
 | `MVSEP_WEBHOOK_SEND_MAIL_ON_ERROR` | Send mail on error | `false` |
 | `WOLFRAM_APPID_SHORT` | Wolfram Alpha short app ID | `...` |
 | `WOLFRAM_APPID_LLM` | Wolfram Alpha LLM app ID | `...` |
+| `DELPHITOOLS_EXECUTABLE` | Delphitools executable name or full path | `dt` |
+
+Set `DELPHITOOLS_EXECUTABLE` to the full executable path when the bot runs with
+a different `PATH` than your interactive shell.
 
 ## File path variables
 

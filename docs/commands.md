@@ -70,8 +70,10 @@ The optional `conversion` module loads `cogs.conversion.delphitools` and calls t
 | `~decode`      | Decode Base64, hexadecimal, or URL data                                                   | Anyone      |
 | `~hash`        | Generate an MD5, SHA-1, or SHA-256 hash                                                   | Anyone      |
 
-The module requires the `dt` executable. Each command applies the configured
-subprocess timeout and Discord upload-size limit.
+The module requires the Delphitools executable. Each command applies the
+configured subprocess timeout and Discord upload-size limit. Set
+`DELPHITOOLS_EXECUTABLE` to the executable name or full path. The bot process
+must be able to access the executable.
 
 ---
 

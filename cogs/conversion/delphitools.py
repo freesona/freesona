@@ -6,6 +6,7 @@
 
 import asyncio
 import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -35,6 +36,10 @@ def _get_limit_bytes() -> int:
     )  # 10 MB default
 
 
+def _get_delphitools_executable() -> str:
+    return os.getenv("DELPHITOOLS_EXECUTABLE", "dt").strip() or "dt"
+
+
 async def _run(*cmd: str, timeout: int | None = None) -> int:
     """Run a subprocess and return its exit code.
 
@@ -43,6 +48,9 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
 
     if timeout is None:
         timeout = _get_subprocess_timeout()
+
+    if cmd and cmd[0] == "dt":
+        cmd = (_get_delphitools_executable(), *cmd[1:])
 
     proc = await asyncio.create_subprocess_exec(*cmd)
 
@@ -72,6 +80,9 @@ async def _run_capture(
     if timeout is None:
         timeout = _get_subprocess_timeout()
 
+    if cmd and cmd[0] == "dt":
+        cmd = (_get_delphitools_executable(), *cmd[1:])
+
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -80,7 +91,9 @@ async def _run_capture(
         )
     except FileNotFoundError as e:
         raise RuntimeError(
-            "Delphitools CLI (`dt`) is not installed or not available on PATH."
+            "Cannot start the Delphitools CLI. Set "
+            "`DELPHITOOLS_EXECUTABLE` to its executable path or add it to the "
+            "bot process PATH."
         ) from e
 
     try:
@@ -852,8 +865,9 @@ class Delphitools(commands.Cog):
                     cmd = [
                         "dt",
                         "barcode",
-                        type,
                         text,
+                        "--format",
+                        type,
                         "--output",
                         str(output_file),
                     ]
