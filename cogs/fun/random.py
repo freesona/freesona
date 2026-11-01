@@ -4,7 +4,6 @@
 
 # coin flip, dice roll, and picking from choices.
 
-
 import secrets
 
 from discord.ext import commands

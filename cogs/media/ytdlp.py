@@ -71,7 +71,9 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
     return return_code
 
 
-async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]:
+async def _run_capture(
+    *cmd: str, timeout: int | None = None
+) -> tuple[int, str]:
     """Run a subprocess, capture stdout, and return
     (exit_code, stdout_text)."""
     if timeout is None:
@@ -95,7 +97,7 @@ async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]
 class YtDlp(commands.Cog):
     LIMIT_BYTES = 10 * 1024 * 1024  # 10 MB Discord upload limit
 
-    # ---------------------------------------------------------------------------
+    # ------------------------------------------------------------------------
     # Cookies — two supported sources (both can coexist):
     # 1. Local / dev:
     #    Set COOKIES_INSTAGRAM=cookies/instagram.txt (or any relative path).
@@ -107,7 +109,7 @@ class YtDlp(commands.Cog):
     #   COOKIES_INSTAGRAM=/etc/secrets/instagram.txt
     #   COOKIES_TIKTOK=/etc/secrets/tiktok.txt
     #   COOKIES_TWITTER=/etc/secrets/twitter.txt
-    # ---------------------------------------------------------------------------
+    # ------------------------------------------------------------------------
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
@@ -133,7 +135,9 @@ class YtDlp(commands.Cog):
             if platform not in hostname:
                 continue
             if not os.path.isfile(path):
-                log.warning("Cookies file for %s not found at %s", platform, path)
+                log.warning(
+                    "Cookies file for %s not found at %s", platform, path
+                )
                 continue
             log.debug("Using cookies file %s for %s", path, url)
             return ["--cookies", path]
@@ -191,7 +195,9 @@ class YtDlp(commands.Cog):
             return None
         compress_target_mb = _get_compress_target_mb()
         target_bits = compress_target_mb * 8 * 1024 * 1024
-        video_bitrate = int(target_bits / duration) - 128_000  # reserve 128k for audio
+        video_bitrate = (
+            int(target_bits / duration) - 128_000
+        )  # reserve 128k for audio
         if video_bitrate < 100_000:
             log.warning(
                 "Calculated bitrate %d bps too low; skipping compression.",
@@ -221,7 +227,9 @@ class YtDlp(commands.Cog):
             output_path,
         )
         if code != 0 or not os.path.exists(output_path):
-            log.error("FFmpeg compression failed for %s (exit %d)", input_path, code)
+            log.error(
+                "FFmpeg compression failed for %s (exit %d)", input_path, code
+            )
             return None
         # Remove the uncompressed source to save temp-dir space
         try:
@@ -249,7 +257,9 @@ class YtDlp(commands.Cog):
             url,
         )
         if code != 0:
-            log.error("yt-dlp audio download failed (exit %d) for %s", code, url)
+            log.error(
+                "yt-dlp audio download failed (exit %d) for %s", code, url
+            )
             return None
         path = _find_file(tmp_dir, "mp3")
         if path is None:
@@ -264,7 +274,9 @@ class YtDlp(commands.Cog):
         """
         for height in _VIDEO_RESOLUTIONS:
             _clear_dir(tmp_dir)
-            output_template = str(Path(tmp_dir, "%(uploader)s – %(title)s.mp4"))
+            output_template = str(
+                Path(tmp_dir, "%(uploader)s – %(title)s.mp4")
+            )
             code = await _run(
                 "yt-dlp",
                 *self._cookies_for(url),
@@ -304,7 +316,10 @@ class YtDlp(commands.Cog):
             if size <= self.LIMIT_BYTES:
                 return path
             if height == _VIDEO_RESOLUTIONS[-1]:
-                log.info("File too large at lowest resolution; attempting compression.")
+                log.info(
+                    "File too large at lowest resolution; "
+                    "attempting compression."
+                )
                 return await self._compress_video(path)
         return None
 
@@ -358,7 +373,8 @@ class YtDlp(commands.Cog):
                     return
                 if not local_path or not os.path.exists(local_path):
                     await ctx.send(
-                        f"❌ **{kind} failed.** Content is unavailable or too large."
+                        f"❌ **{kind} failed.** Content is unavailable "
+                        "or too large."
                     )
                     return
                 size_bytes = os.path.getsize(local_path)
@@ -366,13 +382,15 @@ class YtDlp(commands.Cog):
                 # Sanity check: compressed file may still exceed the limit
                 if size_bytes > self.LIMIT_BYTES:
                     await ctx.send(
-                        f"⚠️ **{kind} ({size_mb:.1f} MB) exceeds the 10 MB limit.**"
+                        f"⚠️ **{kind} ({size_mb:.1f} MB) exceeds "
+                        "the 10 MB limit.**"
                     )
                     return
                 elapsed = time.perf_counter() - start
                 await ctx.send(
                     content=(
-                        f"✅ **{kind} Downloaded** • {elapsed:.2f}s • {size_mb:.1f} MB"
+                        f"✅ **{kind} Downloaded** • {elapsed:.2f}s • "
+                        f"{size_mb:.1f} MB"
                     ),
                     file=discord.File(local_path),
                 )
@@ -406,7 +424,10 @@ class YtDlp(commands.Cog):
     async def _dl_error(self, ctx: commands.Context, error: Exception) -> None:
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.send(
-                (f"⏳ Wait **{error.retry_after:.1f}s** before downloading again."),
+                (
+                    f"⏳ Wait **{error.retry_after:.1f}s** before "
+                    "downloading again."
+                ),
                 ephemeral=True,
                 delete_after=10,
             )

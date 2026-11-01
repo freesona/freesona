@@ -3,6 +3,37 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+
+class ProviderError(Exception):
+    """Base exception for all provider errors."""
+
+    pass
+
+
+class RateLimitError(ProviderError):
+    """Provider rate limit or quota exceeded."""
+
+    pass
+
+
+class ProviderTimeoutError(ProviderError):
+    """Provider request timed out."""
+
+    pass
+
+
+class MalformedResponseError(ProviderError):
+    """Provider returned a malformed or unparseable response."""
+
+    pass
+
+
+class TransientError(ProviderError):
+    """Provider transient failure (e.g., 500, 503)."""
+
+    pass
+
+
 class BaseProvider(ABC):
     """Abstract base class defining the provider interface.
 

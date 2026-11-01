@@ -5,8 +5,13 @@ from typing import Any
 
 import requests
 
-from providers.base import BaseProvider
+from providers.base import (
+    BaseProvider,
+    ProviderError,
+    ProviderTimeoutError,
+)
 from utils.providers import build_messages
+
 
 class OllamaProvider(BaseProvider):
     def generate_text(
@@ -42,9 +47,15 @@ class OllamaProvider(BaseProvider):
             "options": {"temperature": temperature},
         }
 
-        response = requests.post(url, json=payload, timeout=60)
-
-        response.raise_for_status()
+        try:
+            response = requests.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+        except requests.exceptions.Timeout as e:
+            raise ProviderTimeoutError(str(e)) from e
+        except requests.exceptions.HTTPError as e:
+            raise ProviderError(str(e)) from e
+        except Exception as e:
+            raise ProviderError(str(e)) from e
 
         data = response.json()
 

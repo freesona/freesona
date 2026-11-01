@@ -16,8 +16,12 @@ DEFAULT_CONFIG = {
     "provider": os.getenv("AI_PROVIDER", "gemini"),
     "provider_model": os.getenv("AI_PROVIDER_MODEL", ""),
     "chroma_collection": os.getenv("CHROMA_COLLECTION", "freesona"),
-    "chroma_persist_directory": os.getenv("CHROMA_PERSIST_DIRECTORY", "./.chroma"),
-    "knowledge_base_database": os.getenv("KNOWLEDGE_BASE_DATABASE", "knowledge.db"),
+    "chroma_persist_directory": os.getenv(
+        "CHROMA_PERSIST_DIRECTORY", "./.chroma"
+    ),
+    "knowledge_base_database": os.getenv(
+        "KNOWLEDGE_BASE_DATABASE", "knowledge.db"
+    ),
     "debounce_seconds": 1.2,
     "autonomy_cooldown_seconds": 120,
     "autonomy_user_cooldown": 60,
@@ -38,22 +42,33 @@ DEFAULT_CONFIG = {
     # Logging
     "log_enabled": os.getenv("LOG_ENABLED", "false").lower() == "true",
     "log_channel_id": (
-        int(os.getenv("LOG_CHANNEL_ID", "0")) if os.getenv("LOG_CHANNEL_ID") else 0
+        int(os.getenv("LOG_CHANNEL_ID", "0"))
+        if os.getenv("LOG_CHANNEL_ID")
+        else 0
     ),
     "log_level": os.getenv("LOG_LEVEL", "INFO"),
     "log_file_path": os.getenv("LOG_FILE_PATH", "logs/freesona.log"),
     "log_file_max_months": int(os.getenv("LOG_FILE_MAX_MONTHS", "3")),
-    "log_include_discord": os.getenv("LOG_INCLUDE_DISCORD", "true").lower() == "true",
-    # Logging sections (granular control)
-    "log_section_general": os.getenv("LOG_SECTION_GENERAL", "true").lower() == "true",
-    "log_section_config": os.getenv("LOG_SECTION_CONFIG", "false").lower() == "true",
-    "log_section_ai": os.getenv("LOG_SECTION_AI", "true").lower() == "true",
-    "log_section_memory": os.getenv("LOG_SECTION_MEMORY", "false").lower() == "true",
-    "log_section_media": os.getenv("LOG_SECTION_MEDIA", "false").lower() == "true",
-    "log_section_moderation": os.getenv("LOG_SECTION_MODERATION", "false").lower()
+    "log_include_discord": os.getenv("LOG_INCLUDE_DISCORD", "true").lower()
     == "true",
-    "log_section_security": os.getenv("LOG_SECTION_SECURITY", "true").lower() == "true",
-    "log_section_webhook": os.getenv("LOG_SECTION_WEBHOOK", "false").lower() == "true",
+    # Logging sections (granular control)
+    "log_section_general": os.getenv("LOG_SECTION_GENERAL", "true").lower()
+    == "true",
+    "log_section_config": os.getenv("LOG_SECTION_CONFIG", "false").lower()
+    == "true",
+    "log_section_ai": os.getenv("LOG_SECTION_AI", "true").lower() == "true",
+    "log_section_memory": os.getenv("LOG_SECTION_MEMORY", "false").lower()
+    == "true",
+    "log_section_media": os.getenv("LOG_SECTION_MEDIA", "false").lower()
+    == "true",
+    "log_section_moderation": os.getenv(
+        "LOG_SECTION_MODERATION", "false"
+    ).lower()
+    == "true",
+    "log_section_security": os.getenv("LOG_SECTION_SECURITY", "true").lower()
+    == "true",
+    "log_section_webhook": os.getenv("LOG_SECTION_WEBHOOK", "false").lower()
+    == "true",
 }
 
 
@@ -107,7 +122,9 @@ def get_model_name() -> str:
 
 def get_provider_name() -> str:
 
-    provider = load_config().get("provider") or os.getenv("AI_PROVIDER", "gemini")
+    provider = load_config().get("provider") or os.getenv(
+        "AI_PROVIDER", "gemini"
+    )
 
     return str(provider).strip().lower() or "gemini"
 
@@ -175,11 +192,15 @@ def get_prompt_token_budget() -> int:
     return 8000
 
 
-def embed_footer(author_display: str, query: str, max_query_len: int = 80) -> str:
+def embed_footer(
+    author_display: str, query: str, max_query_len: int = 80
+) -> str:
     """Returns a footer string: 'Asked by <name> • <truncated query>'"""
 
     truncated = (
-        query if len(query) <= max_query_len else query[: max_query_len - 1] + "…"
+        query
+        if len(query) <= max_query_len
+        else query[: max_query_len - 1] + "…"
     )
 
     return f"Asked by {author_display}  •  {truncated}"

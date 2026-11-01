@@ -20,7 +20,8 @@ class CoreCog(commands.Cog):
         embed = discord.Embed(
             title="Freesona Documentation",
             description=(
-                "Read the full documentation — setup guides, feature reference, "
+                "Read the full documentation — setup guides, "
+                "feature reference, "
                 "command listing, and more.\n\n"
                 f"[Open docs]({DOCS_URL})"
             ),
@@ -32,7 +33,9 @@ class CoreCog(commands.Cog):
     @commands.hybrid_command(
         name="sync", help="Sync all global slash commands (Owner only)."
     )
-    @app_commands.describe(guild="Optional guild ID to sync to (for development)")
+    @app_commands.describe(
+        guild="Optional guild ID to sync to (for development)"
+    )
     @commands.is_owner()
     async def sync_commands(
         self, ctx: commands.Context, guild: discord.Object | None = None

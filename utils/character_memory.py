@@ -360,7 +360,9 @@ async def get_memory_by_id(memory_id: str) -> CharacterMemory | None:
             return CharacterMemory.from_row(row) if row else None
 
 
-async def get_memory_count(guild_id: int, user_id: int, persona_id: str) -> int:
+async def get_memory_count(
+    guild_id: int, user_id: int, persona_id: str
+) -> int:
     """Get total memory count for a scope."""
 
     async with aiosqlite.connect(_get_character_memory_file_path()) as db:
@@ -572,14 +574,17 @@ async def extract_memories_from_conversation(
 
             import re
 
-            match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", raw, re.DOTALL)
+            match = re.search(
+                r"```(?:json)?\s*(\[.*?\])\s*```", raw, re.DOTALL
+            )
 
             if match:
                 extracted = json.loads(match.group(1))
 
             else:
                 logger.warning(
-                    f"Character memory extraction returned invalid JSON: {raw[:200]}"
+                    "Character memory extraction returned invalid JSON: "
+                    f"{raw[:200]}"
                 )
 
                 return []

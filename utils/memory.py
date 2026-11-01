@@ -80,7 +80,9 @@ async def init_db():
         await db.commit()
 
 
-async def get_user_facts_prompt(guild_id: int, user_id: int, display_name: str) -> str:
+async def get_user_facts_prompt(
+    guild_id: int, user_id: int, display_name: str
+) -> str:
 
     async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -104,11 +106,14 @@ async def get_user_facts_prompt(guild_id: int, user_id: int, display_name: str) 
 
             return (
                 "\n[Known facts about "
-                f"{display_name or f'Discord user {user_id}'}]\n" + "\n".join(lines)
+                f"{display_name or f'Discord user {user_id}'}]\n"
+                + "\n".join(lines)
             )
 
 
-async def inject_user_memory(guild_id: int, user_id: int, display_name: str) -> str:
+async def inject_user_memory(
+    guild_id: int, user_id: int, display_name: str
+) -> str:
 
     return await get_user_facts_prompt(guild_id, user_id, display_name)
 
@@ -220,7 +225,10 @@ async def extract_and_store_fact(
 
         async with aiosqlite.connect(MEMORY_FILE_PATH) as db:
             await db.execute(
-                ("INSERT OR IGNORE INTO user_facts VALUES (?, ?, ?, ?, ?, ?, ?)"),
+                (
+                    "INSERT OR IGNORE INTO user_facts "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ),
                 (
                     str(guild_id),
                     str(user_id),
@@ -298,9 +306,13 @@ async def run_migration():
                 guild_id, user_id = key.split(":")
 
                 for fact in user_data.get("facts", []):
-                    m_id = fact.get("message_id", f"migrated_{count}_{user_id}")
+                    m_id = fact.get(
+                        "message_id", f"migrated_{count}_{user_id}"
+                    )
 
-                    ts = fact.get("timestamp", datetime.now(timezone.utc).isoformat())
+                    ts = fact.get(
+                        "timestamp", datetime.now(timezone.utc).isoformat()
+                    )
 
                     await db.execute(
                         (

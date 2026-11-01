@@ -32,7 +32,9 @@ try:
 except ImportError:
     logger.warning("SymEngine not found. Falling back to default SymPy.")
 except (OSError, ModuleNotFoundError, AttributeError):
-    logger.warning("SymEngine not available — falling back to pure Python SymPy.")
+    logger.warning(
+        "SymEngine not available — falling back to pure Python SymPy."
+    )
 try:
     from matplotlib.figure import Figure
 except ImportError:
@@ -249,7 +251,8 @@ def check_ast_safe(node) -> bool:
     )
     if not isinstance(node, allowed_nodes):
         return isinstance(node, ast.Constant) and (
-            isinstance(node.value, (int, float, complex, bool)) or node.value is None
+            isinstance(node.value, (int, float, complex, bool))
+            or node.value is None
         )
     if isinstance(node, ast.Name):
         return not (
@@ -322,7 +325,9 @@ def _generate_explicit_plot(func_str: str) -> io.BytesIO:
         lhs = lhs.strip()
         rhs = rhs.strip()
         # Check if LHS looks like f(x), g(x), y, or x (non-parametric)
-        if ("(" in lhs and ")" in lhs and lhs.endswith(")")) or lhs.lower() in (
+        if (
+            "(" in lhs and ")" in lhs and lhs.endswith(")")
+        ) or lhs.lower() in (
             "y",
             "x",
         ):
@@ -400,7 +405,9 @@ def _generate_implicit_plot(func_str: str) -> io.BytesIO:
         # Create contour plot at level 0
         fig = Figure(figsize=(6, 4))
         ax = fig.subplots()
-        ax.contour(x_grid, y_grid, z_grid, levels=[0], colors="blue", linewidths=2)
+        ax.contour(
+            x_grid, y_grid, z_grid, levels=[0], colors="blue", linewidths=2
+        )
         ax.set_title(f"Plot of {func_str}")
         ax.grid(True)
         ax.set_xlim(-10, 10)
@@ -417,7 +424,9 @@ def _generate_implicit_plot(func_str: str) -> io.BytesIO:
         np.linalg.LinAlgError,
         ZeroDivisionError,
     ) as e:
-        logger.warning(f"Implicit plot failed, falling back to placeholder: {e}")
+        logger.warning(
+            f"Implicit plot failed, falling back to placeholder: {e}"
+        )
         return _minimal_png_placeholder()
 
 
@@ -492,7 +501,9 @@ def _generate_parametric_plot(func_str: str) -> io.BytesIO:
         ZeroDivisionError,
         OverflowError,
     ) as e:
-        logger.warning(f"Parametric plot failed, falling back to placeholder: {e}")
+        logger.warning(
+            f"Parametric plot failed, falling back to placeholder: {e}"
+        )
         return _minimal_png_placeholder()
 
 
@@ -582,7 +593,8 @@ class MathCog(commands.Cog):
             # 1. Critical safety validation
             if not is_safe_expression(clean_query):
                 logger.debug(
-                    f"Expression not valid for local eval (will try Wolfram): {query}"
+                    "Expression not valid for local eval "
+                    f"(will try Wolfram): {query}"
                 )
                 return None
             parsed_expr = _sympify(clean_query, evaluate=False)
@@ -633,7 +645,9 @@ class MathCog(commands.Cog):
             await ctx.send(f"Error plotting function: {e}")
             return
         file = discord.File(buf, filename="plot.png")
-        embed = discord.Embed(title=f"Plot of {func_str_clean}", color=0xDA5B40)
+        embed = discord.Embed(
+            title=f"Plot of {func_str_clean}", color=0xDA5B40
+        )
         embed.set_image(url="attachment://plot.png")
         embed.set_footer(text=f"Query: plot {func_str_clean}")
         await ctx.send(embed=embed, file=file)
@@ -651,14 +665,18 @@ class MathCog(commands.Cog):
         text = re.sub(r"\n\s*\n", "\n", text)
         return text.strip()
 
-    def create_embed(self, title: str, content: str, query: str) -> discord.Embed:
+    def create_embed(
+        self, title: str, content: str, query: str
+    ) -> discord.Embed:
         formatted_content = self.format_wolfram_text(content)
         embed = discord.Embed(
             title=title,
             description=formatted_content[:4096] or "No result found.",
             color=0xDA5B40,
         )
-        clean_math = formatted_content.replace("**", "").replace("`", "").strip()
+        clean_math = (
+            formatted_content.replace("**", "").replace("`", "").strip()
+        )
         if 0 < len(clean_math) < 150 and (
             any(char in clean_math for char in "xyz√π∫^")
             or ("=" in clean_math and len(clean_math) > 3)
@@ -680,33 +698,43 @@ class MathCog(commands.Cog):
         aliases=["wa", "wolfram", "mq"],
         help="Answers math queries locally or via Wolfram Alpha.",
     )
-    @app_commands.describe(query="The math problem, function to plot, or question.")
+    @app_commands.describe(
+        query="The math problem, function to plot, or question."
+    )
     async def math(self, ctx, *, query: str):
         await ctx.defer()
         # Handle Plotting (both "plot" and "graph" keywords)
         query_lower = query.lower()
         if "plot" in query_lower or "graph" in query_lower:
             # Remove the first occurrence of "plot" or "graph"
-            func = query_lower.replace("plot", "").replace("graph", "", 1).strip()
+            func = (
+                query_lower.replace("plot", "").replace("graph", "", 1).strip()
+            )
             await self.plot_function(ctx, func)
             return
         # Handle Calculation
         local_result = self.solve_locally(query)
         if local_result:
             await ctx.send(
-                embed=self.create_embed("Local Math Result", local_result, query)
+                embed=self.create_embed(
+                    "Local Math Result", local_result, query
+                )
             )
             return
         short_result = await self.query_short_answer(query)
         if short_result and "did not understand" not in short_result.lower():
             await ctx.send(
-                embed=self.create_embed("Wolfram Alpha Result", short_result, query)
+                embed=self.create_embed(
+                    "Wolfram Alpha Result", short_result, query
+                )
             )
             return
         full_result = await self.query_llm_api(query)
         if full_result:
             await ctx.send(
-                embed=self.create_embed("Wolfram Alpha Result", full_result, query)
+                embed=self.create_embed(
+                    "Wolfram Alpha Result", full_result, query
+                )
             )
         else:
             await ctx.send("Sorry, I couldn't find an answer to your query.")

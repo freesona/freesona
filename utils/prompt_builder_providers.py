@@ -37,7 +37,8 @@ class SystemContextProvider(ContextProvider):
 
     Provides system-level instructions. Currently, this extracts the
 
-    `system_instructions` field from persona data, which is the highest-priority
+    `system_instructions` field from persona data, which is the
+    highest-priority
 
     block in the assembled prompt.
 
@@ -86,16 +87,24 @@ class SystemContextProvider(ContextProvider):
 
         discord_instructions = (
             "Discord mention guidelines:\n"
-            "- When REPLYING to a message (using Discord's reply feature), do NOT add a @mention — the reply already notifies the user.\n"
-            "- When mentioning the user you're responding to in a NON-reply message, use <@USER_ID> format to ping them.\n"
-            "- When referencing other users in conversation, prefer their display name or nickname naturally; use <@USER_ID> only when you want to actively ping/notify them.\n"
-            "- User IDs and mention formats are provided in message context when available.\n"
+            "- When REPLYING to a message (using Discord's reply feature), "
+            "do NOT add a @mention — the reply already notifies the user.\n"
+            "- When mentioning the user you're responding to in a NON-reply "
+            "message, use <@USER_ID> format to ping them.\n"
+            "- When referencing other users in conversation, prefer their "
+            "display name or nickname naturally; use <@USER_ID> only when "
+            "you want to actively ping/notify them.\n"
+            "- User IDs and mention formats are provided in message context "
+            "when available.\n"
             "- Do NOT use @username format — it will not ping the user."
         )
 
         # Match current XML tag format from persona.py assemble_persona()
 
-        content = f"<system_instructions>\n{system_instructions}\n\n{discord_instructions}\n</system_instructions>"
+        content = (
+            f"<system_instructions>\n{system_instructions}\n\n"
+            f"{discord_instructions}\n</system_instructions>"
+        )
 
         return ContextBlock(
             name=self.name,
@@ -148,9 +157,11 @@ class PersonaContextProvider(ContextProvider):
                 content="",
             )
 
-        # Replicate the exact assembly from persona.py: ASSEMBLY_ORDER minus system_instructions
+        # Replicate the exact assembly from persona.py: ASSEMBLY_ORDER
+        # minus system_instructions
 
-        # Current order: system_instructions, core_personality, background, beliefs, language
+        # Current order: system_instructions, core_personality, background,
+        # beliefs, language
 
         # We only do the last four here (system_instructions handled by
 
@@ -197,7 +208,8 @@ class CanonContextProvider(ContextProvider):
 
     Provides modular, immutable canon blocks that explain the *why* behind
 
-    persona behavior. Replaces monolithic persona with composable canon fragments.
+    persona behavior. Replaces monolithic persona with composable canon
+    fragments.
 
 
 
@@ -317,17 +329,18 @@ class ConversationHistoryProvider(ContextProvider):
 
     This replaces provider-specific continuity (Gemini Interactions API) with a
 
-    unified, provider-agnostic conversation history that works identically across
+    unified, provider-agnostic conversation history that works identically
+    across
 
-    all providers. The ConversationManager stores recent messages, handles token
+    all providers. The ConversationManager stores recent messages, handles
+    token
 
     budgets, expiration, and context assembly.
 
 
 
-    Scope: Per (guild_id, channel_id, user_id) — each user has their own
-
-    conversation thread within a channel, matching the previous Gemini behavior.
+    Normal chat uses (guild_id, channel_id, user_id). Autonomy can use a
+    combined view of recent channel history for one user in one guild.
 
     """
 
@@ -368,13 +381,16 @@ class ConversationHistoryProvider(ContextProvider):
                 content="",
             )
 
-        # channel_id must be provided; if missing, we cannot scope the
+        channel_id = (
+            None
+            if context.share_conversation_across_channels
+            else context.channel_id
+        )
 
-        # conversation
-
-        channel_id = context.channel_id
-
-        if channel_id is None:
+        if (
+            channel_id is None
+            and not context.share_conversation_across_channels
+        ):
             return ContextBlock(
                 name=self.name,
                 priority=self.priority,
@@ -499,13 +515,15 @@ class CharacterMemoryProvider(ContextProvider):
 
 
 
-    Stores: promises, shared experiences, recurring jokes, unfinished activities,
+    Stores: promises, shared experiences, recurring jokes, unfinished
+    activities,
 
     relationship progression, persistent decisions.
 
 
 
-    Scope: Per (guild_id, user_id, persona_id) triple — persists across channels
+    Scope: Per (guild_id, user_id, persona_id) triple — persists across
+    channels
 
     within the same guild (per ADR-0003 Multi-Guild Identity philosophy).
 
@@ -550,7 +568,11 @@ class CharacterMemoryProvider(ContextProvider):
                 content="",
             )
 
-        if not context.guild_id or not context.user_id or not context.persona_id:
+        if (
+            not context.guild_id
+            or not context.user_id
+            or not context.persona_id
+        ):
             return ContextBlock(
                 name=self.name,
                 priority=self.priority,
@@ -598,7 +620,8 @@ class CharacterMemoryProvider(ContextProvider):
 class GuildWorldContextProvider(ContextProvider):
     """
 
-    Provides environmental context: the Discord guild as the character's "world".
+    Provides environmental context: the Discord guild as the character's
+    "world".
 
 
 
@@ -614,7 +637,8 @@ class GuildWorldContextProvider(ContextProvider):
 
 
 
-    This is NOT memory — it's the current environment. Fetched fresh every request.
+    This is NOT memory — it's the current environment. Fetched fresh every
+    request.
 
     No persistence, no history, no cross-guild awareness.
 
@@ -632,7 +656,8 @@ class GuildWorldContextProvider(ContextProvider):
 
     - MUST NOT store canonical facts (that's Canon/PKB)
 
-    - MUST NOT require special permissions beyond standard guild/channel intents
+    - MUST NOT require special permissions beyond standard guild/channel
+      intents
 
     - This is *environment*, not *memory*
 
@@ -677,7 +702,9 @@ class GuildWorldContextProvider(ContextProvider):
 
         # Get accessor from context (injected by caller) or use null accessor
 
-        accessor = getattr(context, "guild_world_accessor", None) or NULL_ACCESSOR
+        accessor = (
+            getattr(context, "guild_world_accessor", None) or NULL_ACCESSOR
+        )
 
         try:
             world_context = await build_guild_world_context(
@@ -722,7 +749,8 @@ class PersonaKnowledgeBaseProvider(ContextProvider):
 
     Provides relevant canonical context from the Persona Knowledge Base (RAG).
 
-    Replicates the exact format from generation.py:retrieve_knowledge_context().
+    Replicates the exact format from
+    generation.py:retrieve_knowledge_context().
 
     """
 

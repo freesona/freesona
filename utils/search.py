@@ -53,7 +53,9 @@ def _is_transient(exc: Exception) -> bool:
 # ---------------------------------------------------------------------------
 # Single grounded call against a given model, with retry/backoff
 # ---------------------------------------------------------------------------
-async def _grounded_call(query: str, model: str, max_retries: int) -> SearchResult:
+async def _grounded_call(
+    query: str, model: str, max_retries: int
+) -> SearchResult:
     client = genai.Client(api_key=GOOGLE_API_KEY)
     grounding_tool = types.Tool(google_search=types.GoogleSearch())
     config = types.GenerateContentConfig(
@@ -78,7 +80,9 @@ async def _grounded_call(query: str, model: str, max_retries: int) -> SearchResu
                     grounding_metadata = getattr(
                         candidates[0], "grounding_metadata", None
                     )
-                    chunks = getattr(grounding_metadata, "grounding_chunks", None)
+                    chunks = getattr(
+                        grounding_metadata, "grounding_chunks", None
+                    )
                 for chunk in chunks or []:
                     web = getattr(chunk, "web", None)
                     if web:
@@ -109,7 +113,11 @@ async def _grounded_call(query: str, model: str, max_retries: int) -> SearchResu
             # Non-transient, or out of retries — stop trying this model.
             logger.warning(f"[{model}] search attempt failed: {e}")
             break
-    raise (last_exc if last_exc else RuntimeError(f"Unknown failure for model {model}"))
+    raise (
+        last_exc
+        if last_exc
+        else RuntimeError(f"Unknown failure for model {model}")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +138,9 @@ async def web_search(query: str) -> SearchResult:
     for model in (PRIMARY_MODEL, SECONDARY_MODEL):
         try:
             result = await _grounded_call(query, model, MAX_RETRIES_PER_MODEL)
-            logger.info(f"Search succeeded via {model} ({len(result.sources)} sources)")
+            logger.info(
+                f"Search succeeded via {model} ({len(result.sources)} sources)"
+            )
             return result
         except Exception as e:  # noqa: BLE001 – genai API raises unpredictable types
             logger.warning(f"Model {model} exhausted retries, escalating: {e}")

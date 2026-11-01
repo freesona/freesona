@@ -10,7 +10,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-import discord
 from dotenv import load_dotenv
 
 try:
@@ -23,7 +22,14 @@ except ImportError:
     types = None
 
 
-from utils.chroma import query_knowledge
+from providers.base import (
+    MalformedResponseError as ProviderMalformedResponseError,
+    ProviderError,
+    RateLimitError as ProviderRateLimitError,
+    ProviderTimeoutError,
+    TransientError as ProviderTransientError,
+)
+from utils.kb_interface import KnowledgeBase
 from utils.config import (
     get_kb_top_k,
     get_model_name,
@@ -35,7 +41,9 @@ from utils.config import (
 from utils.conversation import (
     add_assistant_message,
     add_user_message,
+    get_recent_image_attachments,
 )
+from utils.interaction import InteractionRequest
 from utils.persona import PERSONA_DATA as GLOBAL_PERSONA_DATA
 from utils.prompt_builder import build_system_prompt
 from utils.providers import generate_text
@@ -181,15 +189,42 @@ class TimeoutGenerationError(GenerationError):
 
 def _classify_error(e: Exception) -> GenerationError:
 
+    # Typed provider errors map directly to GenerationError subclasses
+
+    if isinstance(e, ProviderRateLimitError):
+
+        return RateLimitError(str(e))
+
+    if isinstance(e, ProviderTimeoutError):
+
+        return TimeoutGenerationError(str(e))
+
+    if isinstance(e, ProviderTransientError):
+
+        return TransientError(str(e))
+
+    if isinstance(e, ProviderMalformedResponseError):
+
+        return MalformedResponseError(str(e))
+
+    if isinstance(e, ProviderError):
+
+        return GenerationError(str(e))
+
+    # Fall back to string matching for untyped exceptions
+
     msg = str(e).lower()
 
     if "429" in msg or "quota" in msg or "rate" in msg:
+
         return RateLimitError(str(e))
 
     if "timeout" in msg or "timed out" in msg:
+
         return TimeoutGenerationError(str(e))
 
     if "500" in msg or "503" in msg or "internal" in msg:
+
         return TransientError(str(e))
 
     return GenerationError(str(e))
@@ -368,115 +403,6 @@ def clean_text(text: str, limit: int = 4000) -> str:
 
 # ---------------------------------------------------------------------------
 
-# Multi-message sender
-
-# ---------------------------------------------------------------------------
-
-
-async def send_response(
-    response: ConversationResponse,
-    channel: discord.abc.Messageable,
-    *,
-    reply_to: discord.Message | None = None,
-) -> None:
-    """Send a formatted response to a Discord channel.
-
-    Args:
-        response: ConversationResponse containing message segments.
-        channel: Discord channel or messageable target.
-        reply_to: Optional message to reply to.
-    """
-
-    if not response.segments:
-        return
-
-    segments = [s for s in response.segments if s.text.strip()]
-
-    if not segments:
-        # Ensure we always have at least one segment to send
-
-        segments = [MessageSegment(text=".", delay=0, typing=False)]
-
-    for i, segment in enumerate(segments):
-        if segment.typing and segment.delay > 0:
-            async with channel.typing():
-                await asyncio.sleep(segment.delay)
-
-        try:
-            if i == 0 and reply_to is not None:
-                await _send_first_segment_with_reply(channel, segment.text, reply_to)
-
-            else:
-                await channel.send(segment.text)
-
-        except discord.Forbidden:
-            # Stop sending when Forbidden error occurs (e.g., lack of permissions)
-
-            return
-
-
-async def _send_first_segment_with_reply(
-    channel: discord.abc.Messageable,
-    text: str,
-    reply_to: discord.Message,
-) -> None:
-    """Send the first segment, trying reply first then
-
-    falling back to regular send."""
-
-    try:
-        await reply_to.reply(text)
-
-    except discord.NotFound:
-        # Message was deleted or is inaccessible; fall back to regular send
-
-        logger.debug("Reply target message not found, falling back to channel.send")
-
-        await channel.send(text)
-
-
-# ---------------------------------------------------------------------------
-
-# Attachment helper
-
-# ---------------------------------------------------------------------------
-
-
-async def extract_attachments(
-    message: discord.Message | None,
-) -> list[tuple[bytes, str]]:
-    """Extract attachments from a Discord message.
-
-    Args:
-        message: Discord message object possibly containing attachments.
-
-    Returns:
-        List of (bytes, mime_type) tuples for each attachment.
-    """
-
-    if not message or not message.attachments:
-        return []
-
-    results = []
-
-    for att in message.attachments:
-        mime = att.content_type or ""
-
-        mime_base = mime.split(";")[0].strip()
-
-        try:
-            data = await att.read()
-
-            results.append((data, mime_base))
-
-        except (discord.HTTPException, OSError, asyncio.TimeoutError) as e:
-            logger.error(f"Failed to read attachment {att.filename}: {e}")
-
-    return results
-
-
-# ---------------------------------------------------------------------------
-
 # Knowledge Base Retrieval
 
 # ---------------------------------------------------------------------------
@@ -486,6 +412,7 @@ async def retrieve_knowledge_context(
     query: str,
     persona: str,
     top_k: int = KB_TOP_K,
+    kb: KnowledgeBase | None = None,
 ) -> str:
     """
 
@@ -503,6 +430,10 @@ async def retrieve_knowledge_context(
 
         top_k: Maximum number of entries to retrieve.
 
+        kb: Optional knowledge base implementation. Defaults to
+
+            ChromaKnowledgeBase.
+
 
 
     Returns:
@@ -519,11 +450,16 @@ async def retrieve_knowledge_context(
     if not persona or not persona.strip():
         return ""
 
+    if kb is None:
+        from utils.kb_interface import ChromaKnowledgeBase
+
+        kb = ChromaKnowledgeBase()
+
     try:
         # Run query off-thread to avoid blocking
 
         entries = await asyncio.to_thread(
-            query_knowledge, query, limit=top_k, persona=persona
+            kb.query, query, limit=top_k, persona=persona
         )
 
         if not entries:
@@ -604,6 +540,7 @@ async def generate(
     channel_id: int | None = None,
     guild_id: int | None = None,
     user_id: int | None = None,
+    share_conversation_across_channels: bool = False,
     message_id: int | None = None,
     apply_persona: bool = True,
     instruction_prefix: str = "",
@@ -636,13 +573,49 @@ async def generate(
         embeds = []
 
     text = sanitize_prompt(text)
+    conversation_channel_id = (
+        None if share_conversation_across_channels else channel_id
+    )
+
+    image_reference = re.search(
+        r"\b(?:same|that|this|earlier|previous|before|uploaded)\b.{0,40}"
+        r"\b(?:image|photo|picture|worksheet|diagram|screenshot)\b|"
+        r"\b(?:image|photo|picture|worksheet|diagram|screenshot)\b.{0,40}"
+        r"\b(?:same|that|this|earlier|previous|before|uploaded)\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if (
+        not attachments
+        and image_reference
+        and guild_id
+        and (channel_id or share_conversation_across_channels)
+        and user_id
+    ):
+        attachments = await get_recent_image_attachments(
+            guild_id, conversation_channel_id, user_id
+        )
+        if not attachments:
+            limitation = (
+                "The user refers to an image from earlier in the "
+                "conversation, "
+                "but its original image data is no longer available. "
+                "Be honest "
+                "about this; do not imply they never uploaded it."
+            )
+            instruction_prefix = "\n\n".join(
+                part for part in (instruction_prefix, limitation) if part
+            )
 
     # Add user message to conversation history (short-term memory)
 
-    if guild_id and channel_id and user_id:
+    if guild_id and user_id and (
+        channel_id or share_conversation_across_channels
+    ):
         await add_user_message(
             guild_id,
-            channel_id,
+            conversation_channel_id,
             user_id,
             text,
             message_id,
@@ -650,6 +623,7 @@ async def generate(
             mentions,
             reply,
             embeds,
+            attachments,
         )
 
     # Build system prompt using PromptBuilder (includes conversation history
@@ -661,6 +635,9 @@ async def generate(
         persona_id=persona_id,
         guild_id=guild_id,
         channel_id=channel_id,
+        share_conversation_across_channels=(
+            share_conversation_across_channels
+        ),
         user_id=user_id,
         username=username,
         apply_persona=apply_persona,
@@ -689,15 +666,17 @@ async def generate(
 
         # providers completely stateless and interchangeable.
 
-        # Get previous interaction ID for Gemini multi-turn support
+        # Get previous interaction ID for multi-turn support
 
         previous_interaction_id = None
 
-        if provider_name == "gemini" and guild_id and channel_id and user_id:
+        if guild_id and user_id and (
+            channel_id or share_conversation_across_channels
+        ):
             from utils.conversation import get_last_interaction_id
 
             previous_interaction_id = await get_last_interaction_id(
-                guild_id, channel_id, user_id
+                guild_id, conversation_channel_id, user_id
             )
 
         output = generate_text(
@@ -737,21 +716,38 @@ async def generate(
 
         if (
             interaction_id
-            and provider_name == "gemini"
             and guild_id
-            and channel_id
             and user_id
+            and (channel_id or share_conversation_across_channels)
         ):
             from utils.conversation import set_last_interaction_id
 
-            await set_last_interaction_id(guild_id, channel_id, user_id, interaction_id)
+            await set_last_interaction_id(
+                guild_id,
+                conversation_channel_id,
+                user_id,
+                interaction_id,
+            )
+
+        # Strip reasoning tags before storing in conversation history
+
+        output_text = _strip_reasoning_tags(output_text or "")
 
         # Add assistant response to conversation history
 
-        if guild_id and channel_id and user_id and output_text:
-            await add_assistant_message(guild_id, channel_id, user_id, output_text)
+        if (
+            guild_id
+            and user_id
+            and output_text
+            and (channel_id or share_conversation_across_channels)
+        ):
+            await add_assistant_message(
+                guild_id, conversation_channel_id, user_id, output_text
+            )
 
-        return build_response(clean_text(output_text or "Something went wrong."))
+        return build_response(
+            clean_text(output_text or "Something went wrong.")
+        )
 
     except Exception as e:
         logger.error(f"Generation error: {e}")
@@ -769,12 +765,47 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
         ConversationResponse containing the generated text or an error message.
     """
     try:
+        if args and isinstance(args[0], InteractionRequest):
+            if len(args) != 1:
+                raise TypeError("safe_generate accepts one InteractionRequest")
+            unexpected = set(kwargs) - {"guild_world_accessor"}
+            if unexpected:
+                names = ", ".join(sorted(unexpected))
+                raise TypeError(
+                    f"Unexpected InteractionRequest options: {names}"
+                )
+
+            request = args[0]
+            prompt = {
+                "content": request.content,
+                "mentions": request.mentions,
+                "reply": request.reply,
+                "embeds": request.embeds,
+            }
+            return await generate(
+                prompt,
+                current_persona=request.current_persona,
+                channel_id=request.channel_id,
+                guild_id=request.guild_id,
+                user_id=request.user_id,
+                share_conversation_across_channels=(
+                    request.share_conversation_across_channels
+                ),
+                message_id=request.message_id,
+                apply_persona=request.apply_persona,
+                instruction_prefix=request.instruction_prefix,
+                username=request.username,
+                attachments=request.attachments,
+                persona_id=request.persona_id,
+                guild_world_accessor=kwargs.get("guild_world_accessor"),
+            )
+
         return await generate(*args, **kwargs)
 
     except GenerationError as e:
         return build_response(_user_facing_error(e))
 
-    except (RuntimeError, ValueError, OSError, discord.DiscordException) as e:
+    except (RuntimeError, ValueError, OSError) as e:
         logger.error(f"Unexpected error in safe_generate: {e}")
 
         return build_response("Something went wrong. Try again.")
@@ -783,8 +814,6 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
 __all__ = [
     "ConversationResponse",
     "build_response",
-    "extract_attachments",
     "retrieve_knowledge_context",
     "safe_generate",
-    "send_response",
 ]

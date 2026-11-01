@@ -21,14 +21,20 @@ class TestMemoryType(unittest.TestCase):
         from utils.character_memory import MemoryType
 
         self.assertEqual(MemoryType.PROMISE.value, "promise")
-        self.assertEqual(MemoryType.SHARED_EXPERIENCE.value, "shared_experience")
+        self.assertEqual(
+            MemoryType.SHARED_EXPERIENCE.value, "shared_experience"
+        )
         self.assertEqual(MemoryType.RECURRING_JOKE.value, "recurring_joke")
-        self.assertEqual(MemoryType.UNFINISHED_ACTIVITY.value, "unfinished_activity")
+        self.assertEqual(
+            MemoryType.UNFINISHED_ACTIVITY.value, "unfinished_activity"
+        )
         self.assertEqual(
             MemoryType.RELATIONSHIP_PROGRESSION.value,
             "relationship_progression",
         )
-        self.assertEqual(MemoryType.PERSISTENT_DECISION.value, "persistent_decision")
+        self.assertEqual(
+            MemoryType.PERSISTENT_DECISION.value, "persistent_decision"
+        )
 
 
 class TestCharacterMemoryDataclass(unittest.TestCase):
@@ -135,7 +141,9 @@ class TestCharacterMemoryDatabase(unittest.IsolatedAsyncioTestCase):
         memories = await get_memories(1, 2, "chisato")
         self.assertEqual(len(memories), 1)
         self.assertEqual(memories[0].memory_id, "mem-1")
-        self.assertEqual(memories[0].content, "We promised to play chess next week.")
+        self.assertEqual(
+            memories[0].content, "We promised to play chess next week."
+        )
         self.assertEqual(memories[0].importance, 0.9)
         self.assertEqual(memories[0].memory_type, MemoryType.PROMISE)
 
@@ -399,7 +407,9 @@ class TestBuildCharacterMemoryContext(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.test_db = os.path.join(self.temp_dir, "test_character_memory_context.db")
+        self.test_db = os.path.join(
+            self.temp_dir, "test_character_memory_context.db"
+        )
         os.environ["CHARACTER_MEMORY_FILE_PATH"] = self.test_db
         import importlib
 
@@ -467,9 +477,12 @@ class TestBuildCharacterMemoryContext(unittest.IsolatedAsyncioTestCase):
             username="TestUser",
         )
         self.assertIn("Character Memory with TestUser", result)
-        self.assertIn("[PROMISE] We promised to play chess. (importance: 0.9)", result)
         self.assertIn(
-            "[SHARED_EXPERIENCE] We defeated the boss together. (importance: 0.7)",
+            "[PROMISE] We promised to play chess. (importance: 0.9)", result
+        )
+        self.assertIn(
+            "[SHARED_EXPERIENCE] We defeated the boss together. "
+            "(importance: 0.7)",
             result,
         )
         self.assertIn(
@@ -546,7 +559,9 @@ class TestExtractionPipeline(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(memories), 1)
         self.assertEqual(memories[0].memory_type, MemoryType.PROMISE)
-        self.assertEqual(memories[0].content, "We promised to play chess next week.")
+        self.assertEqual(
+            memories[0].content, "We promised to play chess next week."
+        )
         self.assertEqual(memories[0].importance, 0.9)
         self.assertEqual(memories[0].guild_id, 1)
         self.assertEqual(memories[0].user_id, 2)
@@ -613,7 +628,9 @@ class TestEnforceMemoryBudget(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.test_db = os.path.join(self.temp_dir, "test_character_memory_budget.db")
+        self.test_db = os.path.join(
+            self.temp_dir, "test_character_memory_budget.db"
+        )
         os.environ["CHARACTER_MEMORY_FILE_PATH"] = self.test_db
         os.environ["CHARACTER_MEMORY_MAX_MEMORIES"] = "3"
         import importlib

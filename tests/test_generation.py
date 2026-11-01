@@ -3,18 +3,25 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 
-from utils.generation import (
-    ConversationResponse,
-    MessageSegment,
+from utils.discord_adapter import (
     _send_first_segment_with_reply,
-    _strip_reasoning_tags,
-    clean_text,
+    extract_attachments,
     send_response,
 )
+from utils.generation import (
+    ConversationResponse,
+    GenerationError,
+    MessageSegment,
+    _strip_reasoning_tags,
+    clean_text,
+    generate,
+    safe_generate,
+)
+from utils.interaction import InteractionRequest
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -31,7 +38,9 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         typing_cm.__aexit__ = AsyncMock(return_value=None)
         channel.typing = MagicMock(return_value=typing_cm)
         response = ConversationResponse(
-            segments=[MessageSegment(text="Hello world", typing=False, delay=0)]
+            segments=[
+                MessageSegment(text="Hello world", typing=False, delay=0)
+            ]
         )
         await send_response(response, channel)
         channel.send.assert_called_once_with("Hello world")
@@ -87,7 +96,9 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
             side_effect=discord.NotFound(MagicMock(), "Not found")
         )
         response = ConversationResponse(
-            segments=[MessageSegment(text="Reply fallback", typing=False, delay=0)]
+            segments=[
+                MessageSegment(text="Reply fallback", typing=False, delay=0)
+            ]
         )
         await send_response(response, channel, reply_to=reply_to)
         # Should fall back to channel.send
@@ -138,6 +149,35 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         await send_response(response, channel)
         # Only the valid message should be sent
         channel.send.assert_called_once_with("Valid message")
+
+
+class TestExtractAttachments(unittest.IsolatedAsyncioTestCase):
+    async def test_extracts_slash_command_attachment_without_message(self):
+        attachment = MagicMock(spec=discord.Attachment)
+        attachment.content_type = "image/png"
+        attachment.read = AsyncMock(return_value=b"image-data")
+
+        result = await extract_attachments(None, attachment)
+
+        self.assertEqual(result, [(b"image-data", "image/png")])
+        attachment.read.assert_awaited_once_with()
+
+    async def test_extracts_message_and_explicit_attachments(self):
+        message_attachment = MagicMock(spec=discord.Attachment)
+        message_attachment.content_type = "image/jpeg"
+        message_attachment.read = AsyncMock(return_value=b"message-image")
+        slash_attachment = MagicMock(spec=discord.Attachment)
+        slash_attachment.content_type = "image/png"
+        slash_attachment.read = AsyncMock(return_value=b"slash-image")
+        message = MagicMock(spec=discord.Message)
+        message.attachments = [message_attachment]
+
+        result = await extract_attachments(message, slash_attachment)
+
+        self.assertEqual(
+            result,
+            [(b"message-image", "image/jpeg"), (b"slash-image", "image/png")],
+        )
 
 
 class TestSendFirstSegmentWithReply(unittest.IsolatedAsyncioTestCase):
@@ -237,11 +277,467 @@ class TestCleanText(unittest.TestCase):
         self.assertNotIn("<thought>", result)
 
     def test_clean_text_no_tags_normal_truncate(self):
-        """clean_text should work normally without tags."""
+        """clean_text should work normally without reasoning tags."""
         text = "x" * 5000
         result = clean_text(text, limit=100)
         self.assertLessEqual(len(result), 100)
         self.assertNotIn("<thought>", result)
+
+
+class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
+    async def test_follow_up_reuses_recent_image(self):
+        earlier_image = [(b"original-image", "image/png")]
+        with (
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
+            patch("utils.generation.add_user_message", new_callable=AsyncMock),
+            patch(
+                "utils.generation.get_recent_image_attachments",
+                new_callable=AsyncMock,
+                return_value=earlier_image,
+            ) as get_images,
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="system",
+            ),
+            patch(
+                "utils.generation.generate_text",
+                return_value="It shows a worksheet.",
+            ) as provider,
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ),
+            patch("utils.generation.get_provider_name", return_value="openai"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch("utils.generation.get_model_temperature", return_value=0.4),
+            patch("utils.generation.KB_ENABLED", False),
+        ):
+            await generate(
+                "What is in the same photo?",
+                current_persona="persona",
+                guild_id=2,
+                channel_id=3,
+                user_id=1,
+            )
+
+        get_images.assert_awaited_once_with(2, 3, 1)
+        self.assertEqual(
+            provider.call_args.kwargs["attachments"], earlier_image
+        )
+
+    async def test_missing_referenced_image_is_disclosed_to_provider(self):
+        with (
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
+            patch("utils.generation.add_user_message", new_callable=AsyncMock),
+            patch(
+                "utils.generation.get_recent_image_attachments",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="system",
+            ),
+            patch(
+                "utils.generation.generate_text",
+                return_value="I cannot access that image now.",
+            ) as provider,
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ),
+            patch("utils.generation.get_provider_name", return_value="openai"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch("utils.generation.get_model_temperature", return_value=0.4),
+            patch("utils.generation.KB_ENABLED", False),
+        ):
+            await generate(
+                "Please inspect the same photo again",
+                current_persona="persona",
+                guild_id=2,
+                channel_id=3,
+                user_id=1,
+            )
+
+        self.assertEqual(provider.call_args.kwargs["attachments"], [])
+        self.assertIn(
+            "do not imply they never uploaded it",
+            provider.call_args.kwargs["instruction_prefix"],
+        )
+
+    async def test_generate_preserves_serialized_context_and_provider_handoff(
+        self,
+    ):
+        prompt = {
+            "content": "hello",
+            "mentions": [{"id": 8, "name": "Lin", "mention": "<@8>"}],
+            "reply": {"content": "question"},
+            "embeds": ["context"],
+        }
+        attachments = [(b"image-bytes", "image/png")]
+        with (
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: f"clean:{value}",
+            ),
+            patch(
+                "utils.generation.add_user_message", new_callable=AsyncMock
+            ) as add_user,
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="assembled context",
+            ) as build_prompt,
+            patch(
+                "utils.generation.generate_text",
+                return_value=(
+                    "Hello <thought>private</thought>",
+                    "interaction-2",
+                ),
+            ) as provider,
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ) as add_assistant,
+            patch("utils.generation.get_provider_name", return_value="gemini"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch("utils.generation.get_model_temperature", return_value=0.4),
+            patch("utils.generation.KB_ENABLED", True),
+            patch("utils.generation.KB_TOP_K", 5),
+            patch(
+                "utils.conversation.get_last_interaction_id",
+                new_callable=AsyncMock,
+                return_value="interaction-1",
+            ),
+            patch(
+                "utils.conversation.set_last_interaction_id",
+                new_callable=AsyncMock,
+            ) as set_interaction,
+        ):
+            response = await generate(
+                prompt,
+                current_persona="persona text",
+                persona_id="persona-a",
+                channel_id=3,
+                guild_id=2,
+                user_id=1,
+                message_id=4,
+                username="Ada",
+                attachments=attachments,
+            )
+
+        add_user.assert_awaited_once_with(
+            2,
+            3,
+            1,
+            "clean:hello",
+            4,
+            "Ada",
+            prompt["mentions"],
+            prompt["reply"],
+            prompt["embeds"],
+            attachments,
+        )
+        assert build_prompt.await_args is not None
+        self.assertEqual(
+            build_prompt.await_args.kwargs["persona_id"], "persona-a"
+        )
+        self.assertEqual(
+            build_prompt.await_args.kwargs["user_message"], "clean:hello"
+        )
+        self.assertEqual(provider.call_args.args[0], "clean:hello")
+        self.assertEqual(
+            provider.call_args.kwargs["system_prompt"], "assembled context"
+        )
+        self.assertEqual(provider.call_args.kwargs["attachments"], attachments)
+        self.assertEqual(
+            provider.call_args.kwargs["extra_payload"],
+            {"previous_interaction_id": "interaction-1"},
+        )
+        set_interaction.assert_awaited_once_with(2, 3, 1, "interaction-2")
+        add_assistant.assert_awaited_once_with(2, 3, 1, "Hello")
+        self.assertEqual(response.first_text(), "Hello")
+
+    async def test_generate_uses_guild_user_scope_for_shared_conversations(
+        self,
+    ):
+        with (
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
+            patch(
+                "utils.generation.add_user_message", new_callable=AsyncMock
+            ) as add_user,
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="system",
+            ) as build_prompt,
+            patch("utils.generation.generate_text", return_value="Answer"),
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ) as add_assistant,
+            patch(
+                "utils.conversation.get_last_interaction_id",
+                new_callable=AsyncMock,
+                return_value=None,
+            ) as get_interaction,
+            patch("utils.generation.get_provider_name", return_value="openai"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch("utils.generation.get_model_temperature", return_value=0.4),
+            patch("utils.generation.KB_ENABLED", False),
+        ):
+            await generate(
+                "Question from another channel",
+                current_persona="persona",
+                guild_id=2,
+                channel_id=3,
+                user_id=1,
+                share_conversation_across_channels=True,
+            )
+
+        add_user.assert_awaited_once()
+        add_user_call = add_user.await_args
+        assert add_user_call is not None
+        self.assertEqual(add_user_call.args[:3], (2, None, 1))
+        get_interaction.assert_awaited_once_with(2, None, 1)
+        add_assistant.assert_awaited_once_with(2, None, 1, "Answer")
+        build_prompt_call = build_prompt.await_args
+        assert build_prompt_call is not None
+        self.assertEqual(
+            build_prompt_call.kwargs["channel_id"], 3
+        )
+        self.assertTrue(
+            build_prompt_call.kwargs[
+                "share_conversation_across_channels"
+            ]
+        )
+
+    async def test_generate_classifies_provider_timeout(self):
+        with (
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
+            patch("utils.generation.add_user_message", new_callable=AsyncMock),
+            patch(
+                "utils.generation.get_recent_image_attachments",
+                new_callable=AsyncMock,
+            ) as get_images,
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="system",
+            ),
+            patch(
+                "utils.generation.generate_text",
+                side_effect=TimeoutError("request timed out"),
+            ),
+            patch("utils.generation.get_provider_name", return_value="openai"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch("utils.generation.get_model_temperature", return_value=0.4),
+            patch("utils.generation.KB_ENABLED", False),
+            patch("utils.generation.KB_TOP_K", 5),
+            self.assertRaises(GenerationError) as raised,
+        ):
+            await generate("hello", current_persona="persona")
+        self.assertEqual(
+            type(raised.exception).__name__, "TimeoutGenerationError"
+        )
+        get_images.assert_not_awaited()
+
+    async def test_safe_generate_accepts_plain_interaction_request(self):
+        request = InteractionRequest(
+            content="What did we decide?",
+            current_persona="persona text",
+            guild_id=2,
+            channel_id=3,
+            user_id=1,
+            message_id=4,
+            apply_persona=False,
+            instruction_prefix="Use one sentence.",
+            username="Ada",
+            persona_id="persona-1",
+            mentions=[{"id": 8, "name": "Lin", "mention": "<@8>"}],
+            reply={"content": "Earlier question", "is_bot": False},
+            embeds=["Decision notes"],
+            attachments=[(b"file-bytes", "text/plain")],
+        )
+        world_accessor = object()
+        with (
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
+            patch(
+                "utils.generation.add_user_message", new_callable=AsyncMock
+            ) as add_user,
+            patch(
+                "utils.generation.get_recent_image_attachments",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="assembled context",
+            ) as build_prompt,
+            patch(
+                "utils.generation.generate_text",
+                return_value="We chose Friday.",
+            ) as provider,
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ) as add_assistant,
+            patch("utils.generation.get_provider_name", return_value="openai"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch("utils.generation.get_model_temperature", return_value=0.4),
+            patch("utils.generation.KB_ENABLED", False),
+            patch("utils.generation.KB_TOP_K", 5),
+        ):
+            response = await safe_generate(
+                request,
+                guild_world_accessor=world_accessor,
+            )
+
+        self.assertIsInstance(response, ConversationResponse)
+        self.assertEqual(response.first_text(), "We chose Friday.")
+        add_user.assert_awaited_once_with(
+            2,
+            3,
+            1,
+            "What did we decide?",
+            4,
+            "Ada",
+            request.mentions,
+            request.reply,
+            request.embeds,
+            request.attachments,
+        )
+        build_prompt.assert_awaited_once()
+        build_prompt_args = build_prompt.await_args
+        assert build_prompt_args is not None
+        self.assertIs(
+            build_prompt_args.kwargs["guild_world_accessor"],
+            world_accessor,
+        )
+        self.assertEqual(build_prompt_args.kwargs["persona_id"], "persona-1")
+        self.assertFalse(build_prompt_args.kwargs["apply_persona"])
+        provider.assert_called_once()
+        provider_args = provider.call_args
+        assert provider_args is not None
+        self.assertEqual(provider_args.args[0], request.content)
+        self.assertEqual(
+            provider_args.kwargs["system_prompt"], "assembled context"
+        )
+        self.assertEqual(provider.call_args.kwargs["provider"], "openai")
+        self.assertEqual(provider.call_args.kwargs["model"], "model-x")
+        self.assertEqual(provider.call_args.kwargs["max_output_tokens"], 2048)
+        self.assertEqual(provider.call_args.kwargs["temperature"], 0.4)
+        self.assertEqual(provider.call_args.kwargs["user_id"], request.user_id)
+        self.assertEqual(
+            provider.call_args.kwargs["username"], request.username
+        )
+        self.assertEqual(
+            provider.call_args.kwargs["instruction_prefix"],
+            request.instruction_prefix,
+        )
+        self.assertEqual(
+            provider.call_args.kwargs["attachments"], request.attachments
+        )
+        add_assistant.assert_awaited_once_with(2, 3, 1, "We chose Friday.")
+
+    async def test_safe_generate_keeps_legacy_command_arguments(self):
+        response = ConversationResponse(
+            segments=[
+                MessageSegment(text="Legacy response", typing=False, delay=0)
+            ]
+        )
+        with patch(
+            "utils.generation.generate",
+            new_callable=AsyncMock,
+            return_value=response,
+        ) as generate_mock:
+            result = await safe_generate("hello", current_persona="persona")
+
+        generate_mock.assert_awaited_once_with(
+            "hello", current_persona="persona"
+        )
+        self.assertIs(result, response)
+
+    async def test_safe_generate_passes_shared_conversation_scope(self):
+        request = InteractionRequest(
+            content="Follow-up",
+            current_persona="persona",
+            share_conversation_across_channels=True,
+        )
+        response = ConversationResponse(segments=[])
+        with patch(
+            "utils.generation.generate",
+            new_callable=AsyncMock,
+            return_value=response,
+        ) as generate_mock:
+            await safe_generate(request)
+
+        generate_call = generate_mock.await_args
+        assert generate_call is not None
+        self.assertTrue(
+            generate_call.kwargs[
+                "share_conversation_across_channels"
+            ]
+        )
 
 
 if __name__ == "__main__":

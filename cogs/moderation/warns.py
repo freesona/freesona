@@ -32,10 +32,12 @@ async def init_db():
             )
         """)
         await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_guild_user ON warnings (guild_id, user_id)"
+            "CREATE INDEX IF NOT EXISTS idx_guild_user "
+            "ON warnings (guild_id, user_id)"
         )
         await db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_warn_id ON warnings (warn_id)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_warn_id "
+            "ON warnings (warn_id)"
         )
         await db.commit()
 
@@ -52,7 +54,9 @@ async def get_warn_count(guild_id: int, user_id: int) -> int:
         return row[0] if row else 0
 
 
-async def resolve_user(ctx, user_input: str) -> discord.User | discord.Member | None:
+async def resolve_user(
+    ctx, user_input: str
+) -> discord.User | discord.Member | None:
     """
     Resolves a user from a mention, username, or raw ID.
     Returns a Member if in guild, User if resolvable via API,
@@ -110,7 +114,9 @@ async def apply_threshold(ctx, member: discord.Member, warn_count: int):
                 f"{member.mention} has been kicked."
             )
         elif action == "ban":
-            await ctx.guild.ban(member, reason=f"Auto-threshold: {warn_count} warnings")
+            await ctx.guild.ban(
+                member, reason=f"Auto-threshold: {warn_count} warnings"
+            )
             await ctx.send(
                 f"Auto-threshold reached ({warn_count} warns): "
                 f"{member.mention} has been banned."
@@ -123,7 +129,9 @@ async def apply_threshold(ctx, member: discord.Member, warn_count: int):
             f"to {action} {member.mention}."
         )
     except discord.HTTPException as e:
-        logger.error(f"Auto-threshold failed for {member} at {warn_count} warns: {e}")
+        logger.error(
+            f"Auto-threshold failed for {member} at {warn_count} warns: {e}"
+        )
 
 
 def thresholds_to_text(thresholds: dict) -> str:
@@ -243,7 +251,9 @@ class WarnsCog(commands.Cog):
     )
     @commands.has_permissions(moderate_members=True)
     @commands.bot_has_permissions(moderate_members=True)
-    async def warn_cmd(self, ctx, member: str, *, reason: str = "No reason provided"):
+    async def warn_cmd(
+        self, ctx, member: str, *, reason: str = "No reason provided"
+    ):
         await ctx.defer()
         user = await resolve_user(ctx, member)
         if not user:
@@ -252,7 +262,9 @@ class WarnsCog(commands.Cog):
         # warn requires the user to be in the server for role hierarchy check
         guild_member = ctx.guild.get_member(user.id)
         if not guild_member:
-            await ctx.send("That user isn't in this server. You can only warn members.")
+            await ctx.send(
+                "That user isn't in this server. You can only warn members."
+            )
             return
         if guild_member == ctx.author:
             await ctx.send("You can't warn yourself.")
@@ -265,7 +277,8 @@ class WarnsCog(commands.Cog):
             and ctx.guild.owner != ctx.author
         ):
             await ctx.send(
-                "You can't warn someone with a role higher than or equal to yours."
+                "You can't warn someone with a role higher than "
+                "or equal to yours."
             )
             return
         warn_id = secrets.token_hex(4)
@@ -293,7 +306,10 @@ class WarnsCog(commands.Cog):
         dm_embed.add_field(name="Server", value=ctx.guild.name, inline=False)
         dm_embed.add_field(name="Reason", value=reason, inline=False)
         dm_embed.set_footer(
-            text=(f"Warning ID: {warn_id} • You now have {warn_count} warning(s).")
+            text=(
+                f"Warning ID: {warn_id} • You now have "
+                f"{warn_count} warning(s)."
+            )
         )
         try:
             await guild_member.send(embed=dm_embed)
@@ -343,7 +359,9 @@ class WarnsCog(commands.Cog):
         for row in rows:
             mod = ctx.guild.get_member(row["mod_id"])
             mod_name = str(mod) if mod else f"<unknown mod {row['mod_id']}>"
-            ts = datetime.fromisoformat(row["timestamp"]).strftime("%Y-%m-%d %H:%M UTC")
+            ts = datetime.fromisoformat(row["timestamp"]).strftime(
+                "%Y-%m-%d %H:%M UTC"
+            )
             embed.add_field(
                 name=f"`{row['warn_id']}` — {ts}",
                 value=f"**Reason:** {row['reason']}\n**By:** {mod_name}",
@@ -355,7 +373,9 @@ class WarnsCog(commands.Cog):
     @commands.hybrid_command(
         name="delwarn", help="Deletes a warning by its ID.", usage="<warn_id>"
     )
-    @app_commands.describe(warn_id="The warning ID to delete (get it from /warns).")
+    @app_commands.describe(
+        warn_id="The warning ID to delete (get it from /warns)."
+    )
     @commands.has_permissions(moderate_members=True)
     async def delwarn_cmd(self, ctx, warn_id: str):
         await ctx.defer()
@@ -369,7 +389,9 @@ class WarnsCog(commands.Cog):
             ) as cursor:
                 row = await cursor.fetchone()
             if not row:
-                await ctx.send(f"No warning with ID `{warn_id}` found in this server.")
+                await ctx.send(
+                    f"No warning with ID `{warn_id}` found in this server."
+                )
                 return
             await db.execute(
                 "DELETE FROM warnings WHERE warn_id = ?", (warn_id.lower(),)
@@ -377,7 +399,9 @@ class WarnsCog(commands.Cog):
             await db.commit()
         member = ctx.guild.get_member(row[1])
         member_str = str(member) if member else f"<user {row[1]}>"
-        await ctx.send(f"Warning `{warn_id}` for **{member_str}** has been deleted.")
+        await ctx.send(
+            f"Warning `{warn_id}` for **{member_str}** has been deleted."
+        )
 
     @commands.hybrid_command(
         name="clearwarns",
@@ -385,7 +409,9 @@ class WarnsCog(commands.Cog):
         usage="<member|id>",
     )
     @app_commands.describe(
-        member=("The member to clear all warnings for (mention, username, or ID)."),
+        member=(
+            "The member to clear all warnings for (mention, username, or ID)."
+        ),
     )
     @commands.has_permissions(moderate_members=True)
     async def clearwarns_cmd(self, ctx, member: str):
@@ -396,7 +422,10 @@ class WarnsCog(commands.Cog):
             return
         async with aiosqlite.connect(WARNINGS_DB) as db:
             async with db.execute(
-                ("SELECT COUNT(*) FROM warnings WHERE guild_id = ? AND user_id = ?"),
+                (
+                    "SELECT COUNT(*) FROM warnings "
+                    "WHERE guild_id = ? AND user_id = ?"
+                ),
                 (ctx.guild.id, user.id),
             ) as cursor:
                 row = await cursor.fetchone()

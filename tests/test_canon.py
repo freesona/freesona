@@ -40,7 +40,9 @@ class TestCanonDatabase(unittest.TestCase):
 
     def setUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         # Re-import to pick up new path
@@ -85,7 +87,9 @@ class TestCanonComponentCRUD(unittest.TestCase):
 
     def setUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         import utils.canon as canon_module
@@ -121,7 +125,9 @@ class TestCanonComponentCRUD(unittest.TestCase):
             assert retrieved is not None
             self.assertEqual(retrieved.component_id, "test-comp-1")
             self.assertEqual(retrieved.persona_id, TEST_PERSONA_ID)
-            self.assertEqual(retrieved.component_type, CanonComponentType.CORE_IDENTITY)
+            self.assertEqual(
+                retrieved.component_type, CanonComponentType.CORE_IDENTITY
+            )
             self.assertEqual(retrieved.content, "Test identity content")
             self.assertEqual(retrieved.explanation, "Test explanation")
 
@@ -268,7 +274,9 @@ class TestCanonSnapshots(unittest.TestCase):
 
     def setUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         import utils.canon as canon_module
@@ -370,7 +378,8 @@ class TestCanonSnapshots(unittest.TestCase):
             )
             assert restored is not None
             self.assertEqual(
-                restored.content, f"Original {CanonComponentType.CORE_IDENTITY.value}"
+                restored.content,
+                f"Original {CanonComponentType.CORE_IDENTITY.value}",
             )
 
         asyncio.run(test())
@@ -381,7 +390,9 @@ class TestCanonContextAssembly(unittest.TestCase):
 
     def setUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         import utils.canon as canon_module
@@ -450,7 +461,9 @@ class TestCanonDefaultCreation(unittest.TestCase):
 
     def setUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         import utils.canon as canon_module
@@ -540,7 +553,9 @@ class TestCanonValidation(unittest.TestCase):
             author="test",
         )
         warnings = validate_canon_component(suspicious)
-        self.assertTrue(any("Canonical Truth Invariant" in w for w in warnings))
+        self.assertTrue(
+            any("Canonical Truth Invariant" in w for w in warnings)
+        )
         # Also test other prohibited patterns
         patterns = [
             ("the user likes pizza", "User Memory violation"),
@@ -558,7 +573,9 @@ class TestCanonValidation(unittest.TestCase):
                 author="test",
             )
             warnings = validate_canon_component(comp)
-            self.assertTrue(any("Canonical Truth Invariant" in w for w in warnings))
+            self.assertTrue(
+                any("Canonical Truth Invariant" in w for w in warnings)
+            )
 
 
 class TestCanonExportImport(unittest.TestCase):
@@ -566,7 +583,9 @@ class TestCanonExportImport(unittest.TestCase):
 
     def setUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         import utils.canon as canon_module
@@ -673,7 +692,9 @@ class TestCanonConstants(unittest.TestCase):
     def test_constants_defined(self):
         """Test that all expected constants are defined."""
         self.assertEqual(len(COMPONENT_ASSEMBLY_ORDER), 6)
-        self.assertEqual(COMPONENT_ASSEMBLY_ORDER[0], CanonComponentType.CORE_IDENTITY)
+        self.assertEqual(
+            COMPONENT_ASSEMBLY_ORDER[0], CanonComponentType.CORE_IDENTITY
+        )
         self.assertEqual(
             COMPONENT_ASSEMBLY_ORDER[-1], CanonComponentType.CANON_EXPLANATIONS
         )
@@ -692,7 +713,9 @@ class TestCanonSnapshotSerialization(unittest.TestCase):
 
     def setUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         import utils.canon as canon_module

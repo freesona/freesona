@@ -16,8 +16,12 @@ logger = logging.getLogger(__name__)
 # RDF namespace constant
 RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 RSS_FEEDS_KEY = "rss_feeds"
-RSS_SEEN_KEY = "rss_seen"  # list of seen article links, persisted in config.json
-RSS_DISABLED_KEY = "rss_disabled"  # built-in feeds the user has explicitly removed
+RSS_SEEN_KEY = (
+    "rss_seen"  # list of seen article links, persisted in config.json
+)
+RSS_DISABLED_KEY = (
+    "rss_disabled"  # built-in feeds the user has explicitly removed
+)
 DEFAULT_RSS_FEEDS: dict[str, str] = {
     "bbc-world": "https://feeds.bbci.co.uk/news/world/rss.xml",
     "bbc-tech": "https://feeds.bbci.co.uk/news/technology/rss.xml",
@@ -54,7 +58,9 @@ class _ImageURLExtractor(HTMLParser):
         super().__init__()
         self.image_url: str = ""
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
         if tag.lower() == "img" and not self.image_url:
             for name, value in attrs:
                 if name == "src" and value:
@@ -284,7 +290,9 @@ def _is_reply(title: str) -> bool:
 # ---------------------------------------------------------------------------
 # Format-specific parsers
 # ---------------------------------------------------------------------------
-def _parse_rdf_feed(root: ElementTree.Element, limit: int = 5) -> list[FeedItem]:
+def _parse_rdf_feed(
+    root: ElementTree.Element, limit: int = 5
+) -> list[FeedItem]:
     """Parse RDF (RSS 1.0) format feeds."""
     channel = next((c for c in root if _local_tag(c) == "channel"), None)
     if channel is None:
@@ -319,8 +327,12 @@ def _parse_rdf_feed(root: ElementTree.Element, limit: int = 5) -> list[FeedItem]
             ("date", "dc:date", "dc.date", "pubdate", "published", "updated"),
         )
         summary = child_text(child, ("description", "summary", "content"))
-        author = child_text(child, ("creator", "author", "dc:creator", "dc.creator"))
-        items.append(_build_item(child, title, link, published, summary, author))
+        author = child_text(
+            child, ("creator", "author", "dc:creator", "dc.creator")
+        )
+        items.append(
+            _build_item(child, title, link, published, summary, author)
+        )
     return items
 
 
@@ -332,7 +344,9 @@ def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
         return _parse_rdf_feed(root, limit)
     # RSS 2.0 uses <item>, Atom uses <entry>
     if root_tag == "rss":
-        channel = next((c for c in root.iter() if _local_tag(c) == "channel"), root)
+        channel = next(
+            (c for c in root.iter() if _local_tag(c) == "channel"), root
+        )
         nodes = [c for c in channel if _local_tag(c) == "item"]
     else:
         nodes = [c for c in root if _local_tag(c) == "entry"]
@@ -347,5 +361,7 @@ def parse_feed(xml_text: str, limit: int = 5) -> list[FeedItem]:
         published = child_text(node, ("pubdate", "published", "updated"))
         summary = child_text(node, ("description", "summary", "content"))
         author = child_text(node, ("creator", "author"))
-        items.append(_build_item(node, title, link, published, summary, author))
+        items.append(
+            _build_item(node, title, link, published, summary, author)
+        )
     return items

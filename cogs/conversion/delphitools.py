@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
-# cogs/conversion/delphitools.py: Delphitools CLI integration for file conversion
+# cogs/conversion/delphitools.py: Delphitools CLI integration for file
+# conversion
 
 
 import asyncio
 import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -13,12 +15,13 @@ from discord import app_commands
 from discord.ext import commands
 
 from utils.config import load_config
-from utils.generation import extract_attachments
+from utils.discord_adapter import extract_attachments
 
 log = logging.getLogger(__name__)
 
 
-# Configurable values loaded from config.json (settable via /config slash commands)
+# Configurable values loaded from config.json (settable via /config
+# slash commands)
 
 
 def _get_subprocess_timeout() -> int:
@@ -33,11 +36,21 @@ def _get_limit_bytes() -> int:
     )  # 10 MB default
 
 
+def _get_delphitools_executable() -> str:
+    return os.getenv("DELPHITOOLS_EXECUTABLE", "dt").strip() or "dt"
+
+
 async def _run(*cmd: str, timeout: int | None = None) -> int:
-    """Run a subprocess and return its exit code. Raises TimeoutError on timeout."""
+    """Run a subprocess and return its exit code.
+
+    Raises TimeoutError on timeout.
+    """
 
     if timeout is None:
         timeout = _get_subprocess_timeout()
+
+    if cmd and cmd[0] == "dt":
+        cmd = (_get_delphitools_executable(), *cmd[1:])
 
     proc = await asyncio.create_subprocess_exec(*cmd)
 
@@ -57,32 +70,50 @@ async def _run(*cmd: str, timeout: int | None = None) -> int:
     return return_code
 
 
-async def _run_capture(*cmd: str, timeout: int | None = None) -> tuple[int, str]:
-    """Run a subprocess, capture stdout, and return (exit_code, stdout_text)."""
+async def _run_capture(
+    *cmd: str, timeout: int | None = None
+) -> tuple[int, str]:
+    """Run a subprocess and return its exit code and relevant output.
+
+    On failure, return stderr when available so callers can report diagnostics.
+    """
 
     if timeout is None:
         timeout = _get_subprocess_timeout()
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    if cmd and cmd[0] == "dt":
+        cmd = (_get_delphitools_executable(), *cmd[1:])
 
     try:
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "Cannot start the Delphitools CLI. Set "
+            "`DELPHITOOLS_EXECUTABLE` to its executable path or add it to the "
+            "bot process PATH."
+        ) from e
+
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
 
     except asyncio.TimeoutError:
         proc.kill()
-
-        stdout = b""
+        await proc.communicate()
+        raise
 
     return_code = proc.returncode
 
     if return_code is None:
         raise RuntimeError("Subprocess finished without an exit code.")
 
-    return return_code, stdout.decode().strip()
+    output = stderr if return_code != 0 and stderr else stdout
+    return return_code, output.decode().strip()
 
 
 class Delphitools(commands.Cog):
@@ -108,7 +139,9 @@ class Delphitools(commands.Cog):
 
     @commands.hybrid_command(
         name="imgconvert",
-        description="Convert image formats (PNG, JPG, WebP, etc.) with optional resize",
+        description=(
+            "Convert image formats (PNG, JPG, WebP, etc.) with optional resize"
+        ),
     )
     @app_commands.describe(
         attachment="The image to convert",
@@ -145,8 +178,9 @@ class Delphitools(commands.Cog):
 
         # Check if it's an image
 
-        if not attachment.content_type or not attachment.content_type.startswith(
-            "image/"
+        if (
+            not attachment.content_type
+            or not attachment.content_type.startswith("image/")
         ):
             await ctx.send("Please attach a valid image file.")
 
@@ -174,9 +208,13 @@ class Delphitools(commands.Cog):
 
                     # Save the input image
 
-                    input_file = tmp_path / f"input{Path(attachment.filename).suffix}"
+                    input_file = (
+                        tmp_path / f"input{Path(attachment.filename).suffix}"
+                    )
 
-                    await asyncio.to_thread(Path(input_file).write_bytes, image_data)
+                    await asyncio.to_thread(
+                        Path(input_file).write_bytes, image_data
+                    )
 
                     # Determine output filename
 
@@ -207,7 +245,8 @@ class Delphitools(commands.Cog):
 
                     if exit_code != 0:
                         await ctx.send(
-                            f"❌ **Conversion failed.** delphitools exited with code {exit_code}."
+                            f"❌ **Conversion failed.** delphitools exited "
+                            f"with code {exit_code}."
                         )
 
                         if stdout:
@@ -219,7 +258,8 @@ class Delphitools(commands.Cog):
 
                     if not output_file.exists():
                         await ctx.send(
-                            "❌ **Conversion failed.** Output file was not generated."
+                            "❌ **Conversion failed.** Output file was "
+                            "not generated."
                         )
 
                         return
@@ -230,7 +270,13 @@ class Delphitools(commands.Cog):
 
                     if file_size > self.LIMIT_BYTES:
                         await ctx.send(
-                            f"⚠️ **Conversion successful but file too large.** The converted image is {file_size / (1024 * 1024):.1f} MB, which exceeds the {self.LIMIT_BYTES / (1024 * 1024):.0f} MB Discord limit."
+                            f"⚠️ **Conversion successful but "
+                            "file too large.** "
+                            f"The converted image is "
+                            f"{file_size / (1024 * 1024):.1f} MB, which "
+                            "exceeds the "
+                            f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
+                            "Discord limit."
                         )
 
                         return
@@ -247,7 +293,8 @@ class Delphitools(commands.Cog):
 
             except asyncio.TimeoutError:
                 await ctx.send(
-                    "❌ **Conversion timed out.** The image conversion took too long."
+                    "❌ **Conversion timed out.** The image conversion "
+                    "took too long."
                 )
 
             except Exception as e:
@@ -263,7 +310,10 @@ class Delphitools(commands.Cog):
         attachment="The image to watermark",
         text="Watermark text",
         opacity="Opacity percentage (0-100, default: 50)",
-        position="Position of watermark (top-left, top-right, bottom-left, bottom-right, center)",
+        position=(
+            "Position of watermark (top-left, top-right, bottom-left, "
+            "bottom-right, center)"
+        ),
     )
     @app_commands.choices(
         position=[
@@ -292,8 +342,9 @@ class Delphitools(commands.Cog):
 
         # Check if it's an image
 
-        if not attachment.content_type or not attachment.content_type.startswith(
-            "image/"
+        if (
+            not attachment.content_type
+            or not attachment.content_type.startswith("image/")
         ):
             await ctx.send("Please attach a valid image file.")
 
@@ -328,9 +379,13 @@ class Delphitools(commands.Cog):
 
                     # Save the input image
 
-                    input_file = tmp_path / f"input{Path(attachment.filename).suffix}"
+                    input_file = (
+                        tmp_path / f"input{Path(attachment.filename).suffix}"
+                    )
 
-                    await asyncio.to_thread(Path(input_file).write_bytes, image_data)
+                    await asyncio.to_thread(
+                        Path(input_file).write_bytes, image_data
+                    )
 
                     # Determine output filename
 
@@ -380,7 +435,8 @@ class Delphitools(commands.Cog):
 
                     if not output_file.exists():
                         await ctx.send(
-                            "❌ **Watermarking failed.** Output file was not generated."
+                            "❌ **Watermarking failed.** Output file was "
+                            "not generated."
                         )
 
                         return
@@ -391,9 +447,13 @@ class Delphitools(commands.Cog):
 
                     if file_size > self.LIMIT_BYTES:
                         await ctx.send(
-                            f"⚠️ **Watermarking successful but file too large. "
-                            f"The watermarked image is {file_size / (1024 * 1024):.1f} MB, "
-                            f"which exceeds the {self.LIMIT_BYTES / (1024 * 1024):.0f} MB Discord limit."
+                            f"⚠️ **Watermarking successful but "
+                            "file too large. "
+                            f"The watermarked image is "
+                            f"{file_size / (1024 * 1024):.1f} MB, "
+                            "which exceeds the "
+                            f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
+                            "Discord limit."
                         )
 
                         return
@@ -410,7 +470,8 @@ class Delphitools(commands.Cog):
 
             except asyncio.TimeoutError:
                 await ctx.send(
-                    "❌ **Watermarking timed out.** The operation took too long."
+                    "❌ **Watermarking timed out.** The operation took "
+                    "too long."
                 )
 
             except Exception as e:
@@ -515,7 +576,8 @@ class Delphitools(commands.Cog):
 
                     if not output_file.exists():
                         await ctx.send(
-                            "❌ **Palette generation failed.** Output file was not generated."
+                            "❌ **Palette generation failed.** Output file "
+                            "was not generated."
                         )
 
                         return
@@ -526,9 +588,13 @@ class Delphitools(commands.Cog):
 
                     if file_size > self.LIMIT_BYTES:
                         await ctx.send(
-                            f"⚠️ **Palette generation successful but file too large. "
-                            f"The palette is {file_size / (1024 * 1024):.1f} MB, "
-                            f"which exceeds the {self.LIMIT_BYTES / (1024 * 1024):.0f} MB Discord limit."
+                            f"⚠️ **Palette generation successful but "
+                            "file too large. "
+                            f"The palette is "
+                            f"{file_size / (1024 * 1024):.1f} MB, "
+                            "which exceeds the "
+                            f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
+                            "Discord limit."
                         )
 
                         return
@@ -545,7 +611,8 @@ class Delphitools(commands.Cog):
 
             except asyncio.TimeoutError:
                 await ctx.send(
-                    "❌ **Palette generation timed out.** The operation took too long."
+                    "❌ **Palette generation timed out.** The operation "
+                    "took too long."
                 )
 
             except Exception as e:
@@ -559,7 +626,10 @@ class Delphitools(commands.Cog):
     )
     @app_commands.describe(
         attachment="The image to process",
-        type="Type of colorblindness to simulate (protanopia, deuteranopia, tritanopia, achromatopsia)",
+        type=(
+            "Type of colorblindness to simulate "
+            "(protanopia, deuteranopia, tritanopia, achromatopsia)"
+        ),
     )
     @app_commands.choices(
         type=[
@@ -585,8 +655,9 @@ class Delphitools(commands.Cog):
 
         # Check if it's an image
 
-        if not attachment.content_type or not attachment.content_type.startswith(
-            "image/"
+        if (
+            not attachment.content_type
+            or not attachment.content_type.startswith("image/")
         ):
             await ctx.send("Please attach a valid image file.")
 
@@ -614,14 +685,19 @@ class Delphitools(commands.Cog):
 
                     # Save the input image
 
-                    input_file = tmp_path / f"input{Path(attachment.filename).suffix}"
+                    input_file = (
+                        tmp_path / f"input{Path(attachment.filename).suffix}"
+                    )
 
-                    await asyncio.to_thread(Path(input_file).write_bytes, image_data)
+                    await asyncio.to_thread(
+                        Path(input_file).write_bytes, image_data
+                    )
 
                     # Determine output filename
 
                     output_filename = (
-                        f"colorblind_{type}_{Path(attachment.filename).stem}.png"
+                        f"colorblind_{type}_"
+                        f"{Path(attachment.filename).stem}.png"
                     )
 
                     output_file = tmp_path / output_filename
@@ -645,7 +721,8 @@ class Delphitools(commands.Cog):
 
                     if exit_code != 0:
                         await ctx.send(
-                            f"❌ **Colorblind simulation failed.** delphitools exited with code {exit_code}."
+                            f"❌ **Colorblind simulation failed.** "
+                            f"delphitools exited with code {exit_code}."
                         )
 
                         if stdout:
@@ -657,7 +734,8 @@ class Delphitools(commands.Cog):
 
                     if not output_file.exists():
                         await ctx.send(
-                            "❌ **Colorblind simulation failed.** Output file was not generated."
+                            "❌ **Colorblind simulation failed.** "
+                            "Output file was not generated."
                         )
 
                         return
@@ -668,9 +746,13 @@ class Delphitools(commands.Cog):
 
                     if file_size > self.LIMIT_BYTES:
                         await ctx.send(
-                            f"⚠️ **Colorblind simulation successful but file too large.** "
-                            f"The processed image is {file_size / (1024 * 1024):.1f} MB, "
-                            f"which exceeds the {self.LIMIT_BYTES / (1024 * 1024):.0f} MB Discord limit."
+                            f"⚠️ **Colorblind simulation successful but "
+                            "file too large.** "
+                            f"The processed image is "
+                            f"{file_size / (1024 * 1024):.1f} MB, "
+                            f"which exceeds the "
+                            f"{self.LIMIT_BYTES / (1024 * 1024):.0f} MB "
+                            "Discord limit."
                         )
 
                         return
@@ -680,14 +762,16 @@ class Delphitools(commands.Cog):
                     await ctx.send(
                         content=(
                             f"✅ **Colorblind simulation completed** "
-                            f"({type} simulation applied to {attachment.filename})"
+                            f"({type} simulation applied to "
+                            f"{attachment.filename})"
                         ),
                         file=discord.File(str(output_file)),
                     )
 
             except asyncio.TimeoutError:
                 await ctx.send(
-                    "❌ **Colorblind simulation timed out.** The operation took too long."
+                    "❌ **Colorblind simulation timed out.** The operation "
+                    "took too long."
                 )
 
             except Exception as e:
@@ -721,7 +805,8 @@ class Delphitools(commands.Cog):
 
                     if exit_code != 0:
                         await ctx.send(
-                            f"❌ ❌ QR generation failed.** delphitools exited with code {exit_code}."
+                            f"❌ ❌ QR generation failed.** delphitools "
+                            f"exited with code {exit_code}."
                         )
 
                         if stdout:
@@ -737,7 +822,9 @@ class Delphitools(commands.Cog):
                         return
 
                     if output_file.stat().st_size > self.LIMIT_BYTES:
-                        await ctx.send("⚠️ QR image exceeds Discord size limit.")
+                        await ctx.send(
+                            "⚠️ QR image exceeds Discord size limit."
+                        )
 
                         return
 
@@ -767,7 +854,9 @@ class Delphitools(commands.Cog):
         ]
     )
     @commands.cooldown(1, 30, commands.BucketType.user)
-    async def barcodegen(self, ctx: commands.Context, text: str, type: str) -> None:
+    async def barcodegen(
+        self, ctx: commands.Context, text: str, type: str
+    ) -> None:
         """Generate barcode."""
 
         async with ctx.typing():
@@ -777,7 +866,15 @@ class Delphitools(commands.Cog):
 
                     output_file = tmp_path / f"barcode.{type}.png"
 
-                    cmd = ["dt", "barcode", type, text, "--output", str(output_file)]
+                    cmd = [
+                        "dt",
+                        "barcode",
+                        text,
+                        "--format",
+                        type,
+                        "--output",
+                        str(output_file),
+                    ]
 
                     exit_code, stdout = await _run_capture(
                         *cmd, timeout=_get_subprocess_timeout()
@@ -785,7 +882,8 @@ class Delphitools(commands.Cog):
 
                     if exit_code != 0:
                         await ctx.send(
-                            f"❌ **Barcode generation failed.** delphitools exited with code {exit_code}."
+                            f"❌ **Barcode generation failed.** delphitools "
+                            f"exited with code {exit_code}."
                         )
 
                         if stdout:
@@ -795,13 +893,16 @@ class Delphitools(commands.Cog):
 
                     if not output_file.exists():
                         await ctx.send(
-                            "❌ **Barcode generation failed.** Output not created."
+                            "❌ **Barcode generation failed.** "
+                            "Output not created."
                         )
 
                         return
 
                     if output_file.stat().st_size > self.LIMIT_BYTES:
-                        await ctx.send("⚠️ Barcode image exceeds Discord size limit.")
+                        await ctx.send(
+                            "⚠️ Barcode image exceeds Discord size limit."
+                        )
 
                         return
 
@@ -840,7 +941,8 @@ class Delphitools(commands.Cog):
 
                 if exit_code != 0:
                     await ctx.send(
-                        f"❌ **Unit conversion failed.** delphitools exited with code {exit_code}."
+                        f"❌ **Unit conversion failed.** delphitools "
+                        f"exited with code {exit_code}."
                     )
 
                     if stdout:
@@ -874,7 +976,9 @@ class Delphitools(commands.Cog):
         ]
     )
     @commands.cooldown(1, 30, commands.BucketType.user)
-    async def encode(self, ctx: commands.Context, data: str, encoding: str) -> None:
+    async def encode(
+        self, ctx: commands.Context, data: str, encoding: str
+    ) -> None:
         """Encode data."""
 
         async with ctx.typing():
@@ -887,7 +991,8 @@ class Delphitools(commands.Cog):
 
                 if exit_code != 0:
                     await ctx.send(
-                        f"❌ **Encode failed.** delphitools exited with code {exit_code}."
+                        f"❌ **Encode failed.** delphitools "
+                        f"exited with code {exit_code}."
                     )
 
                     if stdout:
@@ -921,7 +1026,9 @@ class Delphitools(commands.Cog):
         ]
     )
     @commands.cooldown(1, 30, commands.BucketType.user)
-    async def decode(self, ctx: commands.Context, data: str, encoding: str) -> None:
+    async def decode(
+        self, ctx: commands.Context, data: str, encoding: str
+    ) -> None:
         """Decode data."""
 
         async with ctx.typing():
@@ -934,7 +1041,8 @@ class Delphitools(commands.Cog):
 
                 if exit_code != 0:
                     await ctx.send(
-                        f"❌ **Decode failed.** delphitools exited with code {exit_code}."
+                        f"❌ **Decode failed.** delphitools "
+                        f"exited with code {exit_code}."
                     )
 
                     if stdout:
@@ -968,7 +1076,9 @@ class Delphitools(commands.Cog):
         ]
     )
     @commands.cooldown(1, 30, commands.BucketType.user)
-    async def hash(self, ctx: commands.Context, data: str, algorithm: str) -> None:
+    async def hash(
+        self, ctx: commands.Context, data: str, algorithm: str
+    ) -> None:
         """Hash data."""
 
         async with ctx.typing():
@@ -981,7 +1091,8 @@ class Delphitools(commands.Cog):
 
                 if exit_code != 0:
                     await ctx.send(
-                        f"❌ **Hash failed.** delphitools exited with code {exit_code}."
+                        f"❌ **Hash failed.** delphitools "
+                        f"exited with code {exit_code}."
                     )
 
                     if stdout:

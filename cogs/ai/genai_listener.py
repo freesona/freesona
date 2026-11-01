@@ -3,16 +3,18 @@
 # message handling.
 import asyncio
 import time
-from typing import TypeAlias, TypedDict
+from typing import TypeAlias, TypedDict, cast
 
 import discord
 from discord.ext import commands
 
 from utils.config import load_config
 from utils.conversation import start_cleanup_task, stop_cleanup_task
-from utils.generation import extract_attachments, safe_generate, send_response
+from utils.discord_adapter import extract_attachments, send_response
+from utils.generation import safe_generate
 from utils.guild_world import DiscordGuildWorldAccessor
 from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
+from utils.interaction import InteractionRequest
 from utils.memory import extract_and_store_fact
 from utils.persona import CURRENT_PERSONA, CURRENT_PERSONA_ID
 from utils.roles import resolve_message_role
@@ -76,7 +78,9 @@ def _extract_embeds(embeds: list[discord.Embed]) -> list[str]:
     return embed_texts
 
 
-def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDict:
+def build_payload(
+    message: discord.Message, role: str, bot_id: int
+) -> PayloadDict:
     """
     Build a standardized payload from a Discord message.
     Eliminates duplicated payload construction between
@@ -104,7 +108,9 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
         embed_texts = _extract_embeds(message.embeds)
         if embed_texts:
             payload["embeds"] = embed_texts
-    if message.reference and isinstance(message.reference.resolved, discord.Message):
+    if message.reference and isinstance(
+        message.reference.resolved, discord.Message
+    ):
         ref = message.reference.resolved
         reply_payload: ReplyPayload = {
             "author": ref.author.display_name,
@@ -121,6 +127,38 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
                 reply_payload["embeds"] = embed_texts
         payload["reply"] = reply_payload
     return payload
+
+
+def _build_interaction_request(
+    payload: PayloadDict,
+    *,
+    current_persona: str,
+    persona_id: str,
+    channel_id: int,
+    guild_id: int,
+    user_id: int,
+    message_id: int,
+    username: str,
+    attachments: list[tuple[bytes, str]],
+    share_conversation_across_channels: bool = False,
+) -> InteractionRequest:
+    return InteractionRequest(
+        content=cast(str, payload["content"]),
+        current_persona=current_persona,
+        channel_id=channel_id,
+        guild_id=guild_id,
+        user_id=user_id,
+        share_conversation_across_channels=(
+            share_conversation_across_channels
+        ),
+        message_id=message_id,
+        username=username,
+        attachments=attachments,
+        persona_id=persona_id,
+        mentions=cast(list[MentionPayload], payload["mentions"]),
+        reply=cast(ReplyPayload | None, payload["reply"]),
+        embeds=cast(list[str], payload.get("embeds", [])),
+    )
 
 
 class GenAIListenerCog(commands.Cog):
@@ -182,7 +220,9 @@ class GenAIListenerCog(commands.Cog):
         chat_channel_id = config.get("chat_channel_id")
         if chat_channel_id and message.channel.id == chat_channel_id:
             response_mode = config.get("conversation_response_mode", "all")
-            if not should_respond_in_chat_channel(message, bot_user, response_mode):
+            if not should_respond_in_chat_channel(
+                message, bot_user, response_mode
+            ):
                 return
             user_id = message.author.id
             channel_snapshot = message.channel
@@ -197,7 +237,9 @@ class GenAIListenerCog(commands.Cog):
             async def debounced_respond(_key=_debounce_key):
                 try:
                     current_config = load_config()
-                    debounce_seconds = current_config.get("debounce_seconds", 1.2)
+                    debounce_seconds = current_config.get(
+                        "debounce_seconds", 1.2
+                    )
                     await asyncio.sleep(debounce_seconds)
                     # Check bot permissions before processing
                     guild = channel_snapshot.guild
@@ -210,8 +252,10 @@ class GenAIListenerCog(commands.Cog):
                     ):
                         return
                     async with channel_snapshot.typing():
-                        attachments = await extract_attachments(message_snapshot)
-                        response = await safe_generate(
+                        attachments = await extract_attachments(
+                            message_snapshot
+                        )
+                        request = _build_interaction_request(
                             payload,
                             current_persona=CURRENT_PERSONA,
                             persona_id=CURRENT_PERSONA_ID,
@@ -221,15 +265,24 @@ class GenAIListenerCog(commands.Cog):
                             message_id=message_snapshot.id,
                             username=username_snapshot,
                             attachments=attachments,
-                            guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
                         )
-                        reply_target = get_reply_target(message_snapshot, self.bot.user)
+                        response = await safe_generate(
+                            request,
+                            guild_world_accessor=DiscordGuildWorldAccessor(
+                                self.bot
+                            ),
+                        )
+                        reply_target = get_reply_target(
+                            message_snapshot, self.bot.user
+                        )
                         await send_response(
                             response, channel_snapshot, reply_to=reply_target
                         )
                     # Extract and store long-term user facts after responding
                     try:
-                        provider_name = current_config.get("provider", "gemini")
+                        provider_name = current_config.get(
+                            "provider", "gemini"
+                        )
                         model_name = current_config.get(
                             "provider_model"
                         ) or current_config.get(
@@ -248,7 +301,8 @@ class GenAIListenerCog(commands.Cog):
                         )
                     except (RuntimeError, ValueError, OSError) as fact_exc:
                         logger.warning(
-                            f"Fact extraction failed for user {user_id}: {fact_exc}"
+                            f"Fact extraction failed for user {user_id}: "
+                            f"{fact_exc}"
                         )
                 except asyncio.CancelledError:
                     pass
@@ -259,12 +313,15 @@ class GenAIListenerCog(commands.Cog):
                     discord.DiscordException,
                 ) as exc:
                     logger.error(
-                        f"Error in debounced response for user {user_id}: {exc}"
+                        f"Error in debounced response for user {user_id}: "
+                        f"{exc}"
                     )
                 finally:
                     _pending_responses.pop(_key, None)
 
-            _pending_responses[_debounce_key] = asyncio.create_task(debounced_respond())
+            _pending_responses[_debounce_key] = asyncio.create_task(
+                debounced_respond()
+            )
             return
         # -------------------------------------------------------------------
         # Autonomy
@@ -280,30 +337,41 @@ class GenAIListenerCog(commands.Cog):
             threshold = FREQUENCY_THRESHOLD.get(freq_setting, 0.50)
             now = time.time()
             last_channel = _autonomy_cooldown.get(message.channel.id, 0)
-            autonomy_cooldown_seconds = config.get("autonomy_cooldown_seconds", 120)
+            autonomy_cooldown_seconds = config.get(
+                "autonomy_cooldown_seconds", 120
+            )
             autonomy_user_cooldown = config.get("autonomy_user_cooldown", 60)
             last_user = _autonomy_user_cooldown.get(message.author.id, 0)
             channel_ready = now - last_channel > autonomy_cooldown_seconds
             user_ready = now - last_user > autonomy_user_cooldown
             if channel_ready and user_ready:
                 intent = evaluate_intent(message, self.bot.user, False)
-                if intent.intent != INTENT_IGNORE and intent.confidence >= threshold:
+                if (
+                    intent.intent != INTENT_IGNORE
+                    and intent.confidence >= threshold
+                ):
                     _autonomy_cooldown[message.channel.id] = now
                     _autonomy_user_cooldown[message.author.id] = now
                     autonomy_payload = build_payload(message, role, bot_id)
                     async with message.channel.typing():
                         attachments = await extract_attachments(message)
-                        response = await safe_generate(
+                        request = _build_interaction_request(
                             autonomy_payload,
                             current_persona=CURRENT_PERSONA,
                             persona_id=CURRENT_PERSONA_ID,
                             channel_id=message.channel.id,
                             guild_id=message.guild.id,
                             user_id=message.author.id,
+                            share_conversation_across_channels=True,
                             message_id=message.id,
                             username=message.author.display_name,
                             attachments=attachments,
-                            guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
+                        )
+                        response = await safe_generate(
+                            request,
+                            guild_world_accessor=DiscordGuildWorldAccessor(
+                                self.bot
+                            ),
                         )
                         reply_target = get_reply_target(message, self.bot.user)
                         await send_response(
@@ -312,7 +380,9 @@ class GenAIListenerCog(commands.Cog):
                     # Extract and store long-term user facts after responding
                     try:
                         current_config = load_config()
-                        provider_name = current_config.get("provider", "gemini")
+                        provider_name = current_config.get(
+                            "provider", "gemini"
+                        )
                         model_name = current_config.get(
                             "provider_model"
                         ) or current_config.get(

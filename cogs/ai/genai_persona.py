@@ -91,13 +91,16 @@ class GenAIPersonaCog(commands.Cog):
         import utils.persona as p
 
         if p.PERSONA_LOCKED:
-            await ctx.send("Persona is locked.", ephemeral=bool(ctx.interaction))
+            await ctx.send(
+                "Persona is locked.", ephemeral=bool(ctx.interaction)
+            )
             return
         profiles = load_profiles()
         key = name.lower()
         if key not in profiles:
             await ctx.send(
-                f"No profile named `{key}`. Use `/personalist` to see saved profiles."
+                f"No profile named `{key}`. Use `/personalist` to see "
+                "saved profiles."
             )
             return
         loaded = profiles[key]
@@ -109,7 +112,9 @@ class GenAIPersonaCog(commands.Cog):
             p.CURRENT_PERSONA = assemble_persona(p.PERSONA_DATA)
         p.CURRENT_PERSONA_ID = key
         save_persona_json(p.PERSONA_DATA)
-        await ctx.send(f"Loaded persona `{key}`.", ephemeral=bool(ctx.interaction))
+        await ctx.send(
+            f"Loaded persona `{key}`.", ephemeral=bool(ctx.interaction)
+        )
 
     @commands.hybrid_command(
         name="personalist",
@@ -139,7 +144,9 @@ class GenAIPersonaCog(commands.Cog):
             return
         del profiles[key]
         save_profiles(profiles)
-        await ctx.send(f"Deleted profile `{key}`.", ephemeral=bool(ctx.interaction))
+        await ctx.send(
+            f"Deleted profile `{key}`.", ephemeral=bool(ctx.interaction)
+        )
 
     # -------------------------------------------------------------------
     # /debugpersona
@@ -153,16 +160,22 @@ class GenAIPersonaCog(commands.Cog):
     async def debug_persona(self, ctx: commands.Context):
         import utils.persona as p
 
-        last = LAST_DEBUG.get(ctx.channel.id, "*(no prompt sent in this channel yet)*")
+        last = LAST_DEBUG.get(
+            ctx.channel.id, "*(no prompt sent in this channel yet)*"
+        )
         locked = "Yes" if p.PERSONA_LOCKED else "No"
         legacy = "Yes — migrate via `/setpersona`" if LEGACY_DETECTED else "No"
         config = load_config()
         autonomy_status = "On" if config.get("autonomy", False) else "Off"
         autonomy_freq = config.get("autonomy_frequency", "default")
         response_mode = config.get("conversation_response_mode", "all")
-        embed = discord.Embed(title="Persona Debug", color=discord.Color.yellow())
+        embed = discord.Embed(
+            title="Persona Debug", color=discord.Color.yellow()
+        )
         embed.add_field(name="Locked", value=locked, inline=True)
-        embed.add_field(name="Provider", value=get_provider_name(), inline=True)
+        embed.add_field(
+            name="Provider", value=get_provider_name(), inline=True
+        )
         embed.add_field(name="Model", value=get_model_name(), inline=True)
         embed.add_field(name="Legacy Mode", value=legacy, inline=True)
         embed.add_field(

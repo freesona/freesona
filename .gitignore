@@ -39,6 +39,10 @@ ATTRIBUTION_FIXES.md
 logs/
 *.log
 
+# Generated tool output
+.manus/
+.work/
+
 # Local/internal notes (optional)
 docs/internal/
 
@@ -50,6 +54,7 @@ Thumbs.db
 config.json
 persona.json
 .chroma/
+.ua/
 
 # IDE/editor
 .vscode/
@@ -113,3 +118,4 @@ test_*.txt
 .junie/skills/mintlify/SKILL.md
 .agents/skills/mintlify/SKILL.md
 skills-lock.json
+/outputs/*audit*

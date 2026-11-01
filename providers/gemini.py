@@ -42,7 +42,9 @@ class GeminiProvider(BaseProvider):
 
         # Build user text
 
-        user_text = format_user_text(user_prompt, instruction_prefix, username, user_id)
+        user_text = format_user_text(
+            user_prompt, instruction_prefix, username, user_id
+        )
 
         # Get previous interaction ID from extra_payload
 
@@ -82,7 +84,9 @@ class GeminiProvider(BaseProvider):
             interaction_kwargs["system_instruction"] = system_prompt
 
         if previous_interaction_id:
-            interaction_kwargs["previous_interaction_id"] = previous_interaction_id
+            interaction_kwargs["previous_interaction_id"] = (
+                previous_interaction_id
+            )
 
         response = client.interactions.create(**interaction_kwargs)
 

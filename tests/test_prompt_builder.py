@@ -109,12 +109,20 @@ class TestPromptBuilderArchitecture(unittest.TestCase):
         self.assertEqual(mem_meta["priority"], ProviderPriority.USER_MEMORY)
         self.assertEqual(mem_meta["mutability"], Mutability.MUTABLE.value)
         # Check character_memory provider metadata (mutable)
-        char_meta = next(m for m in metadata if m["name"] == "character_memory")
-        self.assertEqual(char_meta["priority"], ProviderPriority.CHARACTER_MEMORY)
+        char_meta = next(
+            m for m in metadata if m["name"] == "character_memory"
+        )
+        self.assertEqual(
+            char_meta["priority"], ProviderPriority.CHARACTER_MEMORY
+        )
         self.assertEqual(char_meta["mutability"], Mutability.MUTABLE.value)
         # Check persona_knowledge_base provider metadata (immutable)
-        kb_meta = next(m for m in metadata if m["name"] == "persona_knowledge_base")
-        self.assertEqual(kb_meta["priority"], ProviderPriority.PERSONA_KNOWLEDGE_BASE)
+        kb_meta = next(
+            m for m in metadata if m["name"] == "persona_knowledge_base"
+        )
+        self.assertEqual(
+            kb_meta["priority"], ProviderPriority.PERSONA_KNOWLEDGE_BASE
+        )
         self.assertEqual(kb_meta["mutability"], Mutability.IMMUTABLE.value)
 
 
@@ -136,13 +144,21 @@ class TestContextBlock(unittest.TestCase):
 
     def test_is_empty_property(self):
         """is_empty should return True for empty/whitespace content."""
-        self.assertTrue(ContextBlock("a", 1, Mutability.IMMUTABLE, "").is_empty)
-        self.assertTrue(ContextBlock("a", 1, Mutability.IMMUTABLE, "   ").is_empty)
-        self.assertFalse(ContextBlock("a", 1, Mutability.IMMUTABLE, "content").is_empty)
+        self.assertTrue(
+            ContextBlock("a", 1, Mutability.IMMUTABLE, "").is_empty
+        )
+        self.assertTrue(
+            ContextBlock("a", 1, Mutability.IMMUTABLE, "   ").is_empty
+        )
+        self.assertFalse(
+            ContextBlock("a", 1, Mutability.IMMUTABLE, "content").is_empty
+        )
 
     def test_len(self):
         """len() should return content length."""
-        self.assertEqual(len(ContextBlock("a", 1, Mutability.IMMUTABLE, "abc")), 3)
+        self.assertEqual(
+            len(ContextBlock("a", 1, Mutability.IMMUTABLE, "abc")), 3
+        )
 
 
 class TestSystemContextProvider(unittest.IsolatedAsyncioTestCase):
@@ -158,7 +174,9 @@ class TestSystemContextProvider(unittest.IsolatedAsyncioTestCase):
         provider = SystemContextProvider()
         context = PromptBuildContext(
             apply_persona=True,
-            persona_data={"system_instructions": "You are a helpful assistant."},
+            persona_data={
+                "system_instructions": "You are a helpful assistant."
+            },
         )
         result = await provider.build(context)
         self.assertIsInstance(result, ContextBlock)
@@ -231,9 +249,15 @@ class TestPersonaContextProvider(unittest.IsolatedAsyncioTestCase):
         result = await provider.build(context)
         # Should contain all four fields in correct XML format
         self.assertIn("<role>\nFriendly and helpful\n</role>", result.content)
-        self.assertIn("<background>\nBorn in a lab\n</background>", result.content)
-        self.assertIn("<beliefs>\nKnowledge is power\n</beliefs>", result.content)
-        self.assertIn("<language>\nCasual with emojis\n</language>", result.content)
+        self.assertIn(
+            "<background>\nBorn in a lab\n</background>", result.content
+        )
+        self.assertIn(
+            "<beliefs>\nKnowledge is power\n</beliefs>", result.content
+        )
+        self.assertIn(
+            "<language>\nCasual with emojis\n</language>", result.content
+        )
         # System instructions should NOT be here
         self.assertNotIn("system_instructions", result.content)
         # Order should match ASSEMBLY_ORDER: core, background, beliefs,
@@ -278,7 +302,9 @@ class TestConversationHistoryProvider(unittest.IsolatedAsyncioTestCase):
     def test_name_and_priority(self):
         provider = ConversationHistoryProvider()
         self.assertEqual(provider.name, "conversation_history")
-        self.assertEqual(provider.priority, ProviderPriority.CONVERSATION_HISTORY)
+        self.assertEqual(
+            provider.priority, ProviderPriority.CONVERSATION_HISTORY
+        )
         self.assertEqual(provider.mutability, Mutability.MUTABLE)
 
     async def test_build_returns_empty_when_missing_context(self):
@@ -328,6 +354,26 @@ class TestConversationHistoryProvider(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.mutability, Mutability.MUTABLE)
 
+    @patch("utils.conversation.build_conversation_context")
+    async def test_build_uses_shared_scope_for_autonomy(self, mock_build):
+        mock_build.return_value = "[Conversation History]"
+        provider = ConversationHistoryProvider()
+        context = PromptBuildContext(
+            apply_persona=True,
+            guild_id=123,
+            user_id=456,
+            channel_id=789,
+            share_conversation_across_channels=True,
+        )
+
+        await provider.build(context)
+
+        mock_build.assert_called_once_with(
+            guild_id=123,
+            channel_id=None,
+            user_id=456,
+        )
+
 
 class TestUserMemoryProvider(unittest.IsolatedAsyncioTestCase):
     """Tests for UserMemoryProvider."""
@@ -358,7 +404,9 @@ class TestUserMemoryProvider(unittest.IsolatedAsyncioTestCase):
     async def test_build_returns_empty_when_missing_ids(self):
         provider = UserMemoryProvider()
         # Missing guild_id
-        result = await provider.build(PromptBuildContext(apply_persona=True, user_id=1))
+        result = await provider.build(
+            PromptBuildContext(apply_persona=True, user_id=1)
+        )
         self.assertTrue(result.is_empty)
         # Missing user_id
         result = await provider.build(
@@ -385,7 +433,9 @@ class TestCharacterMemoryProvider(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.mutability, Mutability.MUTABLE)
 
     @patch("utils.character_memory.build_character_memory_context")
-    async def test_build_delegates_to_character_memory_module(self, mock_build):
+    async def test_build_delegates_to_character_memory_module(
+        self, mock_build
+    ):
         """Delegates to CharacterMemory.
         build_character_memory_context."""
         mock_build.return_value = (
@@ -420,12 +470,16 @@ class TestCharacterMemoryProvider(unittest.IsolatedAsyncioTestCase):
         provider = CharacterMemoryProvider()
         # Missing guild_id
         result = await provider.build(
-            PromptBuildContext(apply_persona=True, user_id=1, persona_id="test")
+            PromptBuildContext(
+                apply_persona=True, user_id=1, persona_id="test"
+            )
         )
         self.assertTrue(result.is_empty)
         # Missing user_id
         result = await provider.build(
-            PromptBuildContext(apply_persona=True, guild_id=1, persona_id="test")
+            PromptBuildContext(
+                apply_persona=True, guild_id=1, persona_id="test"
+            )
         )
         self.assertTrue(result.is_empty)
         # Missing persona_id
@@ -452,7 +506,9 @@ class TestPersonaKnowledgeBaseProvider(unittest.IsolatedAsyncioTestCase):
     def test_name_and_priority(self):
         provider = PersonaKnowledgeBaseProvider()
         self.assertEqual(provider.name, "persona_knowledge_base")
-        self.assertEqual(provider.priority, ProviderPriority.PERSONA_KNOWLEDGE_BASE)
+        self.assertEqual(
+            provider.priority, ProviderPriority.PERSONA_KNOWLEDGE_BASE
+        )
         self.assertEqual(provider.mutability, Mutability.IMMUTABLE)
 
     @patch("utils.chroma.query_knowledge")
@@ -502,7 +558,8 @@ class TestPersonaKnowledgeBaseProvider(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("2. Takina is serious.", result.content)
         self.assertIn(
-            "(Source: Episode 01, Type: narration, Chapter: Chapter 1, Canon: canon)",
+            "(Source: Episode 01, Type: narration, Chapter: Chapter 1, "
+            "Canon: canon)",
             result.content,
         )
         self.assertEqual(result.mutability, Mutability.IMMUTABLE)
@@ -679,7 +736,9 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         """Set up a temporary canon database for each test."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.temp_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.temp_db_path
         import utils.canon as canon_module
@@ -702,7 +761,9 @@ class TestBuildSystemPromptBackwardsCompat(unittest.IsolatedAsyncioTestCase):
         },
     )
     @patch("utils.memory.get_user_facts_prompt")
-    async def test_uses_global_persona_data_when_none_provided(self, mock_get_facts):
+    async def test_uses_global_persona_data_when_none_provided(
+        self, mock_get_facts
+    ):
         mock_get_facts.return_value = ""
         result = await build_system_prompt(
             current_persona=(
@@ -758,7 +819,9 @@ class TestPromptBuilderInspect(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         """Set up temporary databases for each test."""
         # Canon database
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.canon_db_path = temp_db.name
         os.environ["CANON_FILE_PATH"] = self.canon_db_path
         import utils.canon as canon_module
@@ -766,7 +829,9 @@ class TestPromptBuilderInspect(unittest.IsolatedAsyncioTestCase):
         canon_module.CANON_FILE_PATH = self.canon_db_path
         await canon_module.init_db()
         # Memory database
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.memory_db_path = temp_db.name
         os.environ["MEMORY_FILE_PATH"] = self.memory_db_path
         import utils.memory as memory_module
@@ -774,12 +839,18 @@ class TestPromptBuilderInspect(unittest.IsolatedAsyncioTestCase):
         memory_module.MEMORY_FILE_PATH = self.memory_db_path
         await memory_module.init_db()
         # Character memory database
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_db:
             self.character_memory_db_path = temp_db.name
-        os.environ["CHARACTER_MEMORY_FILE_PATH"] = self.character_memory_db_path
+        os.environ["CHARACTER_MEMORY_FILE_PATH"] = (
+            self.character_memory_db_path
+        )
         import utils.character_memory as char_memory_module
 
-        char_memory_module.CHARACTER_MEMORY_FILE_PATH = self.character_memory_db_path
+        char_memory_module.CHARACTER_MEMORY_FILE_PATH = (
+            self.character_memory_db_path
+        )
         await char_memory_module.init_db()
 
     async def asyncTearDown(self):
@@ -830,7 +901,9 @@ class TestPromptBuilderInspect(unittest.IsolatedAsyncioTestCase):
         self.assertIn("persona_knowledge_base", result)
         # Each value should be a ContextBlock
         for name, block in result.items():
-            self.assertIsInstance(block, ContextBlock, f"{name} should be ContextBlock")
+            self.assertIsInstance(
+                block, ContextBlock, f"{name} should be ContextBlock"
+            )
             self.assertEqual(block.name, name)
             # Convert name to ProviderPriority attribute format
             priority_attr_map = {
@@ -857,12 +930,16 @@ class TestPromptBuilderInspect(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["persona"].mutability, Mutability.IMMUTABLE)
         self.assertEqual(result["canon"].mutability, Mutability.IMMUTABLE)
         self.assertEqual(result["user_memory"].mutability, Mutability.MUTABLE)
-        self.assertEqual(result["character_memory"].mutability, Mutability.MUTABLE)
+        self.assertEqual(
+            result["character_memory"].mutability, Mutability.MUTABLE
+        )
         self.assertEqual(result["guild_world"].mutability, Mutability.MUTABLE)
         self.assertEqual(
             result["persona_knowledge_base"].mutability, Mutability.IMMUTABLE
         )
-        self.assertEqual(result["conversation_history"].mutability, Mutability.MUTABLE)
+        self.assertEqual(
+            result["conversation_history"].mutability, Mutability.MUTABLE
+        )
 
 
 class TestPromptBuilderCustomProviders(unittest.TestCase):
@@ -1092,7 +1169,9 @@ class TestTokenBudgetEnforcement(unittest.IsolatedAsyncioTestCase):
 
         providers = [
             SmallProvider("immutable", 10, Mutability.IMMUTABLE, "A" * 100),
-            SmallProvider("placeholder", 20, Mutability.PLACEHOLDER, "B" * 100),
+            SmallProvider(
+                "placeholder", 20, Mutability.PLACEHOLDER, "B" * 100
+            ),
             SmallProvider("mutable", 30, Mutability.MUTABLE, "C" * 100),
         ]
         builder = PromptBuilder.with_providers(providers, token_budget=50)

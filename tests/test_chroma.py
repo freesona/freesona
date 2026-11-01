@@ -24,9 +24,13 @@ class FakeCollection:
         )
         # Provide fallback defaults per item so zip doesn't evaluate to empty
         # list
-        meta_list = metadatas if metadatas is not None else [{}] * len(documents)
+        meta_list = (
+            metadatas if metadatas is not None else [{}] * len(documents)
+        )
         id_list = (
-            ids if ids is not None else [f"doc-{i}" for i in range(len(documents))]
+            ids
+            if ids is not None
+            else [f"doc-{i}" for i in range(len(documents))]
         )
         for doc, meta, doc_id in zip(documents, meta_list, id_list):
             self.docs[doc_id] = {"document": doc, "metadata": meta}
@@ -88,7 +92,9 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "entry_type": "dialogue",
             "topics": ["testing", "validation"],
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
             chroma.add_knowledge(
                 "Alpha doc",
                 source="manual",
@@ -104,8 +110,12 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(entries[0]["metadata"]["persona"], "test_persona")
         self.assertEqual(entries[0]["metadata"]["entry_type"], "dialogue")
         # topics are normalized to comma-separated string
-        self.assertEqual(entries[0]["metadata"]["topics"], "testing, validation")
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
+        self.assertEqual(
+            entries[0]["metadata"]["topics"], "testing, validation"
+        )
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
             chroma.delete_knowledge(entries[0]["id"])
             entries_after = chroma.list_knowledge()
         self.assertEqual(entries_after, [])
@@ -119,8 +129,12 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "persona": "test_persona",
             # missing source, source_type, entry_type, topics
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
-            doc_id = chroma.add_knowledge("Test doc", metadata=invalid_metadata)
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
+            doc_id = chroma.add_knowledge(
+                "Test doc", metadata=invalid_metadata
+            )
         # Should return empty string on validation failure
         self.assertEqual(doc_id, "")
 
@@ -134,8 +148,12 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "entry_type": "invalid_type",
             "topics": ["testing"],
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
-            doc_id = chroma.add_knowledge("Test doc", metadata=invalid_metadata)
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
+            doc_id = chroma.add_knowledge(
+                "Test doc", metadata=invalid_metadata
+            )
         self.assertEqual(doc_id, "")
 
     def test_add_knowledge_rejects_invalid_source_type(self):
@@ -148,8 +166,12 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "entry_type": "dialogue",
             "topics": ["testing"],
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
-            doc_id = chroma.add_knowledge("Test doc", metadata=invalid_metadata)
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
+            doc_id = chroma.add_knowledge(
+                "Test doc", metadata=invalid_metadata
+            )
         self.assertEqual(doc_id, "")
 
     def test_add_knowledge_rejects_empty_topics(self):
@@ -162,8 +184,12 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "entry_type": "dialogue",
             "topics": [],  # Empty list
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
-            doc_id = chroma.add_knowledge("Test doc", metadata=invalid_metadata)
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
+            doc_id = chroma.add_knowledge(
+                "Test doc", metadata=invalid_metadata
+            )
         self.assertEqual(doc_id, "")
 
     def test_query_knowledge_filters_by_persona(self):
@@ -184,12 +210,18 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "entry_type": "narration",
             "topics": ["topic_b"],
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
             chroma.add_knowledge("Persona A content", metadata=metadata_a)
             chroma.add_knowledge("Persona B content", metadata=metadata_b)
             # Query for persona_a only
-            results_a = chroma.query_knowledge("content", limit=5, persona="persona_a")
-            results_b = chroma.query_knowledge("content", limit=5, persona="persona_b")
+            results_a = chroma.query_knowledge(
+                "content", limit=5, persona="persona_a"
+            )
+            results_b = chroma.query_knowledge(
+                "content", limit=5, persona="persona_b"
+            )
             results_all = chroma.query_knowledge("content", limit=5)
         # Should only return persona_a entries
         self.assertEqual(len(results_a), 1)
@@ -217,7 +249,9 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "entry_type": "narration",
             "topics": ["topic_b"],
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
             chroma.add_knowledge("Persona A content 1", metadata=metadata_a)
             chroma.add_knowledge("Persona A content 2", metadata=metadata_a)
             chroma.add_knowledge("Persona B content", metadata=metadata_b)
@@ -268,7 +302,9 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
                     "<p>Alpha content for test.</p></body></html>"
                 ),
             )
-        text = chroma.extract_text_from_bytes("sample.epub", epub_buffer.getvalue())
+        text = chroma.extract_text_from_bytes(
+            "sample.epub", epub_buffer.getvalue()
+        )
         self.assertIn("Chapter One", text)
         self.assertIn("Alpha content for test.", text)
 
@@ -291,12 +327,16 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "canon_level": "canon",
             "tags": ["canon", "key_moment"],
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
             doc_id = chroma.add_knowledge(
                 "Test doc with optionals", metadata=metadata_with_optionals
             )
         self.assertNotEqual(doc_id, "")
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
             entries = chroma.list_knowledge()
         self.assertEqual(len(entries), 1)
         meta = entries[0]["metadata"]
@@ -318,8 +358,12 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             "topics": ["testing"],
             "canon_level": "invalid_canon",
         }
-        with patch.object(chroma, "get_collection", return_value=fake_collection):
-            doc_id = chroma.add_knowledge("Test doc", metadata=invalid_metadata)
+        with patch.object(
+            chroma, "get_collection", return_value=fake_collection
+        ):
+            doc_id = chroma.add_knowledge(
+                "Test doc", metadata=invalid_metadata
+            )
         self.assertEqual(doc_id, "")
 
     def test_clean_source_text(self):
@@ -335,7 +379,8 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(cleaned, "Line 1\n\nLine 2\n\nLine 3")
         # Test empty input
         self.assertEqual(chroma.clean_source_text(""), "")
-        self.assertEqual(chroma.clean_source_text(None), "")  # type: ignore[arg-type]
+        cleaned = chroma.clean_source_text(None)  # type: ignore[arg-type]
+        self.assertEqual(cleaned, "")
 
     def test_identify_speakers(self):
         """Test the identify_speakers utility function."""
@@ -370,7 +415,9 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
     def test_chunk_semantic_units_narration(self):
         """Test chunking narration without speaker data."""
         text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
-        chunks = chroma.chunk_semantic_units(text, max_chunk_size=50, min_chunk_size=10)
+        chunks = chroma.chunk_semantic_units(
+            text, max_chunk_size=50, min_chunk_size=10
+        )
         self.assertGreater(len(chunks), 0)
         for chunk in chunks:
             self.assertIsNone(chunk["speaker"])
@@ -427,7 +474,9 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         for result in results:
             self.assertIn("document", result)
             self.assertIn("metadata", result)
-            self.assertEqual(result["metadata"]["persona"], "chisato_nishikigi")
+            self.assertEqual(
+                result["metadata"]["persona"], "chisato_nishikigi"
+            )
             self.assertEqual(result["metadata"]["source"], "Episode 06")
             self.assertIn("topics", result["metadata"])
 

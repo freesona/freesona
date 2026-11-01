@@ -8,17 +8,17 @@ Default prefix is `~`. Change it with `~prefix <symbol>`. Most commands work as 
 
 AI commands are organized by command type in dedicated AI cog modules (`genai_generation`, `genai_persona`, `genai_memory`, `genai_channel`, `genai_autonomy`) and loaded through the aggregate `cogs.ai.genai` extension.
 
-| Command                                                   | Action                                                                                        | Permissions   |
-| :-------------------------------------------------------- | :-------------------------------------------------------------------------------------------- | :------------ |
-| `~write <prompt>` (`/write`, alias `~w`)                  | Structured output using active persona                                                        | Anyone        |
-| `~ask <question>` (`/ask`, alias `~a`)                    | Conversational response using active persona                                                  | Anyone        |
-| `~search <query>` (`/search`, alias `~s`)                 | Web search with AI summary                                                                    | Anyone        |
-| `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP                                                       | Anyone        |
-| `/kbsearch <query> [persona] [limit]`                     | Search the local ChromaDB knowledge base                                                      | Administrator |
-| `/kbadd <title> [content] [attachment]`                   | Add text or a PDF/EPUB/TXT/JSON attachment to the local knowledge base (opens metadata modal) | Administrator |
-| `/kblist [persona] [limit]`                               | List the newest knowledge base entries                                                        | Administrator |
-| `/kbdelete <id>`                                          | Delete a knowledge base entry by ID                                                           | Administrator |
-| `/kbpersona <persona> [limit]`                            | List all knowledge entries for a specific persona                                             | Administrator |
+| Command                                                   | Action                                                                                          | Permissions   |
+| :-------------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :------------ |
+| `~write <prompt>` (`/write`, alias `~w`)                  | Structured output using active persona; slash command accepts an optional file attachment       | Anyone        |
+| `~ask <question>` (`/ask`, alias `~a`)                    | Conversational response using active persona; slash command accepts an optional file attachment | Anyone        |
+| `~search <query>` (`/search`, alias `~s`)                 | Web search with AI summary                                                                      | Anyone        |
+| `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP                                                         | Anyone        |
+| `/kbsearch <query> [persona] [limit]`                     | Search the local ChromaDB knowledge base                                                        | Administrator |
+| `/kbadd <title> [content] [attachment]`                   | Add text or a PDF/EPUB/TXT/JSON attachment to the local knowledge base (opens metadata modal)   | Administrator |
+| `/kblist [persona] [limit]`                               | List the newest knowledge base entries                                                          | Administrator |
+| `/kbdelete <id>`                                          | Delete a knowledge base entry by ID                                                             | Administrator |
+| `/kbpersona <persona> [limit]`                            | List all knowledge entries for a specific persona                                               | Administrator |
 
 ---
 
@@ -29,24 +29,24 @@ The `/kbadd` command opens a modal with the following fields:
 **Required:**
 | Field | Description | Example |
 
-|-------|-------------|---------|
-| Persona ID | Persona identifier | `chisato_nishikigi` |
-| Source | Original source reference | `Episode 06` |
-| Source Type | `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` | `anime` |
-| Entry Type | `dialogue`, `narration`, `event`, `relationship`, `description` | `dialogue` |
-| Topics | Comma-separated semantic topics | `friendship, optimism, coffee` |
+| -------     | -------------                                                                   | ---------                      |
+| Persona ID  | Persona identifier                                                              | `chisato_nishikigi`            |
+| Source      | Original source reference                                                       | `Episode 06`                   |
+| Source Type | `anime`, `novel`, `manga`, `game`, `guidebook`, `interview`, `website`, `other` | `anime`                        |
+| Entry Type  | `dialogue`, `narration`, `event`, `relationship`, `description`                 | `dialogue`                     |
+| Topics      | Comma-separated semantic topics                                                 | `friendship, optimism, coffee` |
 
 **Optional:**
 | Field | Description | Example |
 
-|-------|-------------|---------|
-| Scene | Scene/location description | `Aquarium visit` |
-| Speaker | Speaking character (auto-sets entry_type to dialogue) | `Chisato` |
-| Episode | Episode number | `06` |
-| Chapter | Chapter number/title | `Chapter 12` |
-| Timestamp | Source timestamp | `2023-01-15` or `S01E06 12:34` |
-| Canon Level | `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` | `canon` |
-| Tags | Comma-separated additional tags | `canon, emotional, key_moment` |
+| -------     | -------------                                                | ---------                      |
+| Scene       | Scene/location description                                   | `Aquarium visit`               |
+| Speaker     | Speaking character (auto-sets entry_type to dialogue)        | `Chisato`                      |
+| Episode     | Episode number                                               | `06`                           |
+| Chapter     | Chapter number/title                                         | `Chapter 12`                   |
+| Timestamp   | Source timestamp                                             | `2023-01-15` or `S01E06 12:34` |
+| Canon Level | `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` | `canon`                        |
+| Tags        | Comma-separated additional tags                              | `canon, emotional, key_moment` |
 
 Knowledge Base records are validated and persisted by
 `utils/knowledge_base.py` in SQLite. New records are also indexed in ChromaDB
@@ -70,8 +70,10 @@ The optional `conversion` module loads `cogs.conversion.delphitools` and calls t
 | `~decode`      | Decode Base64, hexadecimal, or URL data                                                   | Anyone      |
 | `~hash`        | Generate an MD5, SHA-1, or SHA-256 hash                                                   | Anyone      |
 
-The module requires the `dt` executable. Each command applies the configured
-subprocess timeout and Discord upload-size limit.
+The module requires the Delphitools executable. Each command applies the
+configured subprocess timeout and Discord upload-size limit. Set
+`DELPHITOOLS_EXECUTABLE` to the executable name or full path. The bot process
+must be able to access the executable.
 
 ---
 
@@ -92,7 +94,7 @@ subprocess timeout and Discord upload-size limit.
 | :------------------------------- | :------------------------------------------------------ | :------------ |
 | `/setchannel #channel`           | Set the AI conversation channel                         | Administrator |
 | `/clearchannel`                  | Remove the conversation channel                         | Administrator |
-| `/clearmemory`                   | Clear server-side conversation history for this channel | Administrator |
+| `/clearmemory`                   | Clear conversation history for this server              | Administrator |
 | `/chatmode <all/mentions/smart>` | Set when the bot replies in the conversation channel    | Administrator |
 
 The bot responds to messages in the configured conversation channel. `all` replies to every message; `mentions` replies only to direct mentions and replies to the bot; `smart` also responds to messages with attachments.
@@ -198,6 +200,13 @@ Module and model names include slash-command autocomplete suggestions.
 | `/autonomy frequency <low/default/high>` | Set confidence threshold | Administrator |
 
 Autonomous mode uses a confidence-scored intent evaluator (not random chance). Thresholds: `low` = 0.70, `default` = 0.50, `high` = 0.35. A 120-second per-channel cooldown and 60-second per-user cooldown prevent the bot from dominating a conversation.
+
+Autonomy uses recent message exchanges handled by Freesona across channels for
+each user in the same server. It does not share history between users or
+servers.
+Normal chat stores history by channel. Autonomy combines recent channel
+history for the same user.
+`/clearmemory` clears all conversation history for the server.
 
 ## Moderation
 

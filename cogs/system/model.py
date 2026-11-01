@@ -31,7 +31,9 @@ class ModelCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_group(name="model", help="Show or change the active model.")
+    @commands.hybrid_group(
+        name="model", help="Show or change the active model."
+    )
     @commands.is_owner()
     async def model_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
@@ -43,7 +45,9 @@ class ModelCog(commands.Cog):
             )
 
     # type: ignore[attr-defined]
-    @model_group.command(name="show", help="Show the active provider and model.")
+    @model_group.command(
+        name="show", help="Show the active provider and model."
+    )
     @commands.is_owner()
     async def model_show(self, ctx: commands.Context):
         config = get_provider_config()
@@ -90,7 +94,10 @@ class ModelCog(commands.Cog):
     )
     @commands.is_owner()
     @app_commands.describe(
-        value=("Temperature value between 0.0 (deterministic) and 2.0 (very creative)")
+        value=(
+            "Temperature value between 0.0 (deterministic) "
+            "and 2.0 (very creative)"
+        )
     )
     async def model_temperature(self, ctx: commands.Context, value: float):
         if value < 0.0 or value > 2.0:

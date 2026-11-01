@@ -13,6 +13,22 @@ load_dotenv()
 BOT_NAME = os.getenv("BOT_NAME", "Bot")
 logger = logging.getLogger(__name__)
 
+DELPHITOOLS_COMMANDS = (
+    "**Delphitools CLI** (`dt`, `delphi`, `delphitools`)\n"
+    "**Colour:** `colour`, `contrast`, `harmony`, `tailwind-shades`, "
+    "`palette`, `colorblind`\n"
+    "**Image:** `crop`, `matte`, `scroll`, `watermark`, `favicon`, `split`, "
+    "`convert`, `noise`, `clip`, `trace`, `svgo`, `rmbg`\n"
+    "**PDF:** `preflight`, `zine`, `impose`\n"
+    "**Text and type:** `px2rem`, `rem2px`, `line-height`, `typo`, `wc`, "
+    "`paper`, `glyph`, `font-info`, `regex`, `shavian`\n"
+    "**Generators:** `qr`, `barcode`, `meta`\n"
+    "**Calculators:** `calc`, `base`, `time`, `unit`, `encode`, `decode`, "
+    "`hash`\n"
+    "**CLI utilities:** `agent`, `install-man`, `completions`\n"
+    "Use `dt <command> --help` for command options."
+)
+
 
 def _split_embed_text(text: str, limit: int = 1024) -> list[str]:
     """Split long help text into Discord-safe chunks."""
@@ -54,12 +70,15 @@ class HelpView(discord.ui.View):
             embed = discord.Embed(
                 title=f"{category} Commands",
                 description=(
-                    f"Detailed help for {BOT_NAME}'s {category.lower()} features."
+                    f"Detailed help for {BOT_NAME}'s "
+                    f"{category.lower()} features."
                 ),
                 color=discord.Color.blue(),
             )
             user = getattr(self.bot, "user", None)
-            avatar = getattr(getattr(user, "display_avatar", None), "url", None)
+            avatar = getattr(
+                getattr(user, "display_avatar", None), "url", None
+            )
             if avatar:
                 embed.set_thumbnail(url=avatar)
             content = self.categories.get(category, "No commands found.")
@@ -77,7 +96,9 @@ class HelpView(discord.ui.View):
                     )
                 )
             else:
-                embed.set_footer(text=f"Use {self.prefix}help <command> for specifics.")
+                embed.set_footer(
+                    text=f"Use {self.prefix}help <command> for specifics."
+                )
             self.prev_button.disabled = self.page_index == 0
             self.next_button.disabled = self.page_index >= len(chunks) - 1
             message = interaction.message
@@ -86,7 +107,9 @@ class HelpView(discord.ui.View):
             else:
                 await interaction.followup.send(embed=embed, view=self)
         except Exception:
-            logger.exception("Help button interaction failed for category %s", category)
+            logger.exception(
+                "Help button interaction failed for category %s", category
+            )
             if not interaction.response.is_done():
                 await interaction.response.send_message(
                     "The help panel could not be updated right now.",
@@ -103,7 +126,9 @@ class HelpView(discord.ui.View):
         view = cast("HelpView", self)
         await view.update_help(interaction, "AI Persona")
 
-    @discord.ui.button(label="Media", style=discord.ButtonStyle.secondary, emoji="📥")
+    @discord.ui.button(
+        label="Media", style=discord.ButtonStyle.secondary, emoji="📥"
+    )
     async def media_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
@@ -121,7 +146,19 @@ class HelpView(discord.ui.View):
         view = cast("HelpView", self)
         await view.update_help(interaction, "News")
 
-    @discord.ui.button(label="Utility", style=discord.ButtonStyle.secondary, emoji="🔧")
+    @discord.ui.button(
+        label="Conversion", style=discord.ButtonStyle.secondary, emoji="🛠️"
+    )
+    async def conversion_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        _ = button
+        view = cast("HelpView", self)
+        await view.update_help(interaction, "Conversion")
+
+    @discord.ui.button(
+        label="Utility", style=discord.ButtonStyle.secondary, emoji="🔧"
+    )
     async def util_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
@@ -129,7 +166,9 @@ class HelpView(discord.ui.View):
         view = cast("HelpView", self)
         await view.update_help(interaction, "Utility")
 
-    @discord.ui.button(label="Fun", style=discord.ButtonStyle.success, emoji="🎲")
+    @discord.ui.button(
+        label="Fun", style=discord.ButtonStyle.success, emoji="🎲"
+    )
     async def fun_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
@@ -137,7 +176,9 @@ class HelpView(discord.ui.View):
         view = cast("HelpView", self)
         await view.update_help(interaction, "Fun")
 
-    @discord.ui.button(label="Moderation", style=discord.ButtonStyle.danger, emoji="🛡️")
+    @discord.ui.button(
+        label="Moderation", style=discord.ButtonStyle.danger, emoji="🛡️"
+    )
     async def mod_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
@@ -239,7 +280,9 @@ class HelpCog(commands.Cog):
             return "AI Persona"
         return "Utility"  # Default fallback
 
-    @commands.hybrid_command(name="help", help="Shows help information for commands.")
+    @commands.hybrid_command(
+        name="help", help="Shows help information for commands."
+    )
     @app_commands.describe(
         command_name=("The name of the command you want details for.")
     )
@@ -257,6 +300,7 @@ class HelpCog(commands.Cog):
                 "Moderation": [],
                 "Utility": [],
                 "Media": [],
+                "Conversion": [],
                 "AI Persona": [],
                 "News": [],
             }
@@ -269,7 +313,9 @@ class HelpCog(commands.Cog):
                 entry = f"`{cmd.name}` - {cmd.help or 'No description'}"
                 cats[category].append(entry)
             # Special additions to formatted strings
-            formatted_cats = {k: "\n".join(v) if v else "None" for k, v in cats.items()}
+            formatted_cats = {
+                k: "\n".join(v) if v else "None" for k, v in cats.items()
+            }
             if "AI Persona" in formatted_cats:
                 formatted_cats["AI Persona"] += (
                     "\n`/setpersona` — Persona editor\n"
@@ -282,6 +328,10 @@ class HelpCog(commands.Cog):
                     "`/rss latest <name>` — Fetch articles\n"
                     "`/rss add <name> <url>` — Add feed\n"
                     "`/rss setchannel <#ch>` — Auto-post"
+                )
+            if "Conversion" in formatted_cats:
+                formatted_cats["Conversion"] += (
+                    "\n\n" + DELPHITOOLS_COMMANDS
                 )
             embed = discord.Embed(
                 title=f"{BOT_NAME} Help Menu",
@@ -318,7 +368,9 @@ class HelpCog(commands.Cog):
                 if command.aliases:
                     embed.add_field(
                         name="Aliases",
-                        value=", ".join(f"`{prefix}{a}`" for a in command.aliases),
+                        value=", ".join(
+                            f"`{prefix}{a}`" for a in command.aliases
+                        ),
                         inline=False,
                     )
                 await ctx.send(embed=embed)
@@ -326,10 +378,13 @@ class HelpCog(commands.Cog):
             app_command = self.find_app_command(search_name)
             if app_command:
                 app_command_name = getattr(app_command, "name", search_name)
-                app_command_description = getattr(app_command, "description", None)
+                app_command_description = getattr(
+                    app_command, "description", None
+                )
                 embed = discord.Embed(
                     title=f"Help: `/{app_command_name}`",
-                    description=app_command_description or "No description provided.",
+                    description=app_command_description
+                    or "No description provided.",
                     color=discord.Color.green(),
                 )
                 await ctx.send(embed=embed)

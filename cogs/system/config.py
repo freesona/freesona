@@ -35,7 +35,9 @@ class ConfigCog(commands.Cog):
         name="show",
         help="Show current configuration values (optionally filtered by key).",
     )
-    @app_commands.describe(key="Optional config key to show (e.g. mvsep_poll_interval)")
+    @app_commands.describe(
+        key="Optional config key to show (e.g. mvsep_poll_interval)"
+    )
     @commands.is_owner()
     async def config_show(self, ctx: commands.Context, key: str | None = None):
         config = load_config()
@@ -44,7 +46,8 @@ class ConfigCog(commands.Cog):
             key = key.strip()
             if key not in defaults:
                 await ctx.send(
-                    f"Unknown config key: `{key}`. Use `/config list` to see all keys.",
+                    f"Unknown config key: `{key}`. Use `/config list` "
+                    "to see all keys.",
                     ephemeral=bool(ctx.interaction),
                 )
                 return
@@ -76,7 +79,9 @@ class ConfigCog(commands.Cog):
         categorized_keys = set()
         for keys in CONFIG_CATEGORIES.values():
             categorized_keys.update(keys)
-        other_keys = [k for k in sorted(defaults.keys()) if k not in categorized_keys]
+        other_keys = [
+            k for k in sorted(defaults.keys()) if k not in categorized_keys
+        ]
         if other_keys:
             lines = []
             for k in other_keys:
@@ -102,7 +107,9 @@ class ConfigCog(commands.Cog):
     # type: ignore[attr-defined]
     @config_group.command(
         name="list",
-        help=("List all configurable keys with descriptions grouped by category."),
+        help=(
+            "List all configurable keys with descriptions grouped by category."
+        ),
     )
     @commands.is_owner()
     async def config_list(self, ctx: commands.Context):
@@ -113,7 +120,9 @@ class ConfigCog(commands.Cog):
     # type: ignore[attr-defined]
     @config_group.command(
         name="edit",
-        help=("Open an interactive button panel to edit config values via modal."),
+        help=(
+            "Open an interactive button panel to edit config values via modal."
+        ),
     )
     @commands.is_owner()
     async def config_edit(self, ctx: commands.Context):
@@ -141,7 +150,9 @@ class ConfigCog(commands.Cog):
     # type: ignore[attr-defined]
     @config_group.command(
         name="reset-interactive",
-        help=("Open an interactive dropdown to reset a config key to default."),
+        help=(
+            "Open an interactive dropdown to reset a config key to default."
+        ),
     )
     @commands.is_owner()
     async def config_reset_interactive(self, ctx: commands.Context):
@@ -154,7 +165,9 @@ class ConfigCog(commands.Cog):
         )
 
     # type: ignore[attr-defined]
-    @config_group.command(name="set", help="Set a configuration value directly.")
+    @config_group.command(
+        name="set", help="Set a configuration value directly."
+    )
     @app_commands.describe(
         key="Config key to set",
         value="New value (will be type-converted)",
@@ -164,7 +177,8 @@ class ConfigCog(commands.Cog):
         key = key.strip()
         if key not in DEFAULT_CONFIG:
             await ctx.send(
-                f"Unknown config key: `{key}`. Use `/config list` to see all keys.",
+                f"Unknown config key: `{key}`. Use `/config list` "
+                "to see all keys.",
                 ephemeral=bool(ctx.interaction),
             )
             return
@@ -195,7 +209,8 @@ class ConfigCog(commands.Cog):
         config[key] = converted
         save_config(config)
         await ctx.send(
-            f"Set `{key}` = `{converted}` (was `{config.get(key, default_val)}`).",
+            f"Set `{key}` = `{converted}` "
+            f"(was `{config.get(key, default_val)}`).",
             ephemeral=bool(ctx.interaction),
         )
 
@@ -210,7 +225,8 @@ class ConfigCog(commands.Cog):
         key = key.strip()
         if key not in DEFAULT_CONFIG:
             await ctx.send(
-                f"Unknown config key: `{key}`. Use `/config list` to see all keys.",
+                f"Unknown config key: `{key}`. Use `/config list` "
+                "to see all keys.",
                 ephemeral=bool(ctx.interaction),
             )
             return
@@ -224,7 +240,8 @@ class ConfigCog(commands.Cog):
             )
         else:
             await ctx.send(
-                f"`{key}` is already at default value (`{DEFAULT_CONFIG[key]}`).",
+                f"`{key}` is already at default value "
+                f"(`{DEFAULT_CONFIG[key]}`).",
                 ephemeral=bool(ctx.interaction),
             )
 

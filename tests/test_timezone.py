@@ -16,7 +16,9 @@ class TimezoneCompatTests(unittest.TestCase):
                 timezone_module.timezone_autocomplete(MagicMock(), "America")
             )
         self.assertTrue(choices)
-        self.assertTrue(any(choice.value.startswith("America/") for choice in choices))
+        self.assertTrue(
+            any(choice.value.startswith("America/") for choice in choices)
+        )
 
 
 if __name__ == "__main__":

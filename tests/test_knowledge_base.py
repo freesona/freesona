@@ -66,16 +66,21 @@ class TestKnowledgeBase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(await service.list_entries()), 1)
 
     async def test_optional_metadata_is_persisted(self):
-        ingested = await self.service.ingest(entry(scene="Cafe", tags=["important"]))
+        ingested = await self.service.ingest(
+            entry(scene="Cafe", tags=["important"])
+        )
         stored = await self.service.list_entries()
         self.assertEqual(stored, [ingested])
-        self.assertEqual(ingested.metadata, {"scene": "Cafe", "tags": ["important"]})
+        self.assertEqual(
+            ingested.metadata, {"scene": "Cafe", "tags": ["important"]}
+        )
 
     async def test_delete_removes_sqlite_record_when_chroma_delete_fails(self):
         ingested = await self.service.ingest(entry())
 
         with patch(
-            "utils.chroma.delete_knowledge", side_effect=RuntimeError("offline")
+            "utils.chroma.delete_knowledge",
+            side_effect=RuntimeError("offline"),
         ):
             deleted = await self.service.delete_entry(ingested.id)
 

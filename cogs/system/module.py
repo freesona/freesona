@@ -32,7 +32,9 @@ class ModuleCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_group(name="module", help="List or change enabled bot modules.")
+    @commands.hybrid_group(
+        name="module", help="List or change enabled bot modules."
+    )
     @commands.has_permissions(administrator=True)
     async def module_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
@@ -43,7 +45,9 @@ class ModuleCog(commands.Cog):
             )
 
     # type: ignore[attr-defined]
-    @module_group.command(name="list", help="List enabled and disabled modules.")
+    @module_group.command(
+        name="list", help="List enabled and disabled modules."
+    )
     @commands.has_permissions(administrator=True)
     async def module_list(self, ctx: commands.Context):
         config = load_config()
@@ -63,7 +67,9 @@ class ModuleCog(commands.Cog):
         await ctx.send(embed=embed, ephemeral=bool(ctx.interaction))
 
     # type: ignore[attr-defined]
-    @module_group.command(name="enable", help="Enable a module and load it now.")
+    @module_group.command(
+        name="enable", help="Enable a module and load it now."
+    )
     @commands.has_permissions(administrator=True)
     @app_commands.autocomplete(name=module_autocomplete)
     async def module_enable(self, ctx: commands.Context, name: str):
@@ -95,10 +101,14 @@ class ModuleCog(commands.Cog):
         save_module_state(config, key, True)
         save_config(config)
         await self.bot.tree.sync()
-        await ctx.send(f"Module `{key}` enabled.", ephemeral=bool(ctx.interaction))
+        await ctx.send(
+            f"Module `{key}` enabled.", ephemeral=bool(ctx.interaction)
+        )
 
     # type: ignore[attr-defined]
-    @module_group.command(name="disable", help="Disable a module and unload it now.")
+    @module_group.command(
+        name="disable", help="Disable a module and unload it now."
+    )
     @commands.has_permissions(administrator=True)
     @app_commands.autocomplete(name=module_autocomplete)
     async def module_disable(self, ctx: commands.Context, name: str):
@@ -130,7 +140,9 @@ class ModuleCog(commands.Cog):
         save_module_state(config, key, False)
         save_config(config)
         await self.bot.tree.sync()
-        await ctx.send(f"Module `{key}` disabled.", ephemeral=bool(ctx.interaction))
+        await ctx.send(
+            f"Module `{key}` disabled.", ephemeral=bool(ctx.interaction)
+        )
 
     # type: ignore[attr-defined]
     @module_group.command(name="reload", help="Reload an enabled module.")
@@ -165,7 +177,9 @@ class ModuleCog(commands.Cog):
             )
             return
         await self.bot.tree.sync()
-        await ctx.send(f"Module `{key}` reloaded.", ephemeral=bool(ctx.interaction))
+        await ctx.send(
+            f"Module `{key}` reloaded.", ephemeral=bool(ctx.interaction)
+        )
 
 
 async def setup(bot: commands.Bot):

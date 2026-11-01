@@ -51,7 +51,9 @@ class PingCog(commands.Cog):
                 end = time.perf_counter()
                 if response.status == 200:
                     delta = end - start
-                    api_status = f"Online ({delta * 1000:.{ROUND_LATENCY}f} ms)"
+                    api_status = (
+                        f"Online ({delta * 1000:.{ROUND_LATENCY}f} ms)"
+                    )
                 else:
                     api_status = f"HTTP {response.status}"
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:

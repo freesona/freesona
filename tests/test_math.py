@@ -122,7 +122,10 @@ class MathCogTests(unittest.TestCase):
         for expr in [
             "x = cos(t), y = sin(t)",  # circle
             # heart
-            ("x = 16*sin(t)**3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)"),
+            (
+                "x = 16*sin(t)**3, y = 13*cos(t) - 5*cos(2*t) "
+                "- 2*cos(3*t) - cos(4*t)"
+            ),
         ]:
             with self.subTest(expr=expr):
                 buf = generate_plot(expr)
@@ -133,7 +136,9 @@ class MathCogTests(unittest.TestCase):
     def test_format_wolfram_text(self):
         # Test basic filtering
         self.assertEqual(
-            self.cog.format_wolfram_text("Input interpretation: 2+2\nResult:\n4"),
+            self.cog.format_wolfram_text(
+                "Input interpretation: 2+2\nResult:\n4"
+            ),
             "4",
         )
         # Test table formatting (piped output)
@@ -163,7 +168,10 @@ class MathCogTests(unittest.TestCase):
             "f(x)=x**2",  # function notation
             "(x^2 + y^2 - 1)^3 - x^2*y^3 = 0",  # heart curve (with ^)
             # parametric heart
-            ("x = 16*sin(t)^3, y = 13*cos(t) - 5*cos(2*t) - 2*cos(3*t) - cos(4*t)"),
+            (
+                "x = 16*sin(t)^3, y = 13*cos(t) - 5*cos(2*t) "
+                "- 2*cos(3*t) - cos(4*t)"
+            ),
         ]:
             with self.subTest(expr=expr):
                 buf = generate_plot(expr)
@@ -184,7 +192,9 @@ class MathCogTests(unittest.TestCase):
         for expr in dangerous:
             with self.subTest(expr=expr):
                 result = self.cog.solve_locally(expr)
-                self.assertIsNone(result, f"solve_locally should reject: {expr}")
+                self.assertIsNone(
+                    result, f"solve_locally should reject: {expr}"
+                )
 
 
 if __name__ == "__main__":

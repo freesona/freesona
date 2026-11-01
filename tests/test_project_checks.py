@@ -6,7 +6,9 @@ import unittest
 from unittest import mock
 
 CHECK_PROJECT_PATH = (
-    pathlib.Path(__file__).resolve().parents[1] / "scripts" / "check_project.py"
+    pathlib.Path(__file__).resolve().parents[1]
+    / "scripts"
+    / "check_project.py"
 )
 SPEC = importlib.util.spec_from_file_location(
     "project_check_script", CHECK_PROJECT_PATH
@@ -27,12 +29,15 @@ class ProjectChecksTests(unittest.TestCase):
         path.write_text(content, encoding="utf-8")
         return path
 
-    def test_requirements_audit_accepts_google_genai_without_namespace_package(self):
+    def test_requirements_audit_accepts_google_genai_without_namespace_package(
+        self,
+    ):
         path = self.write_requirements(
             "# import google.genai\ngoogle-genai\nrequests\n"
         )
         self.assertEqual(
-            check_project.declared_requirement_names(path), ["google-genai", "requests"]
+            check_project.declared_requirement_names(path),
+            ["google-genai", "requests"],
         )
 
     def test_requirements_audit_rejects_standalone_google(self):

@@ -191,7 +191,9 @@ def evaluate_intent(
                 intent = INTENT_IMAGE_ANALYSIS
 
             elif mime.startswith(("video/", "audio/")):
-                intent = INTENT_IMAGE_ANALYSIS  # same pipeline, different media
+                intent = (
+                    INTENT_IMAGE_ANALYSIS  # same pipeline, different media
+                )
 
             elif mime in ("application/pdf", "text/plain", "text/markdown"):
                 intent = INTENT_GENERAL_CHAT
@@ -237,7 +239,12 @@ def evaluate_intent(
 
     # --- Penalty: long monologue with no question and no mention ---
 
-    if len(content) > 400 and "?" not in content and not is_mention and not is_reply:
+    if (
+        len(content) > 400
+        and "?" not in content
+        and not is_mention
+        and not is_reply
+    ):
         score -= 0.20
 
         targets.append("long_monologue")

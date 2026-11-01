@@ -22,8 +22,12 @@ class MessageClaim:
 class MessageClaimRepository:
     """Store and atomically coordinate message-processing leases in SQLite."""
 
-    def __init__(self, database_path: str, lease_seconds: float = 300.0) -> None:
-        """Create a repository for ``database_path`` with the given lease length."""
+    def __init__(
+        self, database_path: str, lease_seconds: float = 300.0
+    ) -> None:
+        """Create a repository for ``database_path`` with the given
+        lease length.
+        """
         self.database_path = database_path
         self.lease_seconds = lease_seconds
 
@@ -74,7 +78,8 @@ class MessageClaimRepository:
         async with aiosqlite.connect(self.database_path) as db:
             cursor = await db.execute(
                 """UPDATE message_claims SET completed_at = ?
-                   WHERE claim_key = ? AND owner = ? AND completed_at IS NULL""",
+                   WHERE claim_key = ? AND owner = ?
+                   AND completed_at IS NULL""",
                 (time.time(), claim_key, owner),
             )
             await db.commit()
@@ -85,14 +90,17 @@ class MessageClaimRepository:
         async with aiosqlite.connect(self.database_path) as db:
             cursor = await db.execute(
                 """DELETE FROM message_claims
-                   WHERE claim_key = ? AND owner = ? AND completed_at IS NULL""",
+                   WHERE claim_key = ? AND owner = ?
+                   AND completed_at IS NULL""",
                 (claim_key, owner),
             )
             await db.commit()
             return cursor.rowcount == 1
 
     async def cleanup(self, before: float | None = None) -> int:
-        """Delete completed and expired claims, returning the number removed."""
+        """Delete completed and expired claims, returning the number
+        removed.
+        """
         cutoff = time.time() if before is None else before
         async with aiosqlite.connect(self.database_path) as db:
             cursor = await db.execute(

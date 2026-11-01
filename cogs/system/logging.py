@@ -30,7 +30,9 @@ def is_owner_check():
         try:
             if owner_check is not None:
                 return await owner_check(cast(discord.User, interaction.user))
-            owner = getattr(getattr(client, "application", None), "owner", None)
+            owner = getattr(
+                getattr(client, "application", None), "owner", None
+            )
             if owner is not None:
                 return owner.id == interaction.user.id
         except (AttributeError, discord.DiscordException) as e:
@@ -222,7 +224,8 @@ async def logging_toggle(
     refresh_section_filter()
     status = "enabled" if new_value else "disabled"
     await interaction.response.send_message(
-        f"🔄 Toggled logging section **{section.name}** (`{key}`) → **{status}**",
+        f"🔄 Toggled logging section **{section.name}** "
+        f"(`{key}`) → **{status}**",
         ephemeral=True,
     )
 
@@ -253,7 +256,9 @@ async def logging_clearchannel(interaction: discord.Interaction):
     config = load_config()
     config["log_channel_id"] = 0
     save_config(config)
-    await interaction.response.send_message("✅ Log channel cleared.", ephemeral=True)
+    await interaction.response.send_message(
+        "✅ Log channel cleared.", ephemeral=True
+    )
 
 
 @logging_group.command(name="setlevel", description="Set the log level")
@@ -291,7 +296,9 @@ async def logging_test(
 ):
     # type: ignore[arg-type]
     await send_log_message(interaction.client, message, "INFO")
-    await interaction.response.send_message("✅ Test log message sent.", ephemeral=True)
+    await interaction.response.send_message(
+        "✅ Test log message sent.", ephemeral=True
+    )
 
 
 class LoggingCog(commands.Cog):

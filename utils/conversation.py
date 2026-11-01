@@ -19,6 +19,8 @@ from utils.config import load_config
 
 logger = logging.getLogger("FreesonaBot")
 
+_MAX_RETAINED_IMAGE_BYTES = 8 * 1024 * 1024
+
 
 # ---------------------------------------------------------------------------
 
@@ -53,6 +55,10 @@ class ConversationMessage:
 
     embeds: list[str] | None = None  # Text representation of message embeds
 
+    attachments: list[tuple[bytes, str]] | None = None
+
+    has_image_attachment: bool = False
+
 
 @dataclass
 class ConversationState:
@@ -86,56 +92,584 @@ def _get_conversation_token_budget() -> int:
 
 def _get_conversation_ttl_seconds() -> int:
 
-    return int(load_config().get("conversation_ttl_seconds", 3600))  # 1 hour default
+    return int(
+        load_config().get("conversation_ttl_seconds", 3600)
+    )  # 1 hour default
 
 
 # ---------------------------------------------------------------------------
 
-# Global conversation store
+# ConversationManager — standalone conversation orchestration
 
 # ---------------------------------------------------------------------------
 
 
-_conversation_store: dict[tuple[int, int, int], ConversationState] = {}
+class ConversationManager:
+    """Manages short-term conversation state per (guild, channel, user) scope.
 
-_store_lock = asyncio.Lock()
+    All state is owned by this instance. No Discord types are referenced.
+    A missing channel ID represents shared, guild-and-user-scoped history.
+    """
+
+    def __init__(
+        self,
+        max_messages: int | None = None,
+        token_budget: int | None = None,
+        ttl_seconds: int | None = None,
+        max_retained_image_bytes: int = _MAX_RETAINED_IMAGE_BYTES,
+    ) -> None:
+        self._store: dict[tuple[int, int | None, int], ConversationState] = {}
+        self._lock = asyncio.Lock()
+        self._max_messages = max_messages
+        self._token_budget = token_budget
+        self._ttl_seconds = ttl_seconds
+        self._max_retained_image_bytes = max_retained_image_bytes
+
+    def _key(
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> tuple[int, int | None, int]:
+
+        return guild_id, channel_id, user_id
+
+    async def _messages_for_scope(
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> list[ConversationMessage]:
+        if channel_id is not None:
+            state = await self.get_conversation(
+                guild_id, channel_id, user_id
+            )
+            return list(state.messages)
+
+        async with self._lock:
+            key = self._key(guild_id, None, user_id)
+            self._store.setdefault(key, ConversationState())
+            now = time.time()
+            states = [
+                state
+                for (stored_guild_id, _, stored_user_id), state
+                in self._store.items()
+                if stored_guild_id == guild_id
+                and stored_user_id == user_id
+            ]
+            for state in states:
+                state.last_accessed = now
+            messages = [
+                message
+                for state in states
+                for message in state.messages
+            ]
+
+        messages.sort(key=lambda message: message.timestamp)
+        max_messages = _get_conversation_max_messages()
+        if max_messages <= 0:
+            return []
+        bounded_state = ConversationState(
+            messages=deque(messages[-max_messages:])
+        )
+        token_budget = _get_conversation_token_budget()
+        while (
+            self._estimate_tokens(bounded_state) > token_budget
+            and len(bounded_state.messages) > 2
+        ):
+            bounded_state.messages.popleft()
+        return list(bounded_state.messages)
+
+    async def get_conversation(
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> ConversationState:
+        """Get or create conversation state for the given scope."""
+
+        key = self._key(guild_id, channel_id, user_id)
+
+        async with self._lock:
+            if key not in self._store:
+                self._store[key] = ConversationState()
+
+            state = self._store[key]
+
+            state.last_accessed = time.time()
+
+            return state
+
+    async def add_message(
+        self,
+        guild_id: int,
+        channel_id: int | None,
+        user_id: int,
+        role: str,
+        content: str,
+        message_id: int | None = None,
+        username: str | None = None,
+        mentions: list[dict] | None = None,
+        reply: dict | None = None,
+        embeds: list[str] | None = None,
+        attachments: list[tuple[bytes, str]] | None = None,
+    ) -> None:
+        """Add a message to the conversation history."""
+
+        if (not content or not content.strip()) and not attachments:
+            return
+
+        state = await self.get_conversation(guild_id, channel_id, user_id)
+
+        retained_attachments = None
+        if attachments:
+            image_attachments = [
+                (data, mime)
+                for data, mime in attachments
+                if mime.startswith("image/")
+            ]
+            if (
+                sum(len(data) for data, _ in image_attachments)
+                <= self._max_retained_image_bytes
+            ):
+                retained_attachments = image_attachments or None
+
+        msg = ConversationMessage(
+            role=role,
+            content=content.strip(),
+            timestamp=time.time(),
+            message_id=message_id,
+            user_id=user_id,
+            username=username,
+            mentions=mentions,
+            reply=reply,
+            embeds=embeds,
+            attachments=retained_attachments,
+            has_image_attachment=any(
+                mime.startswith("image/") for _, mime in (attachments or [])
+            ),
+        )
+
+        state.messages.append(msg)
+
+        await self._enforce_limits(state)
+
+    async def add_user_message(
+        self,
+        guild_id: int,
+        channel_id: int | None,
+        user_id: int,
+        content: str,
+        message_id: int | None = None,
+        username: str | None = None,
+        mentions: list[dict] | None = None,
+        reply: dict | None = None,
+        embeds: list[str] | None = None,
+        attachments: list[tuple[bytes, str]] | None = None,
+    ) -> None:
+        """Add a user message to the conversation history."""
+
+        await self.add_message(
+            guild_id,
+            channel_id,
+            user_id,
+            "user",
+            content,
+            message_id,
+            username,
+            mentions,
+            reply,
+            embeds,
+            attachments,
+        )
+
+    async def get_recent_image_attachments(
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> list[tuple[bytes, str]]:
+        """Return image bytes from the most recent attachment-bearing user
+        message.
+        """
+        messages = await self._messages_for_scope(
+            guild_id, channel_id, user_id
+        )
+        for message in reversed(messages):
+            if message.has_image_attachment:
+                return message.attachments or []
+        return []
+
+    async def add_assistant_message(
+        self,
+        guild_id: int,
+        channel_id: int | None,
+        user_id: int,
+        content: str,
+    ) -> None:
+        """Add an assistant message to the conversation history."""
+
+        await self.add_message(guild_id, channel_id, user_id, "assistant", content)
+
+    async def set_last_interaction_id(
+        self,
+        guild_id: int,
+        channel_id: int | None,
+        user_id: int,
+        interaction_id: str,
+    ) -> None:
+        """Store the latest interaction ID for multi-turn conversations."""
+
+        state = await self.get_conversation(guild_id, channel_id, user_id)
+
+        state.last_interaction_id = interaction_id
+
+        # Also update the last assistant message if it exists
+
+        for msg in reversed(state.messages):
+            if msg.role == "assistant":
+                msg.interaction_id = interaction_id
+
+                break
+
+    async def get_last_interaction_id(
+        self,
+        guild_id: int,
+        channel_id: int | None,
+        user_id: int,
+    ) -> str | None:
+        """Get the latest interaction ID for multi-turn conversations."""
+
+        state = await self.get_conversation(guild_id, channel_id, user_id)
+
+        return state.last_interaction_id
+
+    async def get_recent_messages(
+        self,
+        guild_id: int,
+        channel_id: int | None,
+        user_id: int,
+        limit: int | None = None,
+    ) -> list[ConversationMessage]:
+        """Get recent messages for the conversation scope."""
+
+        state = await self.get_conversation(guild_id, channel_id, user_id)
+
+        max_msgs = limit or (
+            self._max_messages
+            if self._max_messages is not None
+            else _get_conversation_max_messages()
+        )
+
+        # Return most recent messages, up to limit
+
+        messages = list(state.messages)[-max_msgs:]
+
+        return messages
+
+    async def build_conversation_context(
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> str:
+        """
+
+        Build conversation context string for prompt injection.
+
+
+
+        Format:
+
+        [Conversation History]
+
+        User (name, @mention):
+
+
+
+        mentions:
+
+        - name (@mention, ID)
+
+        ...
+
+
+
+        Message:
+
+        content
+
+
+
+        Reply to:
+
+        role (name, @mention): content
+
+        ...
+
+
+
+        Assistant:
+
+        content
+
+        ...
+
+        """
+
+        messages = await self._messages_for_scope(
+            guild_id, channel_id, user_id
+        )
+        if not messages:
+            return ""
+
+        parts = ["[Conversation History]"]
+
+        for msg in messages:
+            if msg.role == "user":
+                # Build user header with name and mention
+
+                name_parts = []
+
+                if msg.username:
+                    name_parts.append(msg.username)
+
+                if msg.user_id:
+                    name_parts.append(f"ID: {msg.user_id}")
+
+                name_part = f" ({', '.join(name_parts)})" if name_parts else ""
+
+                parts.append(f"User{name_part}:")
+
+                # Add mentions if present
+
+                if msg.mentions:
+                    parts.append("mentions:")
+
+                    for mention in msg.mentions:
+                        if isinstance(mention, dict):
+                            m_name = mention.get("name", "Unknown")
+
+                            m_id = mention.get("id", "Unknown")
+
+                            m_mention = mention.get("mention", f"<@{m_id}>")
+
+                            parts.append(f"  - {m_name} ({m_mention}, ID: {m_id})")
+
+                # Add reply context if present
+
+                if msg.reply:
+                    parts.append("Reply to:")
+
+                    reply = msg.reply
+
+                    if isinstance(reply, dict):
+                        r_role = reply.get("role", "user")
+
+                        r_author = reply.get("author", "Unknown")
+
+                        r_author_id = reply.get("author_id", "Unknown")
+
+                        r_content = reply.get("content", "")
+
+                        parts.append(
+                            f"  {r_role.capitalize()} ({r_author}, "
+                            f"ID: {r_author_id}): {r_content}"
+                        )
+
+                        # Add reply embeds if present
+
+                        if reply.get("embeds"):
+                            parts.append("  Embeds:")
+
+                            for embed_text in reply["embeds"]:
+                                parts.append(f"    {embed_text}")
+
+                parts.append(f"Message:\n{msg.content}")
+
+                # Add embeds if present
+
+                if msg.embeds:
+                    parts.append("Embeds:")
+
+                    for embed_text in msg.embeds:
+                        parts.append(f"  {embed_text}")
+
+            else:
+                parts.append(f"Assistant: {msg.content}")
+
+        return "\n".join(parts)
+
+    async def clear_conversation(
+        self,
+        guild_id: int,
+        channel_id: int | None,
+        user_id: int | None = None,
+    ) -> None:
+        """Clear a channel, a server, or one user's scoped history."""
+
+        async with self._lock:
+            if channel_id is not None and user_id is not None:
+                key = self._key(guild_id, channel_id, user_id)
+
+                self._store.pop(key, None)
+
+            elif channel_id is None:
+                keys_to_remove = [
+                    key
+                    for key in self._store
+                    if key[0] == guild_id
+                    and (user_id is None or key[2] == user_id)
+                ]
+
+                for key in keys_to_remove:
+                    self._store.pop(key, None)
+
+            elif user_id is not None:
+                key = self._key(guild_id, channel_id, user_id)
+
+                self._store.pop(key, None)
+
+            else:
+                # Clear all users in this channel
+
+                keys_to_remove = [
+                    k
+                    for k in self._store
+                    if k[0] == guild_id and k[1] == channel_id
+                ]
+
+                for key in keys_to_remove:
+                    self._store.pop(key, None)
+
+    async def get_conversation_stats(
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> dict:
+        """Get statistics about the conversation state."""
+
+        state = await self.get_conversation(guild_id, channel_id, user_id)
+
+        return {
+            "message_count": len(state.messages),
+            "last_accessed": state.last_accessed,
+            "token_estimate": self._estimate_tokens(state),
+        }
+
+    def _estimate_tokens(self, state: ConversationState) -> int:
+        """Rough token estimation for the conversation."""
+
+        total_chars = 0
+
+        for msg in state.messages:
+            total_chars += len(msg.content)
+
+            # Include embeds in token estimation
+
+            if msg.embeds:
+                for embed_text in msg.embeds:
+                    total_chars += len(embed_text)
+
+            # Include reply embeds in token estimation
+
+            if (
+                msg.reply
+                and isinstance(msg.reply, dict)
+                and msg.reply.get("embeds")
+            ):
+                for embed_text in msg.reply["embeds"]:
+                    total_chars += len(embed_text)
+
+        # Rough estimate: 4 chars per token
+
+        return total_chars // 4
+
+    async def _enforce_limits(self, state: ConversationState) -> None:
+        """Enforce message count and token budget limits."""
+
+        # Enforce message count limit
+
+        max_messages = (
+            self._max_messages
+            if self._max_messages is not None
+            else _get_conversation_max_messages()
+        )
+        token_budget = (
+            self._token_budget
+            if self._token_budget is not None
+            else _get_conversation_token_budget()
+        )
+
+        while len(state.messages) > max_messages:
+            state.messages.popleft()
+
+        # Enforce token budget (rough estimation)
+
+        while self._estimate_tokens(state) > token_budget and len(
+            state.messages
+        ) > 2:
+            # Keep at least 2 messages (1 exchange)
+
+            state.messages.popleft()
+
+        retained_bytes = sum(
+            len(data)
+            for message in state.messages
+            for data, _ in (message.attachments or [])
+        )
+        for message in state.messages:
+            if retained_bytes <= self._max_retained_image_bytes:
+                break
+            if message.attachments:
+                retained_bytes -= sum(
+                    len(data) for data, _ in message.attachments
+                )
+                message.attachments = None
+
+    async def cleanup_expired_conversations(self) -> int:
+        """Remove conversations that haven't been accessed within
+
+        TTL. Returns count removed."""
+
+        now = time.time()
+
+        removed = 0
+
+        async with self._lock:
+            keys_to_remove = [
+                key
+                for key, state in self._store.items()
+                if now - state.last_accessed
+                > (
+                    self._ttl_seconds
+                    if self._ttl_seconds is not None
+                    else _get_conversation_ttl_seconds()
+                )
+            ]
+
+            for key in keys_to_remove:
+                self._store.pop(key, None)
+
+                removed += 1
+
+        return removed
+
+
+# ---------------------------------------------------------------------------
+
+# Global conversation store (backward-compatible free functions)
+
+# ---------------------------------------------------------------------------
+
+
+conversation_manager = ConversationManager()
+_conversation_store = conversation_manager._store
+_store_lock = conversation_manager._lock
 
 
 def _conversation_key(
-    guild_id: int, channel_id: int, user_id: int
-) -> tuple[int, int, int]:
+    guild_id: int, channel_id: int | None, user_id: int
+) -> tuple[int, int | None, int]:
 
     return guild_id, channel_id, user_id
 
 
-# ---------------------------------------------------------------------------
-
-# Core operations
-
-# ---------------------------------------------------------------------------
-
-
 async def get_conversation(
-    guild_id: int, channel_id: int, user_id: int
+    guild_id: int, channel_id: int | None, user_id: int
 ) -> ConversationState:
     """Get or create conversation state for the given scope."""
-
-    key = _conversation_key(guild_id, channel_id, user_id)
-
-    async with _store_lock:
-        if key not in _conversation_store:
-            _conversation_store[key] = ConversationState()
-
-        state = _conversation_store[key]
-
-        state.last_accessed = time.time()
-
-        return state
+    return await conversation_manager.get_conversation(
+        guild_id, channel_id, user_id
+    )
 
 
 async def add_message(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     role: str,
     content: str,
@@ -144,34 +678,27 @@ async def add_message(
     mentions: list[dict] | None = None,
     reply: dict | None = None,
     embeds: list[str] | None = None,
+    attachments: list[tuple[bytes, str]] | None = None,
 ) -> None:
     """Add a message to the conversation history."""
-
-    if not content or not content.strip():
-        return
-
-    state = await get_conversation(guild_id, channel_id, user_id)
-
-    msg = ConversationMessage(
-        role=role,
-        content=content.strip(),
-        timestamp=time.time(),
-        message_id=message_id,
-        user_id=user_id,
-        username=username,
-        mentions=mentions,
-        reply=reply,
-        embeds=embeds,
+    await conversation_manager.add_message(
+        guild_id,
+        channel_id,
+        user_id,
+        role,
+        content,
+        message_id,
+        username,
+        mentions,
+        reply,
+        embeds,
+        attachments,
     )
-
-    state.messages.append(msg)
-
-    await _enforce_limits(state)
 
 
 async def add_user_message(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     content: str,
     message_id: int | None = None,
@@ -179,89 +706,84 @@ async def add_user_message(
     mentions: list[dict] | None = None,
     reply: dict | None = None,
     embeds: list[str] | None = None,
+    attachments: list[tuple[bytes, str]] | None = None,
 ) -> None:
     """Add a user message to the conversation history."""
-
-    await add_message(
+    await conversation_manager.add_user_message(
         guild_id,
         channel_id,
         user_id,
-        "user",
         content,
         message_id,
         username,
         mentions,
         reply,
         embeds,
+        attachments,
+    )
+
+
+async def get_recent_image_attachments(
+    guild_id: int, channel_id: int | None, user_id: int
+) -> list[tuple[bytes, str]]:
+    """Return image bytes from the most recent attachment-bearing user
+    message.
+    """
+    return await conversation_manager.get_recent_image_attachments(
+        guild_id, channel_id, user_id
     )
 
 
 async def add_assistant_message(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     content: str,
 ) -> None:
     """Add an assistant message to the conversation history."""
-
-    await add_message(guild_id, channel_id, user_id, "assistant", content)
+    await conversation_manager.add_assistant_message(
+        guild_id, channel_id, user_id, content
+    )
 
 
 async def set_last_interaction_id(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     interaction_id: str,
 ) -> None:
-    """Store the latest Gemini interaction ID for multi-turn conversations."""
-
-    state = await get_conversation(guild_id, channel_id, user_id)
-
-    state.last_interaction_id = interaction_id
-
-    # Also update the last assistant message if it exists
-
-    for msg in reversed(state.messages):
-        if msg.role == "assistant":
-            msg.interaction_id = interaction_id
-
-            break
+    """Store the latest interaction ID for multi-turn conversations."""
+    await conversation_manager.set_last_interaction_id(
+        guild_id, channel_id, user_id, interaction_id
+    )
 
 
 async def get_last_interaction_id(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
 ) -> str | None:
-    """Get the latest Gemini interaction ID for multi-turn conversations."""
-
-    state = await get_conversation(guild_id, channel_id, user_id)
-
-    return state.last_interaction_id
+    """Get the latest interaction ID for multi-turn conversations."""
+    return await conversation_manager.get_last_interaction_id(
+        guild_id, channel_id, user_id
+    )
 
 
 async def get_recent_messages(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     limit: int | None = None,
 ) -> list[ConversationMessage]:
     """Get recent messages for the conversation scope."""
-
-    state = await get_conversation(guild_id, channel_id, user_id)
-
-    max_msgs = limit or _get_conversation_max_messages()
-
-    # Return most recent messages, up to limit
-
-    messages = list(state.messages)[-max_msgs:]
-
-    return messages
+    return await conversation_manager.get_recent_messages(
+        guild_id, channel_id, user_id, limit
+    )
 
 
 async def build_conversation_context(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
 ) -> str:
     """
@@ -308,203 +830,47 @@ async def build_conversation_context(
 
     """
 
-    state = await get_conversation(guild_id, channel_id, user_id)
-
-    if not state.messages:
-        return ""
-
-    parts = ["[Conversation History]"]
-
-    for msg in state.messages:
-        if msg.role == "user":
-            # Build user header with name and mention
-
-            name_parts = []
-
-            if msg.username:
-                name_parts.append(msg.username)
-
-            if msg.user_id:
-                name_parts.append(f"ID: {msg.user_id}")
-
-            name_part = f" ({', '.join(name_parts)})" if name_parts else ""
-
-            parts.append(f"User{name_part}:")
-
-            # Add mentions if present
-
-            if msg.mentions:
-                parts.append("mentions:")
-
-                for mention in msg.mentions:
-                    if isinstance(mention, dict):
-                        m_name = mention.get("name", "Unknown")
-
-                        m_id = mention.get("id", "Unknown")
-
-                        m_mention = mention.get("mention", f"<@{m_id}>")
-
-                        parts.append(f"  - {m_name} ({m_mention}, ID: {m_id})")
-
-            # Add reply context if present
-
-            if msg.reply:
-                parts.append("Reply to:")
-
-                reply = msg.reply
-
-                if isinstance(reply, dict):
-                    r_role = reply.get("role", "user")
-
-                    r_author = reply.get("author", "Unknown")
-
-                    r_author_id = reply.get("author_id", "Unknown")
-
-                    r_content = reply.get("content", "")
-
-                    parts.append(
-                        f"  {r_role.capitalize()} ({r_author}, "
-                        f"ID: {r_author_id}): {r_content}"
-                    )
-
-                    # Add reply embeds if present
-
-                    if reply.get("embeds"):
-                        parts.append("  Embeds:")
-
-                        for embed_text in reply["embeds"]:
-                            parts.append(f"    {embed_text}")
-
-            parts.append(f"Message:\n{msg.content}")
-
-            # Add embeds if present
-
-            if msg.embeds:
-                parts.append("Embeds:")
-
-                for embed_text in msg.embeds:
-                    parts.append(f"  {embed_text}")
-
-        else:
-            parts.append(f"Assistant: {msg.content}")
-
-    return "\n".join(parts)
+    return await conversation_manager.build_conversation_context(
+        guild_id, channel_id, user_id
+    )
 
 
 async def clear_conversation(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int | None = None,
 ) -> None:
-    """Clear conversation history for a channel or specific user."""
-
-    async with _store_lock:
-        if user_id is not None:
-            key = _conversation_key(guild_id, channel_id, user_id)
-
-            _conversation_store.pop(key, None)
-
-        else:
-            # Clear all users in this channel
-
-            keys_to_remove = [
-                k
-                for k in _conversation_store
-                if k[0] == guild_id and k[1] == channel_id
-            ]
-
-            for key in keys_to_remove:
-                _conversation_store.pop(key, None)
+    """Clear a channel or all server history, optionally for one user."""
+    await conversation_manager.clear_conversation(
+        guild_id, channel_id, user_id
+    )
 
 
 async def get_conversation_stats(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
 ) -> dict:
     """Get statistics about the conversation state."""
-
-    state = await get_conversation(guild_id, channel_id, user_id)
-
-    return {
-        "message_count": len(state.messages),
-        "last_accessed": state.last_accessed,
-        "token_estimate": _estimate_tokens(state),
-    }
+    return await conversation_manager.get_conversation_stats(
+        guild_id, channel_id, user_id
+    )
 
 
 def _estimate_tokens(state: ConversationState) -> int:
     """Rough token estimation for the conversation."""
-
-    total_chars = 0
-
-    for msg in state.messages:
-        total_chars += len(msg.content)
-
-        # Include embeds in token estimation
-
-        if msg.embeds:
-            for embed_text in msg.embeds:
-                total_chars += len(embed_text)
-
-        # Include reply embeds in token estimation
-
-        if msg.reply and isinstance(msg.reply, dict) and msg.reply.get("embeds"):
-            for embed_text in msg.reply["embeds"]:
-                total_chars += len(embed_text)
-
-    # Rough estimate: 4 chars per token
-
-    return total_chars // 4
+    return conversation_manager._estimate_tokens(state)
 
 
 async def _enforce_limits(state: ConversationState) -> None:
     """Enforce message count and token budget limits."""
-
-    max_messages = _get_conversation_max_messages()
-
-    token_budget = _get_conversation_token_budget()
-
-    # Enforce message count limit
-
-    while len(state.messages) > max_messages:
-        state.messages.popleft()
-
-    # Enforce token budget (rough estimation)
-
-    while _estimate_tokens(state) > token_budget and len(state.messages) > 2:
-        # Keep at least 2 messages (1 exchange)
-
-        state.messages.popleft()
+    await conversation_manager._enforce_limits(state)
 
 
 async def cleanup_expired_conversations() -> int:
     """Remove conversations that haven't been accessed within
-
     TTL. Returns count removed."""
-
-    ttl = _get_conversation_ttl_seconds()
-
-    now = time.time()
-
-    removed = 0
-
-    async with _store_lock:
-        keys_to_remove = [
-            key
-            for key, state in _conversation_store.items()
-            if now - state.last_accessed > ttl
-        ]
-
-        for key in keys_to_remove:
-            _conversation_store.pop(key, None)
-
-            removed += 1
-
-    if removed:
-        logger.info(f"Cleaned up {removed} expired conversations")
-
-    return removed
+    return await conversation_manager.cleanup_expired_conversations()
 
 
 # ---------------------------------------------------------------------------

@@ -9,10 +9,10 @@ from discord import app_commands, ui
 from discord.ext import commands
 
 from utils.chroma import (
-    ChromaBackendError,
     VALID_CANON_LEVELS,
     VALID_ENTRY_TYPES,
     VALID_SOURCE_TYPES,
+    ChromaBackendError,
     extract_text_from_bytes,
     query_knowledge,
 )
@@ -42,7 +42,9 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
         style=discord.TextStyle.short,
         required=True,
         max_length=20,
-        placeholder="anime, novel, manga, game, guidebook, interview, website, other",
+        placeholder=(
+            "anime, novel, manga, game, guidebook, interview, website, other"
+        ),
     )
     entry_type = ui.TextInput(
         label="Entry Type",
@@ -189,7 +191,9 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
                 {
                     **metadata,
                     "content": self.document,
-                    "title": self.document_title.strip() if self.document_title else "",
+                    "title": self.document_title.strip()
+                    if self.document_title
+                    else "",
                 }
             )
         except (OSError, RuntimeError, ValueError) as exc:
@@ -200,7 +204,11 @@ class MetadataModal(ui.Modal, title="Knowledge Entry Metadata"):
             )
             return
         indexed = await service.indexed_id(entry.id)
-        status = "fully indexed in Chroma" if indexed else "saved but not indexed (Chroma unavailable)"
+        status = (
+            "fully indexed in Chroma"
+            if indexed
+            else "saved but not indexed (Chroma unavailable)"
+        )
         await interaction.followup.send(
             f"Added knowledge entry with ID `{entry.id}` for persona "
             f"`{metadata['persona']}` ({status}).",
@@ -212,7 +220,9 @@ class ChromaCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="kbsearch", help="Search the local knowledge base.")
+    @commands.hybrid_command(
+        name="kbsearch", help="Search the local knowledge base."
+    )
     @app_commands.describe(
         query="Search query",
         persona="Optional persona to filter by",
@@ -234,7 +244,10 @@ class ChromaCog(commands.Cog):
                 query_knowledge, query, limit=limit, persona=persona
             )
         except ChromaBackendError:
-            await ctx.send("Knowledge base search is currently unavailable.", ephemeral=True)
+            await ctx.send(
+                "Knowledge base search is currently unavailable.",
+                ephemeral=True,
+            )
             return
         if not matches:
             await ctx.send("No knowledge base matches found.", ephemeral=True)
@@ -250,7 +263,8 @@ class ChromaCog(commands.Cog):
             if len(snippet) > 150:
                 snippet = snippet[:147] + "..."
             lines.append(
-                f"- `{structured_id}` **{persona_name}** ({entry_type}, {source}):\n    {snippet}"
+                f"- `{structured_id}` **{persona_name}** "
+                f"({entry_type}, {source}):\n    {snippet}"
             )
         response_text = "\n".join(lines)
         # Ensure text fits within Discord's 2000-character limit
@@ -291,10 +305,14 @@ class ChromaCog(commands.Cog):
             try:
                 raw_bytes = await attachment.read()
             except discord.HTTPException as exc:
-                await ctx.send(f"Failed to read attachment: {exc}", ephemeral=True)
+                await ctx.send(
+                    f"Failed to read attachment: {exc}", ephemeral=True
+                )
                 return
             except OSError as exc:
-                await ctx.send(f"Failed to read attachment: {exc}", ephemeral=True)
+                await ctx.send(
+                    f"Failed to read attachment: {exc}", ephemeral=True
+                )
                 return
             # Extract text off-thread for CPU-heavy parsing (PDFs, EPUBs, JSON)
             extracted = await asyncio.to_thread(
@@ -313,7 +331,8 @@ class ChromaCog(commands.Cog):
             text_parts.append(extracted)
         if not text_parts:
             await ctx.send(
-                "Provide text or attach a supported file (PDF, EPUB, TXT, JSON, MD).",
+                "Provide text or attach a supported file "
+                "(PDF, EPUB, TXT, JSON, MD).",
                 ephemeral=True,
             )
             return
@@ -388,9 +407,13 @@ class ChromaCog(commands.Cog):
         await service.initialize()
         success = await service.delete_entry(entry_id)
         if success:
-            await ctx.send(f"Deleted knowledge entry `{entry_id}`.", ephemeral=True)
+            await ctx.send(
+                f"Deleted knowledge entry `{entry_id}`.", ephemeral=True
+            )
             return
-        await ctx.send("Could not delete that knowledge entry.", ephemeral=True)
+        await ctx.send(
+            "Could not delete that knowledge entry.", ephemeral=True
+        )
 
     @commands.hybrid_command(
         name="kbpersona",
@@ -401,7 +424,9 @@ class ChromaCog(commands.Cog):
         limit="Maximum entries to show (default 50)",
     )
     @commands.has_permissions(administrator=True)
-    async def kbpersona(self, ctx: commands.Context, persona: str, limit: int = 50):
+    async def kbpersona(
+        self, ctx: commands.Context, persona: str, limit: int = 50
+    ):
         await ctx.defer(ephemeral=True)
         service = KnowledgeBaseService(get_knowledge_base_database())
         await service.initialize()

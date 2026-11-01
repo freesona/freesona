@@ -8,10 +8,12 @@ from providers.nim import NimProvider
 from providers.ollama import OllamaProvider
 from providers.openai_compatible import OpenAICompatibleProvider
 
+
 def get_provider(provider_name: str) -> BaseProvider:
     """Return an instance of a concrete provider based on ``provider_name``.
 
-    Supported provider names include ``gemini``, ``openai``, ``ollama``, ``nim``,
+    Supported provider names include ``gemini``, ``openai``, ``ollama``,
+    ``nim``,
     ``azure``, ``groq``, ``openrouter``, and ``custom``. The function raises a
     ``RuntimeError`` for unknown names.
     """
@@ -34,7 +36,8 @@ def get_provider(provider_name: str) -> BaseProvider:
 
     elif provider_name == "azure":
         return OpenAICompatibleProvider(
-            base_url="https://api.azure.com/v1/chat/completions",  # placeholder, needs to be from env
+            # placeholder, needs to be from env
+            base_url="https://api.azure.com/v1/chat/completions",
             api_key_env="AZURE_AI_KEY",
             default_model="gpt-4o-mini",
         )
