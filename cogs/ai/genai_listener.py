@@ -3,7 +3,7 @@
 # message handling.
 import asyncio
 import time
-from typing import TypeAlias, TypedDict
+from typing import TypeAlias, TypedDict, cast
 
 import discord
 from discord.ext import commands
@@ -13,6 +13,7 @@ from utils.conversation import start_cleanup_task, stop_cleanup_task
 from utils.generation import extract_attachments, safe_generate, send_response
 from utils.guild_world import DiscordGuildWorldAccessor
 from utils.intent import FREQUENCY_THRESHOLD, INTENT_IGNORE, evaluate_intent
+from utils.interaction import InteractionRequest
 from utils.memory import extract_and_store_fact
 from utils.persona import CURRENT_PERSONA, CURRENT_PERSONA_ID
 from utils.roles import resolve_message_role
@@ -123,6 +124,34 @@ def build_payload(message: discord.Message, role: str, bot_id: int) -> PayloadDi
     return payload
 
 
+def _build_interaction_request(
+    payload: PayloadDict,
+    *,
+    current_persona: str,
+    persona_id: str,
+    channel_id: int,
+    guild_id: int,
+    user_id: int,
+    message_id: int,
+    username: str,
+    attachments: list[tuple[bytes, str]],
+) -> InteractionRequest:
+    return InteractionRequest(
+        content=cast(str, payload["content"]),
+        current_persona=current_persona,
+        channel_id=channel_id,
+        guild_id=guild_id,
+        user_id=user_id,
+        message_id=message_id,
+        username=username,
+        attachments=attachments,
+        persona_id=persona_id,
+        mentions=cast(list[MentionPayload], payload["mentions"]),
+        reply=cast(ReplyPayload | None, payload["reply"]),
+        embeds=cast(list[str], payload.get("embeds", [])),
+    )
+
+
 class GenAIListenerCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -211,7 +240,7 @@ class GenAIListenerCog(commands.Cog):
                         return
                     async with channel_snapshot.typing():
                         attachments = await extract_attachments(message_snapshot)
-                        response = await safe_generate(
+                        request = _build_interaction_request(
                             payload,
                             current_persona=CURRENT_PERSONA,
                             persona_id=CURRENT_PERSONA_ID,
@@ -221,6 +250,9 @@ class GenAIListenerCog(commands.Cog):
                             message_id=message_snapshot.id,
                             username=username_snapshot,
                             attachments=attachments,
+                        )
+                        response = await safe_generate(
+                            request,
                             guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
                         )
                         reply_target = get_reply_target(message_snapshot, self.bot.user)
@@ -293,7 +325,7 @@ class GenAIListenerCog(commands.Cog):
                     autonomy_payload = build_payload(message, role, bot_id)
                     async with message.channel.typing():
                         attachments = await extract_attachments(message)
-                        response = await safe_generate(
+                        request = _build_interaction_request(
                             autonomy_payload,
                             current_persona=CURRENT_PERSONA,
                             persona_id=CURRENT_PERSONA_ID,
@@ -303,6 +335,9 @@ class GenAIListenerCog(commands.Cog):
                             message_id=message.id,
                             username=message.author.display_name,
                             attachments=attachments,
+                        )
+                        response = await safe_generate(
+                            request,
                             guild_world_accessor=DiscordGuildWorldAccessor(self.bot),
                         )
                         reply_target = get_reply_target(message, self.bot.user)

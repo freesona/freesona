@@ -39,6 +39,9 @@ ATTRIBUTION_FIXES.md
 logs/
 *.log
 
+# Generated Manus tool output
+/.manus/mcp-results/
+
 # Local/internal notes (optional)
 docs/internal/
 
@@ -113,5 +116,4 @@ test_*.txt
 .junie/skills/mintlify/SKILL.md
 .agents/skills/mintlify/SKILL.md
 skills-lock.json
-outputs/week-1-baseline-audit.md
-outputs/week-1-baseline-audit.md
+/outputs/*audit*

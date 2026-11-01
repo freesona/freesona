@@ -6,6 +6,7 @@ import discord
 
 from cogs.ai import genai_listener
 from utils.generation import ConversationResponse
+from utils.interaction import InteractionRequest
 from utils.intent import INTENT_GENERAL_CHAT, IntentResult
 
 
@@ -166,7 +167,9 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(generate.await_count, 1)
         assert generate.await_args is not None
-        self.assertEqual(generate.await_args.args[0]["content"], "latest")
+        request = generate.await_args.args[0]
+        self.assertIsInstance(request, InteractionRequest)
+        self.assertEqual(request.content, "latest")
         send.assert_awaited_once_with(response, second.channel, reply_to=None)
         self.assertNotIn((7, 5), pending)
 
@@ -240,11 +243,24 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(generate.await_count, 1)
         assert generate.await_args is not None
-        payload = generate.await_args.args[0]
-        self.assertEqual(payload["content"], message.content)
-        self.assertEqual(generate.await_args.kwargs["guild_id"], message.guild.id)
-        self.assertEqual(generate.await_args.kwargs["channel_id"], message.channel.id)
-        self.assertEqual(generate.await_args.kwargs["user_id"], message.author.id)
+        request = generate.await_args.args[0]
+        self.assertIsInstance(request, InteractionRequest)
+        self.assertEqual(request.content, message.content)
+        self.assertEqual(request.guild_id, message.guild.id)
+        self.assertEqual(request.channel_id, message.channel.id)
+        self.assertEqual(request.user_id, message.author.id)
+        self.assertEqual(request.message_id, message.id)
+        self.assertEqual(request.username, message.author.display_name)
+        self.assertEqual(request.current_persona, genai_listener.CURRENT_PERSONA)
+        self.assertEqual(request.persona_id, genai_listener.CURRENT_PERSONA_ID)
+        self.assertEqual(request.mentions, [])
+        self.assertIsNone(request.reply)
+        self.assertEqual(request.embeds, [])
+        self.assertEqual(request.attachments, [])
+        self.assertNotIn("guild_id", generate.await_args.kwargs)
+        self.assertEqual(
+            set(generate.await_args.kwargs), {"guild_world_accessor"}
+        )
         send.assert_awaited_once_with(response, message.channel, reply_to=None)
         self.assertIn(message.channel.id, cooldowns)
         self.assertIn(message.author.id, user_cooldowns)

@@ -55,7 +55,8 @@ Freesona/
     ├── config.py             # Config I/O (config.json), embed_footer
     ├── config_schema.py      # Centralized configuration schema definitions
     ├── conversation.py       # ConversationManager — short-term memory, budgets, context
-    ├── generation.py         # Provider orchestration, PromptBuilder integration, send_response
+    ├── generation.py         # Provider orchestration, PromptBuilder integration, Discord response sending
+    ├── interaction.py        # Plain request data for the reusable interaction path
     ├── guild_world.py        # Guild World Context — environmental grounding
     ├── anniversaries_db.py   # Anniversary storage helpers
     ├── ingest_pdf.py         # PDF knowledge-source ingestion helpers
@@ -114,13 +115,27 @@ flowchart TD
     E4 -->|Yes| F[4. Generate]
     E4 -->|No| G[Skip generation]
     D3 --> F
-    F --> F1["safe_generate(payload, persona,\nchannel_id, guild_id, user_id, ...)"]
+    F --> F1["safe_generate(InteractionRequest)"]
     F1 --> H[5. send_response -> split -> send]
 ```
 
 ### Debounce
 
 Messages in the conversation channel are held for 1.2 seconds before generating a response. If the same user sends another message within that window, the first task is canceled and the timer resets. This prevents the bot from responding to mid-thought partial messages.
+
+---
+
+## Interaction Request Boundary
+
+`GenAIListenerCog` converts an eligible message into an `InteractionRequest` after it reads attachments. The request contains plain values only. It does not contain a Discord message, channel, guild, or reply object.
+
+The request contains the message text, serialized mentions, reply data, and embed text. It also contains persona settings, scope identifiers, and username. The request contains attachment bytes and MIME types.
+
+`GuildWorldAccessor` is injected separately. The accessor is not part of the request.
+
+`safe_generate` accepts the request and returns a `ConversationResponse`. The response contains segments and metadata. The Discord adapter selects a reply target and sends the segments. It also extracts user facts after a response.
+
+Legacy `safe_generate(prompt, **options)` calls remain available for commands. A request test can use a fake provider and a fake world accessor. It does not need a Discord event or gateway connection. It does not need a provider network call.
 
 ---
 

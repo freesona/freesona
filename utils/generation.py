@@ -37,6 +37,7 @@ from utils.conversation import (
     add_user_message,
     get_recent_image_attachments,
 )
+from utils.interaction import InteractionRequest
 from utils.persona import PERSONA_DATA as GLOBAL_PERSONA_DATA
 from utils.prompt_builder import build_system_prompt
 from utils.providers import generate_text
@@ -805,6 +806,36 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
         ConversationResponse containing the generated text or an error message.
     """
     try:
+        if args and isinstance(args[0], InteractionRequest):
+            if len(args) != 1:
+                raise TypeError("safe_generate accepts one InteractionRequest")
+            unexpected = set(kwargs) - {"guild_world_accessor"}
+            if unexpected:
+                names = ", ".join(sorted(unexpected))
+                raise TypeError(f"Unexpected InteractionRequest options: {names}")
+
+            request = args[0]
+            prompt = {
+                "content": request.content,
+                "mentions": request.mentions,
+                "reply": request.reply,
+                "embeds": request.embeds,
+            }
+            return await generate(
+                prompt,
+                current_persona=request.current_persona,
+                channel_id=request.channel_id,
+                guild_id=request.guild_id,
+                user_id=request.user_id,
+                message_id=request.message_id,
+                apply_persona=request.apply_persona,
+                instruction_prefix=request.instruction_prefix,
+                username=request.username,
+                attachments=request.attachments,
+                persona_id=request.persona_id,
+                guild_world_accessor=kwargs.get("guild_world_accessor"),
+            )
+
         return await generate(*args, **kwargs)
 
     except GenerationError as e:
