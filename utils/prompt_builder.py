@@ -222,6 +222,8 @@ class PromptBuildContext:
 
     guild_world_accessor: Any = None
 
+    share_conversation_across_channels: bool = False
+
 
 # =============================================================================
 
@@ -573,6 +575,7 @@ async def build_system_prompt(
     persona_id: str,
     guild_id: int | None,
     channel_id: int | None = None,
+    share_conversation_across_channels: bool = False,
     user_id: int | None,
     username: str,
     apply_persona: bool,
@@ -613,6 +616,9 @@ async def build_system_prompt(
     context = PromptBuildContext(
         guild_id=guild_id,
         channel_id=channel_id,
+        share_conversation_across_channels=(
+            share_conversation_across_channels
+        ),
         user_id=user_id,
         username=username,
         persona_id=persona_id,

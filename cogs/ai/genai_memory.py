@@ -22,7 +22,7 @@ class GenAIMemoryCog(commands.Cog):
         name="clearmemory",
         aliases=["smcl"],
         help=(
-            "Clear conversation memory for this channel "
+            "Clear conversation history for this server "
             "(Admin only). Optionally clear long-term facts."
         ),
     )
@@ -30,7 +30,7 @@ class GenAIMemoryCog(commands.Cog):
     @app_commands.describe(
         clear_facts=(
             "Also clear long-term memory facts for all users "
-            "in this channel (default: False)."
+            "in this server (default: False)."
         ),
     )
     async def clear_memory(
@@ -40,17 +40,17 @@ class GenAIMemoryCog(commands.Cog):
         if guild is None:
             await ctx.send("Conversation commands are server-only.")
             return
-        # Clear short-term conversation memory for all users in this channel
-        await clear_conversation(guild.id, ctx.channel.id)
+        # Autonomy can use all channel history in this server.
+        await clear_conversation(guild.id, None)
         if clear_facts:
             # Clear long-term facts for all users in this guild
             await clear_user_facts(guild.id)
             await ctx.send(
-                "Conversation memory and long-term facts cleared "
-                "for this channel."
+                "Conversation history and long-term facts cleared "
+                "for this server."
             )
         else:
-            await ctx.send("Conversation memory cleared for this channel.")
+            await ctx.send("Conversation history cleared for this server.")
 
     # -------------------------------------------------------------------
     # /memorylist (long-term SQLite)

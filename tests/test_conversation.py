@@ -452,6 +452,38 @@ class TestConversationIsolation(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state_a.messages[0].content, "User A")
         self.assertEqual(state_b.messages[0].content, "User B")
 
+    async def test_clearing_server_scope_removes_all_channel_history(self):
+        await add_user_message(1, None, 3, "Autonomy history", 100, "user")
+        await add_user_message(1, 2, 3, "Channel history", 101, "user")
+
+        await clear_conversation(1, None)
+
+        self.assertEqual(
+            await build_conversation_context(1, None, 3),
+            "",
+        )
+        self.assertEqual(
+            await build_conversation_context(1, 2, 3),
+            "",
+        )
+
+    async def test_shared_scope_is_cross_channel_but_stays_per_user_and_guild(
+        self,
+    ):
+        await add_user_message(1, 2, 3, "Channel exchange", 100, "user")
+        await add_assistant_message(1, 2, 3, "Channel reply")
+
+        shared_context = await build_conversation_context(1, None, 3)
+        regular_channel_context = await build_conversation_context(1, 2, 3)
+        other_user_context = await build_conversation_context(1, None, 4)
+        other_guild_context = await build_conversation_context(2, None, 3)
+
+        self.assertIn("Channel exchange", shared_context)
+        self.assertIn("Channel reply", shared_context)
+        self.assertIn("Channel exchange", regular_channel_context)
+        self.assertEqual(other_user_context, "")
+        self.assertEqual(other_guild_context, "")
+
 
 class TestConversationFormat(unittest.IsolatedAsyncioTestCase):
     """Tests for the exact format of conversation context."""

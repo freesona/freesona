@@ -540,6 +540,7 @@ async def generate(
     channel_id: int | None = None,
     guild_id: int | None = None,
     user_id: int | None = None,
+    share_conversation_across_channels: bool = False,
     message_id: int | None = None,
     apply_persona: bool = True,
     instruction_prefix: str = "",
@@ -572,6 +573,9 @@ async def generate(
         embeds = []
 
     text = sanitize_prompt(text)
+    conversation_channel_id = (
+        None if share_conversation_across_channels else channel_id
+    )
 
     image_reference = re.search(
         r"\b(?:same|that|this|earlier|previous|before|uploaded)\b.{0,40}"
@@ -586,11 +590,11 @@ async def generate(
         not attachments
         and image_reference
         and guild_id
-        and channel_id
+        and (channel_id or share_conversation_across_channels)
         and user_id
     ):
         attachments = await get_recent_image_attachments(
-            guild_id, channel_id, user_id
+            guild_id, conversation_channel_id, user_id
         )
         if not attachments:
             limitation = (
@@ -606,10 +610,12 @@ async def generate(
 
     # Add user message to conversation history (short-term memory)
 
-    if guild_id and channel_id and user_id:
+    if guild_id and user_id and (
+        channel_id or share_conversation_across_channels
+    ):
         await add_user_message(
             guild_id,
-            channel_id,
+            conversation_channel_id,
             user_id,
             text,
             message_id,
@@ -629,6 +635,9 @@ async def generate(
         persona_id=persona_id,
         guild_id=guild_id,
         channel_id=channel_id,
+        share_conversation_across_channels=(
+            share_conversation_across_channels
+        ),
         user_id=user_id,
         username=username,
         apply_persona=apply_persona,
@@ -661,11 +670,13 @@ async def generate(
 
         previous_interaction_id = None
 
-        if guild_id and channel_id and user_id:
+        if guild_id and user_id and (
+            channel_id or share_conversation_across_channels
+        ):
             from utils.conversation import get_last_interaction_id
 
             previous_interaction_id = await get_last_interaction_id(
-                guild_id, channel_id, user_id
+                guild_id, conversation_channel_id, user_id
             )
 
         output = generate_text(
@@ -703,11 +714,19 @@ async def generate(
 
         # Store interaction ID for next turn
 
-        if interaction_id and guild_id and channel_id and user_id:
+        if (
+            interaction_id
+            and guild_id
+            and user_id
+            and (channel_id or share_conversation_across_channels)
+        ):
             from utils.conversation import set_last_interaction_id
 
             await set_last_interaction_id(
-                guild_id, channel_id, user_id, interaction_id
+                guild_id,
+                conversation_channel_id,
+                user_id,
+                interaction_id,
             )
 
         # Strip reasoning tags before storing in conversation history
@@ -716,9 +735,14 @@ async def generate(
 
         # Add assistant response to conversation history
 
-        if guild_id and channel_id and user_id and output_text:
+        if (
+            guild_id
+            and user_id
+            and output_text
+            and (channel_id or share_conversation_across_channels)
+        ):
             await add_assistant_message(
-                guild_id, channel_id, user_id, output_text
+                guild_id, conversation_channel_id, user_id, output_text
             )
 
         return build_response(
@@ -764,6 +788,9 @@ async def safe_generate(*args, **kwargs) -> ConversationResponse:
                 channel_id=request.channel_id,
                 guild_id=request.guild_id,
                 user_id=request.user_id,
+                share_conversation_across_channels=(
+                    request.share_conversation_across_channels
+                ),
                 message_id=request.message_id,
                 apply_persona=request.apply_persona,
                 instruction_prefix=request.instruction_prefix,

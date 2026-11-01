@@ -79,6 +79,31 @@ async def test_run_capture_kills_process_and_raises_on_timeout():
 
 
 @pytest.mark.anyio
+async def test_barcodegen_reports_missing_delphitools_cli():
+    cog = Delphitools(bot=MagicMock())
+    ctx = MockContext()
+
+    with patch(
+        "cogs.conversion.delphitools.asyncio.create_subprocess_exec",
+        new=AsyncMock(
+            side_effect=FileNotFoundError(
+                2, "No such file or directory", "dt"
+            )
+        ),
+    ):
+        await cast(Any, cog.barcodegen.callback)(cog, ctx, "hello", "code128")
+
+    assert ctx.sent == [
+        {
+            "args": (
+                "❌ **Barcode generation failed.** Delphitools CLI (`dt`) "
+                "is not installed or not available on PATH.",
+            )
+        }
+    ]
+
+
+@pytest.mark.anyio
 async def test_encode_reports_cli_result():
     cog = Delphitools(bot=MagicMock())
     ctx = MockContext()

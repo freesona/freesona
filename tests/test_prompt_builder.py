@@ -354,6 +354,26 @@ class TestConversationHistoryProvider(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.mutability, Mutability.MUTABLE)
 
+    @patch("utils.conversation.build_conversation_context")
+    async def test_build_uses_shared_scope_for_autonomy(self, mock_build):
+        mock_build.return_value = "[Conversation History]"
+        provider = ConversationHistoryProvider()
+        context = PromptBuildContext(
+            apply_persona=True,
+            guild_id=123,
+            user_id=456,
+            channel_id=789,
+            share_conversation_across_channels=True,
+        )
+
+        await provider.build(context)
+
+        mock_build.assert_called_once_with(
+            guild_id=123,
+            channel_id=None,
+            user_id=456,
+        )
+
 
 class TestUserMemoryProvider(unittest.IsolatedAsyncioTestCase):
     """Tests for UserMemoryProvider."""

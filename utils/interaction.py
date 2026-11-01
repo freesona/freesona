@@ -43,3 +43,4 @@ class InteractionRequest:
     mentions: list[MentionData] = field(default_factory=list)
     reply: ReplyData | None = None
     embeds: list[str] = field(default_factory=list)
+    share_conversation_across_channels: bool = False

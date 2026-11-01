@@ -72,11 +72,16 @@ async def _run_capture(
     if timeout is None:
         timeout = _get_subprocess_timeout()
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "Delphitools CLI (`dt`) is not installed or not available on PATH."
+        ) from e
 
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)

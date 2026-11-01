@@ -55,7 +55,8 @@ Freesona owns conversation history through the **ConversationManager** — a pro
 
 **ConversationManager responsibilities:**
 
-- Stores recent messages per `(guild_id, channel_id, user_id)` scope
+- Stores normal conversation history per `(guild_id, channel_id, user_id)` scope
+- Gives autonomy recent history per `(guild_id, user_id)` across channels
 - Enforces configurable limits:
   - `conversation_max_messages` (default: 20)
   - `conversation_token_budget` (default: 4000, rough estimation)
@@ -64,7 +65,7 @@ Freesona owns conversation history through the **ConversationManager** — a pro
 - Provides `build_conversation_context()` for prompt injection (summary + recent messages format)
 - Runs periodic cleanup of expired conversations
 
-**Provider-owned continuity has been removed.** The legacy Gemini Interactions API (`previous_interaction_id`) and `utils/memory.py::_interaction_store` are deprecated. The `/clearmemory` command now clears ConversationManager state via `clear_conversation()`.
+**Provider-owned continuity has been removed.** The legacy Gemini Interactions API (`previous_interaction_id`) and `utils/memory.py::_interaction_store` are deprecated. The `/clearmemory` command clears ConversationManager history for the server.
 
 Conversation history is injected into the system prompt through `ConversationHistoryProvider` (priority 30 in PromptBuilder), ensuring all providers receive the same context regardless of native capabilities.
 
@@ -455,6 +456,11 @@ When enabled, the bot can join an active conversation unprompted. It uses a conf
 | Long monologue with no question and no mention   | −0.20 |
 
 Frequency thresholds: `low` = 0.70, `default` = 0.50, `high` = 0.35. A 120-second per-channel cooldown prevents it from dominating a conversation. A separate 60-second per-user cooldown prevents repeated autonomous responses to the same user.
+
+Autonomy uses recent message exchanges handled by Freesona across channels for
+each user in the same server. It does not share history between users or
+servers. Normal conversation-channel history remains channel-scoped.
+`/clearmemory` clears all conversation history for the server.
 
 ---
 

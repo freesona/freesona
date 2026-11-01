@@ -140,6 +140,7 @@ def _build_interaction_request(
     message_id: int,
     username: str,
     attachments: list[tuple[bytes, str]],
+    share_conversation_across_channels: bool = False,
 ) -> InteractionRequest:
     return InteractionRequest(
         content=cast(str, payload["content"]),
@@ -147,6 +148,9 @@ def _build_interaction_request(
         channel_id=channel_id,
         guild_id=guild_id,
         user_id=user_id,
+        share_conversation_across_channels=(
+            share_conversation_across_channels
+        ),
         message_id=message_id,
         username=username,
         attachments=attachments,
@@ -358,6 +362,7 @@ class GenAIListenerCog(commands.Cog):
                             channel_id=message.channel.id,
                             guild_id=message.guild.id,
                             user_id=message.author.id,
+                            share_conversation_across_channels=True,
                             message_id=message.id,
                             username=message.author.display_name,
                             attachments=attachments,

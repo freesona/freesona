@@ -487,6 +487,70 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
         add_assistant.assert_awaited_once_with(2, 3, 1, "Hello")
         self.assertEqual(response.first_text(), "Hello")
 
+    async def test_generate_uses_guild_user_scope_for_shared_conversations(
+        self,
+    ):
+        with (
+            patch("utils.generation.rate_limit", new_callable=AsyncMock),
+            patch(
+                "utils.generation.sanitize_prompt",
+                side_effect=lambda value: value,
+            ),
+            patch(
+                "utils.generation.add_user_message", new_callable=AsyncMock
+            ) as add_user,
+            patch(
+                "utils.generation.build_system_prompt",
+                new_callable=AsyncMock,
+                return_value="system",
+            ) as build_prompt,
+            patch("utils.generation.generate_text", return_value="Answer"),
+            patch(
+                "utils.generation.add_assistant_message",
+                new_callable=AsyncMock,
+            ) as add_assistant,
+            patch(
+                "utils.conversation.get_last_interaction_id",
+                new_callable=AsyncMock,
+                return_value=None,
+            ) as get_interaction,
+            patch("utils.generation.get_provider_name", return_value="openai"),
+            patch(
+                "utils.generation.get_provider_model", return_value="model-x"
+            ),
+            patch(
+                "utils.generation.get_model_name",
+                return_value="fallback-model",
+            ),
+            patch("utils.generation.get_model_temperature", return_value=0.4),
+            patch("utils.generation.KB_ENABLED", False),
+        ):
+            await generate(
+                "Question from another channel",
+                current_persona="persona",
+                guild_id=2,
+                channel_id=3,
+                user_id=1,
+                share_conversation_across_channels=True,
+            )
+
+        add_user.assert_awaited_once()
+        add_user_call = add_user.await_args
+        assert add_user_call is not None
+        self.assertEqual(add_user_call.args[:3], (2, None, 1))
+        get_interaction.assert_awaited_once_with(2, None, 1)
+        add_assistant.assert_awaited_once_with(2, None, 1, "Answer")
+        build_prompt_call = build_prompt.await_args
+        assert build_prompt_call is not None
+        self.assertEqual(
+            build_prompt_call.kwargs["channel_id"], 3
+        )
+        self.assertTrue(
+            build_prompt_call.kwargs[
+                "share_conversation_across_channels"
+            ]
+        )
+
     async def test_generate_classifies_provider_timeout(self):
         with (
             patch("utils.generation.rate_limit", new_callable=AsyncMock),
@@ -652,6 +716,28 @@ class TestGeneratePipeline(unittest.IsolatedAsyncioTestCase):
             "hello", current_persona="persona"
         )
         self.assertIs(result, response)
+
+    async def test_safe_generate_passes_shared_conversation_scope(self):
+        request = InteractionRequest(
+            content="Follow-up",
+            current_persona="persona",
+            share_conversation_across_channels=True,
+        )
+        response = ConversationResponse(segments=[])
+        with patch(
+            "utils.generation.generate",
+            new_callable=AsyncMock,
+            return_value=response,
+        ) as generate_mock:
+            await safe_generate(request)
+
+        generate_call = generate_mock.await_args
+        assert generate_call is not None
+        self.assertTrue(
+            generate_call.kwargs[
+                "share_conversation_across_channels"
+            ]
+        )
 
 
 if __name__ == "__main__":

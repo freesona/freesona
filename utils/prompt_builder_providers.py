@@ -339,10 +339,8 @@ class ConversationHistoryProvider(ContextProvider):
 
 
 
-    Scope: Per (guild_id, channel_id, user_id) — each user has their own
-
-    conversation thread within a channel, matching the previous Gemini
-    behavior.
+    Normal chat uses (guild_id, channel_id, user_id). Autonomy can use a
+    combined view of recent channel history for one user in one guild.
 
     """
 
@@ -383,13 +381,16 @@ class ConversationHistoryProvider(ContextProvider):
                 content="",
             )
 
-        # channel_id must be provided; if missing, we cannot scope the
+        channel_id = (
+            None
+            if context.share_conversation_across_channels
+            else context.channel_id
+        )
 
-        # conversation
-
-        channel_id = context.channel_id
-
-        if channel_id is None:
+        if (
+            channel_id is None
+            and not context.share_conversation_across_channels
+        ):
             return ContextBlock(
                 name=self.name,
                 priority=self.priority,

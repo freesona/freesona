@@ -107,8 +107,8 @@ def _get_conversation_ttl_seconds() -> int:
 class ConversationManager:
     """Manages short-term conversation state per (guild, channel, user) scope.
 
-    All state is owned by this instance. No Discord types are referenced;
-    scope identifiers are plain integers.
+    All state is owned by this instance. No Discord types are referenced.
+    A missing channel ID represents shared, guild-and-user-scoped history.
     """
 
     def __init__(
@@ -118,7 +118,7 @@ class ConversationManager:
         ttl_seconds: int | None = None,
         max_retained_image_bytes: int = _MAX_RETAINED_IMAGE_BYTES,
     ) -> None:
-        self._store: dict[tuple[int, int, int], ConversationState] = {}
+        self._store: dict[tuple[int, int | None, int], ConversationState] = {}
         self._lock = asyncio.Lock()
         self._max_messages = max_messages
         self._token_budget = token_budget
@@ -126,13 +126,56 @@ class ConversationManager:
         self._max_retained_image_bytes = max_retained_image_bytes
 
     def _key(
-        self, guild_id: int, channel_id: int, user_id: int
-    ) -> tuple[int, int, int]:
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> tuple[int, int | None, int]:
 
         return guild_id, channel_id, user_id
 
+    async def _messages_for_scope(
+        self, guild_id: int, channel_id: int | None, user_id: int
+    ) -> list[ConversationMessage]:
+        if channel_id is not None:
+            state = await self.get_conversation(
+                guild_id, channel_id, user_id
+            )
+            return list(state.messages)
+
+        async with self._lock:
+            key = self._key(guild_id, None, user_id)
+            self._store.setdefault(key, ConversationState())
+            now = time.time()
+            states = [
+                state
+                for (stored_guild_id, _, stored_user_id), state
+                in self._store.items()
+                if stored_guild_id == guild_id
+                and stored_user_id == user_id
+            ]
+            for state in states:
+                state.last_accessed = now
+            messages = [
+                message
+                for state in states
+                for message in state.messages
+            ]
+
+        messages.sort(key=lambda message: message.timestamp)
+        max_messages = _get_conversation_max_messages()
+        if max_messages <= 0:
+            return []
+        bounded_state = ConversationState(
+            messages=deque(messages[-max_messages:])
+        )
+        token_budget = _get_conversation_token_budget()
+        while (
+            self._estimate_tokens(bounded_state) > token_budget
+            and len(bounded_state.messages) > 2
+        ):
+            bounded_state.messages.popleft()
+        return list(bounded_state.messages)
+
     async def get_conversation(
-        self, guild_id: int, channel_id: int, user_id: int
+        self, guild_id: int, channel_id: int | None, user_id: int
     ) -> ConversationState:
         """Get or create conversation state for the given scope."""
 
@@ -151,7 +194,7 @@ class ConversationManager:
     async def add_message(
         self,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         user_id: int,
         role: str,
         content: str,
@@ -205,7 +248,7 @@ class ConversationManager:
     async def add_user_message(
         self,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         user_id: int,
         content: str,
         message_id: int | None = None,
@@ -232,13 +275,15 @@ class ConversationManager:
         )
 
     async def get_recent_image_attachments(
-        self, guild_id: int, channel_id: int, user_id: int
+        self, guild_id: int, channel_id: int | None, user_id: int
     ) -> list[tuple[bytes, str]]:
         """Return image bytes from the most recent attachment-bearing user
         message.
         """
-        state = await self.get_conversation(guild_id, channel_id, user_id)
-        for message in reversed(state.messages):
+        messages = await self._messages_for_scope(
+            guild_id, channel_id, user_id
+        )
+        for message in reversed(messages):
             if message.has_image_attachment:
                 return message.attachments or []
         return []
@@ -246,7 +291,7 @@ class ConversationManager:
     async def add_assistant_message(
         self,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         user_id: int,
         content: str,
     ) -> None:
@@ -257,7 +302,7 @@ class ConversationManager:
     async def set_last_interaction_id(
         self,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         user_id: int,
         interaction_id: str,
     ) -> None:
@@ -278,7 +323,7 @@ class ConversationManager:
     async def get_last_interaction_id(
         self,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         user_id: int,
     ) -> str | None:
         """Get the latest interaction ID for multi-turn conversations."""
@@ -290,7 +335,7 @@ class ConversationManager:
     async def get_recent_messages(
         self,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         user_id: int,
         limit: int | None = None,
     ) -> list[ConversationMessage]:
@@ -311,7 +356,7 @@ class ConversationManager:
         return messages
 
     async def build_conversation_context(
-        self, guild_id: int, channel_id: int, user_id: int
+        self, guild_id: int, channel_id: int | None, user_id: int
     ) -> str:
         """
 
@@ -357,14 +402,15 @@ class ConversationManager:
 
         """
 
-        state = await self.get_conversation(guild_id, channel_id, user_id)
-
-        if not state.messages:
+        messages = await self._messages_for_scope(
+            guild_id, channel_id, user_id
+        )
+        if not messages:
             return ""
 
         parts = ["[Conversation History]"]
 
-        for msg in state.messages:
+        for msg in messages:
             if msg.role == "user":
                 # Build user header with name and mention
 
@@ -442,13 +488,29 @@ class ConversationManager:
     async def clear_conversation(
         self,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         user_id: int | None = None,
     ) -> None:
-        """Clear conversation history for a channel or specific user."""
+        """Clear a channel, a server, or one user's scoped history."""
 
         async with self._lock:
-            if user_id is not None:
+            if channel_id is not None and user_id is not None:
+                key = self._key(guild_id, channel_id, user_id)
+
+                self._store.pop(key, None)
+
+            elif channel_id is None:
+                keys_to_remove = [
+                    key
+                    for key in self._store
+                    if key[0] == guild_id
+                    and (user_id is None or key[2] == user_id)
+                ]
+
+                for key in keys_to_remove:
+                    self._store.pop(key, None)
+
+            elif user_id is not None:
                 key = self._key(guild_id, channel_id, user_id)
 
                 self._store.pop(key, None)
@@ -466,7 +528,7 @@ class ConversationManager:
                     self._store.pop(key, None)
 
     async def get_conversation_stats(
-        self, guild_id: int, channel_id: int, user_id: int
+        self, guild_id: int, channel_id: int | None, user_id: int
     ) -> dict:
         """Get statistics about the conversation state."""
 
@@ -590,14 +652,14 @@ _store_lock = conversation_manager._lock
 
 
 def _conversation_key(
-    guild_id: int, channel_id: int, user_id: int
-) -> tuple[int, int, int]:
+    guild_id: int, channel_id: int | None, user_id: int
+) -> tuple[int, int | None, int]:
 
     return guild_id, channel_id, user_id
 
 
 async def get_conversation(
-    guild_id: int, channel_id: int, user_id: int
+    guild_id: int, channel_id: int | None, user_id: int
 ) -> ConversationState:
     """Get or create conversation state for the given scope."""
     return await conversation_manager.get_conversation(
@@ -607,7 +669,7 @@ async def get_conversation(
 
 async def add_message(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     role: str,
     content: str,
@@ -636,7 +698,7 @@ async def add_message(
 
 async def add_user_message(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     content: str,
     message_id: int | None = None,
@@ -662,7 +724,7 @@ async def add_user_message(
 
 
 async def get_recent_image_attachments(
-    guild_id: int, channel_id: int, user_id: int
+    guild_id: int, channel_id: int | None, user_id: int
 ) -> list[tuple[bytes, str]]:
     """Return image bytes from the most recent attachment-bearing user
     message.
@@ -674,7 +736,7 @@ async def get_recent_image_attachments(
 
 async def add_assistant_message(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     content: str,
 ) -> None:
@@ -686,7 +748,7 @@ async def add_assistant_message(
 
 async def set_last_interaction_id(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     interaction_id: str,
 ) -> None:
@@ -698,7 +760,7 @@ async def set_last_interaction_id(
 
 async def get_last_interaction_id(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
 ) -> str | None:
     """Get the latest interaction ID for multi-turn conversations."""
@@ -709,7 +771,7 @@ async def get_last_interaction_id(
 
 async def get_recent_messages(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
     limit: int | None = None,
 ) -> list[ConversationMessage]:
@@ -721,7 +783,7 @@ async def get_recent_messages(
 
 async def build_conversation_context(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
 ) -> str:
     """
@@ -775,10 +837,10 @@ async def build_conversation_context(
 
 async def clear_conversation(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int | None = None,
 ) -> None:
-    """Clear conversation history for a channel or specific user."""
+    """Clear a channel or all server history, optionally for one user."""
     await conversation_manager.clear_conversation(
         guild_id, channel_id, user_id
     )
@@ -786,7 +848,7 @@ async def clear_conversation(
 
 async def get_conversation_stats(
     guild_id: int,
-    channel_id: int,
+    channel_id: int | None,
     user_id: int,
 ) -> dict:
     """Get statistics about the conversation state."""

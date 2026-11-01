@@ -475,6 +475,7 @@ class TestListenerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.content, message.content)
         self.assertEqual(request.guild_id, message.guild.id)
         self.assertEqual(request.channel_id, message.channel.id)
+        self.assertTrue(request.share_conversation_across_channels)
         self.assertEqual(request.user_id, message.author.id)
         self.assertEqual(request.message_id, message.id)
         self.assertEqual(request.username, message.author.display_name)
