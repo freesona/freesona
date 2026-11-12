@@ -15,6 +15,7 @@ async def test_kbadd_bridges_modal_with_review_view():
     ctx.defer = AsyncMock()
     ctx.send = AsyncMock()
     ctx.interaction = MagicMock()
+    ctx.interaction.response.is_done.return_value = False
     ctx.author = MagicMock(id=12345)
     ctx.message = MagicMock(attachments=[])
     attachment = MagicMock()
@@ -58,6 +59,7 @@ async def test_kbadd_auto_detects_title_from_epub_filename():
     ctx.defer = AsyncMock()
     ctx.send = AsyncMock()
     ctx.interaction = MagicMock()
+    ctx.interaction.response.is_done.return_value = False
     ctx.author = MagicMock(id=12345)
     ctx.message = MagicMock(attachments=[])
     attachment = MagicMock()
@@ -91,6 +93,25 @@ async def test_kbadd_auto_detects_title_from_epub_filename():
     assert view.modal.source.default == "Too Many Losing Heroines! Volume 1"
     assert view.modal.source_type.default == "novel"
     assert view.modal.extra_metadata.get("author") == "Takibi Amamori"
+
+
+@pytest.mark.anyio
+async def test_kbadd_skips_defer_when_interaction_is_already_acknowledged():
+    cog = ChromaCog(bot=MagicMock())
+    ctx = MagicMock()
+    ctx.defer = AsyncMock()
+    ctx.send = AsyncMock()
+    ctx.interaction = MagicMock()
+    ctx.interaction.response.is_done.return_value = True
+    ctx.author = MagicMock(id=12345)
+    ctx.message = MagicMock(attachments=[])
+    kbadd_callback = cast(Any, cog.kbadd.callback)
+
+    with patch.dict(os.environ, {"DEFAULT_PERSONA_ID": "persona"}):
+        await kbadd_callback(cog, ctx, content="Plain text knowledge.")
+
+    ctx.defer.assert_not_awaited()
+    ctx.send.assert_awaited_once()
 
 
 @pytest.mark.anyio

@@ -346,7 +346,11 @@ class ChromaCog(commands.Cog):
         canon_level: str | None = None,
         tags: str | None = None,
     ):
-        await ctx.defer(ephemeral=True)
+        if (
+            ctx.interaction is None
+            or not ctx.interaction.response.is_done()
+        ):
+            await ctx.defer(ephemeral=True)
         attachment = attachment or (
             ctx.message.attachments[0]
             if getattr(ctx, "message", None) and ctx.message.attachments
