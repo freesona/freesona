@@ -22,15 +22,18 @@ from xml.etree import ElementTree
 # resolves correctly.
 
 __all__ = [
+    "RETRIEVAL_CANDIDATE_MULTIPLIER",
     "VALID_CANON_LEVELS",
     "VALID_ENTRY_TYPES",
     "VALID_SOURCE_TYPES",
     "add_knowledge",
     "delete_knowledge",
+    "extract_epub_book_info",
     "extract_text_from_bytes",
     "get_knowledge_by_persona",
     "list_knowledge",
     "query_knowledge",
+    "rank_knowledge_for_persona",
 ]
 
 
@@ -157,6 +160,50 @@ def get_collection(
     return cast(
         ChromaCollection, resolved_client.get_or_create_collection(name=name)
     )
+
+
+def extract_epub_book_info(data: bytes, filename: str = "") -> dict[str, str]:
+    """Extract book title and author from EPUB container or filename."""
+    info = {"title": "", "author": "", "source": ""}
+    if data:
+        try:
+            with zipfile.ZipFile(io.BytesIO(data), mode="r") as archive:
+                container_data = archive.read("META-INF/container.xml")
+                container = ElementTree.fromstring(container_data)
+                rootfile = next(
+                    (
+                        elem
+                        for elem in container.iter()
+                        if elem.tag.endswith("rootfile")
+                    ),
+                    None,
+                )
+                if rootfile is not None:
+                    opf_path = rootfile.attrib.get("full-path")
+                    if opf_path:
+                        opf_data = archive.read(opf_path)
+                        opf = ElementTree.fromstring(opf_data)
+                        for elem in opf.iter():
+                            tag = elem.tag.split("}")[-1].lower()
+                            text = "".join(elem.itertext()).strip()
+                            if not text:
+                                continue
+                            if tag == "title" and not info["title"]:
+                                info["title"] = text
+                            elif tag == "creator" and not info["author"]:
+                                info["author"] = text
+        except (OSError, zipfile.BadZipFile, ElementTree.ParseError):
+            pass
+
+    # Fall back to cleaned filename if title was not found in OPF
+    if not info["title"] and filename:
+        raw_name = filename
+        base_name = raw_name.rsplit(".", 1)[0] if "." in raw_name else raw_name
+        cleaned = base_name.replace("_", " ").strip()
+        info["title"] = cleaned
+
+    info["source"] = info["title"] or "novel"
+    return info
 
 
 def parse_discord_chat_json(raw_bytes: bytes) -> str:
@@ -335,14 +382,80 @@ def extract_text_from_bytes(filename: str, data: bytes) -> str:
                     if body is None:
                         continue
 
-                    text = " ".join(
-                        part.strip()
-                        for part in body.itertext()
-                        if part and part.strip()
-                    )
+                    heading = None
+                    for tag_name in ("h1", "h2", "h3"):
+                        for elem in chapter_root.iter():
+                            if elem.tag.endswith(tag_name):
+                                h_text = "".join(elem.itertext()).strip()
+                                if (
+                                    h_text
+                                    and h_text.lower() != "unknown"
+                                    and len(h_text) < 100
+                                ):
+                                    heading = h_text
+                                    break
+                        if heading:
+                            break
+
+                    # Preserve paragraph boundaries: block-level elements
+                    # become separate lines so downstream chunking can
+                    # split on real paragraph breaks instead of treating
+                    # an entire chapter as one unbroken line.
+
+                    block_tags = {
+                        "p",
+                        "div",
+                        "h1",
+                        "h2",
+                        "h3",
+                        "h4",
+                        "h5",
+                        "h6",
+                        "blockquote",
+                        "li",
+                    }
+
+                    blocks: list[str] = []
+
+                    for child in list(body):
+
+                        child_tag = (
+                            child.tag.split("}")[-1].lower()
+                            if isinstance(child.tag, str)
+                            else ""
+                        )
+
+                        if child_tag not in block_tags:
+
+                            continue
+
+                        block_text = " ".join(
+                            part.strip()
+                            for part in child.itertext()
+                            if part and part.strip()
+                        )
+
+                        if block_text:
+
+                            blocks.append(block_text)
+
+                    if blocks:
+
+                        text = "\n\n".join(blocks)
+
+                    else:
+
+                        text = " ".join(
+                            part.strip()
+                            for part in body.itertext()
+                            if part and part.strip()
+                        )
 
                     if text:
-                        text_parts.append(text)
+                        if heading:
+                            text_parts.append(f"## {heading}\n\n{text}")
+                        else:
+                            text_parts.append(text)
 
                 result = "\n\n".join(text_parts).strip()
 
@@ -588,6 +701,67 @@ def identify_speakers(
 # noinspection GrazieInspection
 
 
+def _split_long_text(text: str, max_length: int) -> list[str]:
+    """Splits oversized text into pieces at sentence boundaries.
+
+    Guarantee: every returned piece is non-empty, stripped, and at most
+    ``max_length`` characters long.  Used to keep a single oversized
+    narration "line" (e.g., a flattened chapter paragraph) from
+    producing a chunk that exceeds the embedding model's practical
+    token budget.
+    """
+
+    pieces: list[str] = []
+
+    start = 0
+
+    length = len(text)
+
+    sentence_markers = (". ", "! ", "? ", "。”", "！”", "？”", "...")
+
+    while start < length:
+
+        end = min(start + max_length, length)
+
+        if end < length:
+
+            window = text[start:end]
+
+            cut = -1
+
+            cut_width = 1
+
+            for marker in sentence_markers:
+
+                index = window.rfind(marker)
+
+                if index > cut:
+
+                    cut = index
+
+                    # Keep the punctuation; drop any trailing space.
+
+                    cut_width = max(1, len(marker) - 1)
+
+            if cut >= max_length // 2:
+
+                end = start + cut + cut_width
+
+        piece = text[start:end].strip()
+
+        if piece:
+
+            pieces.append(piece)
+
+        start = end
+
+        while start < length and text[start].isspace():
+
+            start += 1
+
+    return pieces
+
+
 def chunk_semantic_units(
     text: str,
     max_chunk_size: int = 1500,
@@ -645,12 +819,50 @@ def chunk_semantic_units(
 
         current_speaker = None
 
+        current_chapter: str | None = None
+
+        def emit_chunk(attribution: str | None) -> None:
+            """Finalize the in-progress chunk with its speaker/chapter."""
+
+            nonlocal current_chunk
+
+            if not current_chunk.strip():
+                return
+
+            chunks.append(
+                {
+                    "document": current_chunk.strip(),
+                    "speaker": attribution,
+                    "chapter": current_chapter,
+                    "estimated_tokens": len(current_chunk) // 4,
+                }
+            )
+
+            current_chunk = ""
+
         # noinspection GrazieInspection
 
         for entry in speaker_data:
             speaker = entry["speaker"]
 
             dialogue = entry["dialogue"]
+
+            # Markdown headings (emitted by the EPUB extractor) open a
+            # new chapter so subsequent chunks carry chapter metadata.
+
+            if speaker == "Narrator" and dialogue.startswith("#"):
+                heading_text = dialogue.lstrip("#").strip()
+
+                if heading_text:
+                    emit_chunk(current_speaker)
+
+                    current_speaker = None
+
+                    current_chapter = heading_text
+
+                    current_chunk = heading_text
+
+                    continue
 
             # If speaker changes and we have content, finalize current chunk
 
@@ -659,89 +871,105 @@ def chunk_semantic_units(
                 and speaker != current_speaker
                 and current_chunk
             ):
-                chunks.append(
-                    {
-                        "document": current_chunk.strip(),
-                        "speaker": current_speaker,
-                        "estimated_tokens": len(current_chunk) // 4,
-                    }
-                )
-
-                current_chunk = ""
+                emit_chunk(current_speaker)
 
             current_speaker = speaker
 
-            current_chunk += f"{speaker}: {dialogue}\n"
+            # Split oversized entries (e.g., flattened narration lines)
+            # so a single entry cannot exceed the chunk budget.
 
-            # Check if chunk is getting too large
+            if len(dialogue) > max_chunk_size:
+                # Reserve room for the "Speaker: " prefix and newline in
+                # each emitted line so chunks never exceed the budget.
 
-            if len(current_chunk) >= max_chunk_size:
-                chunks.append(
-                    {
-                        "document": current_chunk.strip(),
-                        "speaker": current_speaker,
-                        "estimated_tokens": len(current_chunk) // 4,
-                    }
+                line_overhead = len(speaker) + 3
+
+                pieces = _split_long_text(
+                    dialogue, max(1, max_chunk_size - line_overhead)
                 )
 
-                current_chunk = ""
+            else:
+                pieces = [dialogue]
 
-                current_speaker = None
+            for piece in pieces:
+                line = f"{speaker}: {piece}\n"
+
+                # Check if chunk would get too large before appending
+
+                if (
+                    current_chunk
+                    and len(current_chunk) + len(line) > max_chunk_size
+                ):
+                    emit_chunk(current_speaker)
+
+                current_chunk += line
 
         # Add final chunk
 
-        if current_chunk.strip():
-            chunks.append(
-                {
-                    "document": current_chunk.strip(),
-                    "speaker": current_speaker,
-                    "estimated_tokens": len(current_chunk) // 4,
-                }
-            )
+        emit_chunk(current_speaker)
 
         return chunks
 
     # Fallback: simple paragraph-based chunking for narration
-
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
 
     chunks = []
-
     current_chunk = ""
+    current_chapter: str | None = None
 
-    for para in paragraphs:
-        if (
-            len(current_chunk) + len(para) + 2 > max_chunk_size
-            and current_chunk
-        ):
-            if len(current_chunk) >= min_chunk_size:
-                chunks.append(
-                    {
-                        "document": current_chunk,
-                        "speaker": None,
-                        "estimated_tokens": len(current_chunk) // 4,
-                    }
-                )
-
-            else:
-                # Merge small chunk with next
-
-                pass
-
-            current_chunk = para
-
+    for raw_para in paragraphs:
+        # Split oversized paragraphs so a single flattened block cannot
+        # exceed the chunk budget.
+        if len(raw_para) > max_chunk_size:
+            para_parts = _split_long_text(raw_para, max_chunk_size)
         else:
-            if current_chunk:
-                current_chunk += "\n\n" + para
+            para_parts = [raw_para]
 
-            else:
+        for para in para_parts:
+            # Detect markdown chapter headings
+            if para.startswith("#"):
+                heading_text = para.lstrip("#").strip()
+                if heading_text:
+                    if current_chunk.strip():
+                        chunks.append(
+                            {
+                                "document": current_chunk.strip(),
+                                "speaker": None,
+                                "chapter": current_chapter,
+                                "estimated_tokens": len(current_chunk) // 4,
+                            }
+                        )
+                        current_chunk = ""
+                    current_chapter = heading_text
+                    current_chunk = para
+                    continue
+
+            if (
+                len(current_chunk) + len(para) + 2 > max_chunk_size
+                and current_chunk
+            ):
+                if len(current_chunk) >= min_chunk_size:
+                    chunks.append(
+                        {
+                            "document": current_chunk,
+                            "speaker": None,
+                            "chapter": current_chapter,
+                            "estimated_tokens": len(current_chunk) // 4,
+                        }
+                    )
                 current_chunk = para
+            else:
+                if current_chunk:
+                    current_chunk += "\n\n" + para
+                else:
+                    current_chunk = para
 
     if current_chunk.strip():
         chunks.append(
             {
                 "document": current_chunk.strip(),
                 "speaker": None,
+                "chapter": current_chapter,
                 "estimated_tokens": len(current_chunk) // 4,
             }
         )
@@ -791,6 +1019,9 @@ def assign_metadata(
             metadata["embedding_model"] = os.getenv(
                 "EMBEDDING_MODEL", "text-embedding-3-large"
             )
+
+        if chunk.get("chapter"):
+            metadata["chapter"] = chunk["chapter"]
 
         if chunk.get("speaker") and chunk["speaker"] != "Narrator":
             metadata["speaker"] = chunk["speaker"]
@@ -1047,6 +1278,98 @@ def query_knowledge(
     except (ValueError, RuntimeError, OSError) as exc:
         logger.error(f"Chroma query error: {exc}")
         raise ChromaBackendError("Chroma search failed") from exc
+
+
+# How many extra semantic candidates to fetch beyond ``kb_top_k`` before
+
+# persona-first re-ranking, so first-hand (speaker-matched) entries have a
+
+# chance to displace closer-but-second-hand narration.
+
+RETRIEVAL_CANDIDATE_MULTIPLIER = 3
+
+
+def _entry_speakers(entry: dict[str, Any]) -> set[str]:
+    """Collect speaker identities attributed to a knowledge entry.
+
+    Uses the ``speaker`` metadata field first, then falls back to
+    scanning ``Name:``-prefixed lines in the document text so chunks
+    ingested without speaker metadata still count as first-hand
+    knowledge for the characters that speak in them.
+    """
+
+    speakers: set[str] = set()
+
+    metadata = entry.get("metadata") or {}
+
+    speaker = str(metadata.get("speaker", "")).strip()
+
+    if speaker:
+
+        speakers.add(speaker.casefold())
+
+    document = entry.get("document", "")
+
+    if isinstance(document, str):
+
+        for line in document.splitlines():
+
+            prefix = line.split(":", 1)[0].strip()
+
+            if (
+                prefix
+                and len(prefix) <= 40
+                and prefix.replace(" ", "").isalpha()
+            ):
+
+                speakers.add(prefix.casefold())
+
+    return speakers
+
+
+def rank_knowledge_for_persona(
+    entries: list[dict[str, Any]],
+    persona_id: str | None,
+) -> list[dict[str, Any]]:
+    """Re-rank retrieved entries so first-hand knowledge ranks first.
+
+    Similarity search alone cannot tell whether the persona actually
+    witnessed what an entry describes.  Entries where the persona is the
+    speaker (her own words and memories) are first-hand knowledge and
+    are boosted; narration and other characters' dialogue are second-hand
+    or authorial knowledge and keep their original semantic order after
+    the boosted tier.  Nothing is dropped or rewritten — only order
+    changes.
+
+    Args:
+
+        entries: Entries as returned by ``query_knowledge``.
+
+        persona_id: Persona identifier to match speakers against.
+
+    Returns:
+
+        The re-ranked list (stable within each tier by distance).
+
+    """
+
+    if not entries or not persona_id or not persona_id.strip():
+
+        return entries
+
+    persona_key = persona_id.strip().casefold()
+
+    def sort_key(entry: dict[str, Any]) -> tuple[int, float]:
+
+        distance = entry.get("distance")
+
+        distance_value = float("inf") if distance is None else float(distance)
+
+        tier = 0 if persona_key in _entry_speakers(entry) else 1
+
+        return (tier, distance_value)
+
+    return sorted(entries, key=sort_key)
 
 
 def list_knowledge(

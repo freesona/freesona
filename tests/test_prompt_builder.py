@@ -597,6 +597,65 @@ class TestPersonaKnowledgeBaseProvider(unittest.IsolatedAsyncioTestCase):
         result = await provider.build(context)
         self.assertTrue(result.is_empty)
 
+    @patch("utils.chroma.query_knowledge")
+    async def test_build_boosts_speaker_matches_first(self, mock_query):
+        """First-hand (speaker-matched) entries must outrank narration."""
+        mock_query.return_value = [
+            {
+                "document": "Narration scene A about the city.",
+                "metadata": {"entry_type": "narration"},
+                "distance": 0.05,
+            },
+            {
+                "document": "Narration scene B about the school.",
+                "metadata": {"entry_type": "narration"},
+                "distance": 0.10,
+            },
+            {
+                "document": "Persona: I lost again.",
+                "metadata": {"entry_type": "dialogue", "speaker": "Persona"},
+                "distance": 0.90,
+            },
+        ]
+        provider = PersonaKnowledgeBaseProvider()
+        context = PromptBuildContext(
+            apply_persona=True,
+            kb_enabled=True,
+            persona_id="persona",
+            kb_top_k=2,
+            user_message="What did you lose?",
+        )
+        result = await provider.build(context)
+        # The speaker-matched dialogue entry outranks closer narration
+        self.assertIn("1. Persona: I lost again.", result.content)
+        self.assertIn("2. Narration scene A about the city.", result.content)
+        self.assertNotIn("Narration scene B", result.content)
+        # Over-fetches candidates for re-ranking
+        self.assertEqual(mock_query.call_args.kwargs["limit"], 6)
+
+    @patch("utils.chroma.query_knowledge")
+    async def test_build_includes_knowledge_boundary(self, mock_query):
+        """The KB block must state the first-hand knowledge boundary."""
+        mock_query.return_value = [
+            {
+                "document": "Persona: I love shaved ice.",
+                "metadata": {"entry_type": "dialogue", "speaker": "Persona"},
+                "distance": 0.2,
+            }
+        ]
+        provider = PersonaKnowledgeBaseProvider()
+        context = PromptBuildContext(
+            apply_persona=True,
+            kb_enabled=True,
+            persona_id="persona",
+            kb_top_k=3,
+            user_message="What do you like?",
+        )
+        result = await provider.build(context)
+        self.assertIn("Knowledge Boundary", result.content)
+        self.assertIn('"persona"', result.content)
+        self.assertIn("authorial knowledge", result.content)
+
 
 class TestGuildWorldContextProvider(unittest.IsolatedAsyncioTestCase):
     """Tests for GuildWorldContextProvider (Phase 3)."""

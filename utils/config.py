@@ -22,6 +22,7 @@ DEFAULT_CONFIG = {
     "knowledge_base_database": os.getenv(
         "KNOWLEDGE_BASE_DATABASE", "knowledge.db"
     ),
+    "default_persona_id": os.getenv("DEFAULT_PERSONA_ID", ""),
     "debounce_seconds": 1.2,
     "autonomy_cooldown_seconds": 120,
     "autonomy_user_cooldown": 60,
@@ -77,7 +78,6 @@ DEFAULT_MODEL_NAME = os.getenv("MODEL_NAME", "gemini-flash-lite-latest")
 DEFAULT_MODEL_TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", "0.7"))
 
 DEFAULT_KB_TOP_K = int(os.getenv("KB_TOP_K", "5"))
-
 
 LAST_DEBUG: dict[int, str] = {}
 
@@ -175,6 +175,19 @@ def get_knowledge_base_database() -> str:
         "knowledge_base_database", "knowledge.db"
     )
     return str(database).strip() or "knowledge.db"
+
+
+def get_default_persona() -> str:
+    """Return the persona ID pre-filled by /kbadd when none is provided.
+
+    Configured via ``DEFAULT_PERSONA_ID`` (environment or config.json).
+    Returns an empty string when unset, in which case the modal field
+    is left blank for the user to fill in.
+    """
+    persona = os.getenv("DEFAULT_PERSONA_ID") or load_config().get(
+        "default_persona_id", ""
+    )
+    return str(persona).strip()
 
 
 def get_prompt_token_budget() -> int:

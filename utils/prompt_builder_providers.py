@@ -805,19 +805,40 @@ class PersonaKnowledgeBaseProvider(ContextProvider):
 
         # Import here to avoid circular imports
 
-        from utils.chroma import query_knowledge
+        from utils.chroma import (
+            RETRIEVAL_CANDIDATE_MULTIPLIER,
+            query_knowledge,
+            rank_knowledge_for_persona,
+        )
 
         try:
             # Run query off-thread to avoid blocking (same as
 
-            # retrieve_knowledge_context)
+            # retrieve_knowledge_context).  Fetch extra candidates so
 
-            entries = await asyncio.to_thread(
+            # persona-first re-ranking can displace second-hand content.
+
+            candidate_limit = max(
+                context.kb_top_k * RETRIEVAL_CANDIDATE_MULTIPLIER,
+                context.kb_top_k,
+            )
+
+            candidates = await asyncio.to_thread(
                 query_knowledge,
                 context.user_message,
-                limit=context.kb_top_k,
+                limit=candidate_limit,
                 persona=context.persona_id,
             )
+
+            # Boost first-hand knowledge (entries where the persona is
+
+            # the speaker) above second-hand narration, then keep only
+
+            # the requested number of entries.
+
+            entries = rank_knowledge_for_persona(
+                candidates, context.persona_id
+            )[: context.kb_top_k]
 
             if not entries:
                 return ContextBlock(
@@ -881,6 +902,37 @@ class PersonaKnowledgeBaseProvider(ContextProvider):
                     context_parts.append(f"   ({', '.join(details)})")
 
                 lines.extend(context_parts)
+
+            # Persona knowledge boundary: retrieved entries are canonical
+
+            # source material, not automatically the persona's lived
+
+            # memory.  State the boundary explicitly so narration the
+
+            # persona did not witness is not treated as first-hand
+
+            # knowledge.
+
+            lines.extend(
+                [
+                    "",
+                    "Knowledge Boundary (first-hand knowledge rules):",
+                    f'- You are "{context.persona_id}". These entries are '
+                    "canonical source material, not automatically your "
+                    "lived memory.",
+                    "- You know only what you said, did, experienced "
+                    "first-hand, or were told directly. Entries where you "
+                    "are the Speaker are your own words and memories.",
+                    "- Narration describing scenes you did not witness, or "
+                    "other characters' private thoughts and conversations, "
+                    "is authorial knowledge: do not claim to remember or "
+                    "know it.",
+                    "- If asked about something you have no first-hand "
+                    "knowledge of, stay in character and honestly admit "
+                    "you do not know (speculating in character is fine if "
+                    "it is clearly speculation).",
+                ]
+            )
 
             content = "\n".join(lines)
 

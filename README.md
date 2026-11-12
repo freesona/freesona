@@ -40,8 +40,8 @@ and your infrastructure set the available capacity and cost.
 - The bot can process images, PDFs, audio, video, and code files.
 - The shared provider interface supports Gemini, OpenAI, Ollama, NVIDIA NIM,
   Azure AI Foundry, Groq, and OpenRouter.
-- The optional knowledge base provides `/kbsearch`, `/kbadd`, `/kblist`, and
-  `/kbdelete` commands.
+- The optional knowledge base provides `/kbsearch`, `/kbadd`, `/kblist`,
+  `/kbpersona`, and `/kbdelete` commands.
 - Shared logic is in `utils/`. See [the utilities guide](utils/README.md).
 
 ---

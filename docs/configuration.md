@@ -51,6 +51,7 @@ it does not read your Azure AI Foundry endpoint.
 | `KB_ENABLED` | Enable knowledge base retrieval (`true` or `false`) | `true` |
 | `KB_TOP_K` | Maximum knowledge entries retrieved for a response | `5` |
 | `KNOWLEDGE_BASE_DATABASE` | SQLite database for knowledge base entries | `knowledge.db` |
+| `DEFAULT_PERSONA_ID` | Persona ID pre-filled by `/kbadd` when none is provided (unset leaves the field blank) | `persona` |
 | `EMBEDDING_MODEL` | Embedding model label added to knowledge metadata | `text-embedding-3-large` |
 | `LEGACY_PATH` | Legacy JSON memory file used by the migration command | `memory.json` |
 

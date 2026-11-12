@@ -454,6 +454,106 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(results[1]["metadata"]["entry_type"], "narration")
         self.assertNotIn("speaker", results[1]["metadata"])
 
+    def test_split_long_text_respects_max_length(self):
+        """Every piece must be non-empty and within the size budget."""
+        text = "Sentence one. Sentence two is a bit longer. " * 40
+        for limit in (50, 200, 1500):
+            pieces = chroma._split_long_text(text.strip(), limit)
+            self.assertTrue(pieces)
+            for piece in pieces:
+                self.assertGreater(len(piece), 0)
+                self.assertLessEqual(len(piece), limit)
+
+    def test_split_long_text_handles_no_sentence_boundaries(self):
+        """A single huge token with no sentence markers must still split."""
+        text = "a" * 5000
+        pieces = chroma._split_long_text(text, 1500)
+        self.assertTrue(all(len(p) <= 1500 for p in pieces))
+        self.assertEqual("".join(pieces), text)
+
+    def test_chunk_semantic_units_splits_oversized_speaker_entries(self):
+        """An oversized flattened narration line must not become one mega-chunk."""  # noqa: E501
+        speaker_data = [
+            {"speaker": "Narrator", "dialogue": "Word " * 800},
+        ]
+        chunks = chroma.chunk_semantic_units(
+            "", speaker_data=speaker_data, max_chunk_size=1500
+        )
+        self.assertGreater(len(chunks), 1)
+        for chunk in chunks:
+            self.assertLessEqual(len(chunk["document"]), 1500)
+
+    def test_chunk_semantic_units_tracks_chapters_in_speaker_pipeline(self):
+        """Chapter headings must be propagated as chunk metadata."""
+        speaker_data = [
+            {"speaker": "Narrator", "dialogue": "## Chapter 1"},
+            {"speaker": "Narrator", "dialogue": "Alpha content. " * 30},
+            {"speaker": "Chisato", "dialogue": "Hello there."},
+            {"speaker": "Narrator", "dialogue": "## Chapter 2"},
+            {"speaker": "Narrator", "dialogue": "Beta content. " * 30},
+        ]
+        chunks = chroma.chunk_semantic_units(
+            "", speaker_data=speaker_data, max_chunk_size=1500
+        )
+        chapters = [c["chapter"] for c in chunks]
+        self.assertIn("Chapter 1", chapters)
+        self.assertIn("Chapter 2", chapters)
+        for chunk in chunks:
+            self.assertIsNotNone(chunk["chapter"])
+        self.assertTrue(any("Hello there" in c["document"] for c in chunks))
+
+    def test_extract_text_from_bytes_preserves_paragraph_boundaries(self):
+        """EPUB blocks must be newline-separated, not one flattened line."""
+        epub_buffer = io.BytesIO()
+        with zipfile.ZipFile(epub_buffer, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
+            zf.writestr(
+                "META-INF/container.xml",
+                (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<container version="1.0" '
+                    'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                    "  <rootfiles>"
+                    '    <rootfile full-path="OEBPS/content.opf" '
+                    'media-type="application/oebps-package+xml"/>'
+                    "  </rootfiles>"
+                    "</container>"
+                ),
+            )
+            zf.writestr(
+                "OEBPS/content.opf",
+                (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<package xmlns="https://www.idpf.org/2007/opf" '
+                    'xmlns:dc="https://purl.org/dc/elements/1.1/" '
+                    'version="3.0">'
+                    "  <metadata><dc:title>Sample</dc:title></metadata>"
+                    "  <manifest>"
+                    '    <item id="chapter1" href="chapter1.xhtml" '
+                    'media-type="application/xhtml+xml"/>'
+                    "  </manifest>"
+                    '  <spine><itemref idref="chapter1"/></spine>'
+                    "</package>"
+                ),
+            )
+            zf.writestr(
+                "OEBPS/chapter1.xhtml",
+                (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<html xmlns="http://www.w3.org/1999/xhtml">'
+                    "<body><h1>Chapter One</h1>"
+                    "<p>First paragraph.</p>"
+                    "<p>Second paragraph.</p>"
+                    "</body></html>"
+                ),
+            )
+        text = chroma.extract_text_from_bytes(
+            "sample.epub", epub_buffer.getvalue()
+        )
+        self.assertIn("First paragraph.", text)
+        self.assertIn("Second paragraph.", text)
+        self.assertIn("\n\n", text)
+
     def test_ingest_source_full_pipeline(self):
         """Test the full ingest_source pipeline."""
         raw_text = (
@@ -479,6 +579,82 @@ class ChromaKnowledgeBaseTests(unittest.TestCase):
             )
             self.assertEqual(result["metadata"]["source"], "Episode 06")
             self.assertIn("topics", result["metadata"])
+
+    def test_rank_knowledge_for_persona_boosts_speaker_matches(self):
+        """Speaker-matched entries rank above closer second-hand content."""
+        entries = [
+            {
+                "document": "Narration about the city.",
+                "metadata": {"entry_type": "narration"},
+                "distance": 0.05,
+            },
+            {
+                "document": "Persona: I lost again.",
+                "metadata": {
+                    "entry_type": "dialogue",
+                    "speaker": "Persona",
+                },
+                "distance": 0.90,
+            },
+            {
+                "document": "Nukumizu: That is rough.",
+                "metadata": {
+                    "entry_type": "dialogue",
+                    "speaker": "Nukumizu",
+                },
+                "distance": 0.10,
+            },
+        ]
+        ranked = chroma.rank_knowledge_for_persona(entries, "persona")
+        self.assertEqual(ranked[0]["metadata"]["speaker"], "Persona")
+        # Within the second-hand tier the semantic order is preserved
+        self.assertEqual(ranked[1]["distance"], 0.05)
+        self.assertEqual(ranked[2]["distance"], 0.10)
+
+    def test_rank_knowledge_for_persona_detects_document_speakers(self):
+        """Chunks without speaker metadata count via Name: line prefixes."""
+        entries = [
+            {
+                "document": "Narration without any speaker.",
+                "metadata": {},
+                "distance": 0.10,
+            },
+            {
+                "document": "Persona: Something I actually said.\n",
+                "metadata": {},
+                "distance": 0.80,
+            },
+        ]
+        ranked = chroma.rank_knowledge_for_persona(entries, "PERSONA")
+        self.assertIn("Persona: Something", ranked[0]["document"])
+
+    def test_rank_knowledge_for_persona_handles_missing_distance(self):
+        """None distances must not break ranking."""
+        entries = [
+            {
+                "document": "Persona: Hi.",
+                "metadata": {"speaker": "Persona"},
+                "distance": None,
+            },
+            {
+                "document": "Plain narration.",
+                "metadata": {},
+                "distance": None,
+            },
+        ]
+        ranked = chroma.rank_knowledge_for_persona(entries, "persona")
+        self.assertEqual(ranked[0]["metadata"]["speaker"], "Persona")
+
+    def test_rank_knowledge_for_persona_passthrough(self):
+        """No persona or no entries returns the input unchanged."""
+        entries = [{"document": "doc", "metadata": {}, "distance": 0.5}]
+        self.assertEqual(
+            chroma.rank_knowledge_for_persona(entries, "persona"), entries
+        )
+        self.assertEqual(
+            chroma.rank_knowledge_for_persona(entries, "  "), entries
+        )
+        self.assertEqual(chroma.rank_knowledge_for_persona([], "persona"), [])
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ AI commands are organized by command type in dedicated AI cog modules (`genai_ge
 | `~search <query>` (`/search`, alias `~s`)                 | Web search with AI summary                                                                      | Anyone        |
 | `~separate <url>` (`/separate`, aliases `~sep`, `~stems`) | Vocal/instrumental separation via MVSEP                                                         | Anyone        |
 | `/kbsearch <query> [persona] [limit]`                     | Search the local ChromaDB knowledge base                                                        | Administrator |
-| `/kbadd <title> [content] [attachment]`                   | Add text or a PDF/EPUB/TXT/JSON attachment to the local knowledge base (opens metadata modal)   | Administrator |
+| `/kbadd <title> [content] [attachment]`                   | Add text or a PDF/EPUB/TXT/JSON/MD attachment to the local knowledge base (opens metadata modal) | Administrator |
 | `/kblist [persona] [limit]`                               | List the newest knowledge base entries                                                          | Administrator |
 | `/kbdelete <id>`                                          | Delete a knowledge base entry by ID                                                             | Administrator |
 | `/kbpersona <persona> [limit]`                            | List all knowledge entries for a specific persona                                               | Administrator |
@@ -24,7 +24,20 @@ AI commands are organized by command type in dedicated AI cog modules (`genai_ge
 
 ### `/kbadd` Metadata Fields
 
-The `/kbadd` command opens a modal with the following fields:
+The `/kbadd` command accepts text or a supported attachment. It supports
+PDF, EPUB, TXT, JSON, and MD files. The command auto-fills the title from the
+attachment name or file metadata when the user does not provide one.
+
+The command opens a review modal before ingestion. This modal lets the
+administrator confirm the final metadata before the record is saved.
+
+For EPUB files, Freesona reads XHTML files in the book's reading order and
+extracts their text. It keeps detected chapter headings. When the document is
+split into chunks, the chapter heading is stored with each chunk. Freesona can
+also use the EPUB title and author metadata when those values exist.
+
+EPUB extraction requires readable text in the book. It does not perform OCR on
+scanned page images.
 
 **Required:**
 | Field | Description | Example |
@@ -47,6 +60,9 @@ The `/kbadd` command opens a modal with the following fields:
 | Timestamp   | Source timestamp                                             | `2023-01-15` or `S01E06 12:34` |
 | Canon Level | `canon`, `semi-canon`, `non-canon`, `headcanon`, `alternate` | `canon`                        |
 | Tags        | Comma-separated additional tags                              | `canon, emotional, key_moment` |
+
+The command prefers `DEFAULT_PERSONA_ID` when the user does not supply a persona.
+The resolved title, source, and source type pre-fill the modal to reduce typing.
 
 Knowledge Base records are validated and persisted by
 `utils/knowledge_base.py` in SQLite. New records are also indexed in ChromaDB
